@@ -21,7 +21,7 @@
 - `uv sync --project backend --group dev`：成功解析并安装 71 个项目/传递包，生成 `backend/uv.lock`。
 - Ruff：后端、测试和脚本检查通过。
 - Pyright standard：0 errors、0 warnings。
-- pytest + coverage：13 passed，Phase 0 骨架覆盖率 78%；存在一条 FastAPI/Starlette TestClient 上游弃用警告。
+- pytest + coverage：14 passed，Phase 0 骨架覆盖率约 78%；存在一条 FastAPI/Starlette TestClient 上游弃用警告。
 - Uvicorn `/health`：实际启动并返回 `{"data":{"status":"ok","phase":"phase-0"},"error":null}`。
 - pnpm frozen lock、ESLint、TypeScript、Vitest、Prettier、Vite build：通过；Vitest 为 1 passed。
 - Playwright：桌面和 390px 视口均加载正确，最终控制台 0 errors、0 warnings。
