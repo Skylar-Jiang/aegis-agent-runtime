@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ra-agent"
+version = "0.1.0"
+description = "Risk-adaptive runtime safety architecture for tool-using agents"
+readme = "../README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "aiosqlite>=0.20,<1",
+  "alembic>=1.14,<2",
+  "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "langgraph>=0.4,<2",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+  "pyyaml>=6.0,<7",
+  "sqlalchemy>=2.0,<3",
+  "structlog>=24.4,<26",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[dependency-groups]
+dev = [
+  "pre-commit>=4.1,<5",
+  "pyright>=1.1.390,<2",
+  "pytest>=8.3,<9",
+  "pytest-asyncio>=0.25,<2",
+  "pytest-cov>=6.0,<8",
+  "ruff>=0.9,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ra_agent"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --strict-config"
+asyncio_mode = "auto"
+pythonpath = ["src"]
+testpaths = ["../tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "../tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+include = ["src", "../tests"]
+venvPath = "."
+venv = ".venv"

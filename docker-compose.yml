@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    profiles: [postgres]
+    environment:
+      POSTGRES_DB: ra_agent
+      POSTGRES_USER: ra_agent
+      POSTGRES_PASSWORD: local-development-only
+    ports:
+      - "5432:5432"
+    volumes:
+      - ra-agent-postgres:/var/lib/postgresql/data
+
+volumes:
+  ra-agent-postgres:

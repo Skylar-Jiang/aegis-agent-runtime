@@ -1,0 +1,97 @@
+@import 'tailwindcss';
+
+:root {
+  color: #dfe7f1;
+  background: #0b1220;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+.shell {
+  width: min(760px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 72px 0;
+}
+
+.eyebrow {
+  color: #69a7ff;
+  font:
+    600 0.75rem/1.4 ui-monospace,
+    monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 10px 0 16px;
+  color: #f7f9fc;
+  font-size: clamp(2.25rem, 8vw, 4.5rem);
+  letter-spacing: -0.04em;
+}
+
+.summary {
+  max-width: 620px;
+  color: #9eacc0;
+  line-height: 1.75;
+}
+
+section {
+  margin-top: 56px;
+  border-top: 1px solid #263349;
+  padding-top: 24px;
+}
+
+h2 {
+  color: #f7f9fc;
+  font-size: 1rem;
+}
+
+ol {
+  margin: 28px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+li {
+  position: relative;
+  margin-left: 9px;
+  border-left: 1px solid #39506f;
+  padding: 0 0 24px 28px;
+  color: #c5d0df;
+  font:
+    500 0.875rem/1.5 ui-monospace,
+    monospace;
+}
+
+li::before {
+  position: absolute;
+  top: 3px;
+  left: -5px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #0b1220;
+  border-radius: 50%;
+  background: #4f9cff;
+  content: '';
+}
+
+li:last-child {
+  border-color: transparent;
+}
+
+@media (max-width: 520px) {
+  .shell {
+    width: min(100% - 28px, 760px);
+    padding: 44px 0;
+  }
+}

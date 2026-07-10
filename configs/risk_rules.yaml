@@ -1,0 +1,17 @@
+version: 1
+default_risk: HIGH
+default_decision: REQUEST_APPROVAL
+decision_by_risk:
+  LOW: FAST_EXECUTE
+  MEDIUM: SANDBOX_CHECK
+  HIGH: REQUEST_APPROVAL
+  CRITICAL: BLOCK
+  FORBIDDEN: BLOCK
+signals:
+  dangerous_shell:
+    risk: CRITICAL
+    examples: ["rm -rf", "format", "shutdown", "reboot", "mkfs"]
+  sensitive_read:
+    risk: HIGH
+  policy_modification:
+    risk: FORBIDDEN

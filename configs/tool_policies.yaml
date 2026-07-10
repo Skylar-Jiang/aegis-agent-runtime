@@ -1,0 +1,82 @@
+version: 1
+tools:
+  list_dir:
+    {
+      base_risk: LOW,
+      side_effect_type: NONE,
+      reversibility: ATOMIC,
+      sandbox_mode: NONE,
+      timeout_seconds: 5,
+      network_required: false,
+      supports_dry_run: true,
+    }
+  read_file:
+    {
+      base_risk: LOW,
+      side_effect_type: READ,
+      reversibility: ATOMIC,
+      sandbox_mode: NONE,
+      timeout_seconds: 10,
+      network_required: false,
+      supports_dry_run: true,
+    }
+  write_file:
+    {
+      base_risk: MEDIUM,
+      side_effect_type: WRITE,
+      reversibility: BACKUP_RESTORE,
+      sandbox_mode: PENDING,
+      timeout_seconds: 10,
+      network_required: false,
+      supports_dry_run: true,
+    }
+  delete_file:
+    {
+      base_risk: HIGH,
+      side_effect_type: DELETE,
+      reversibility: BACKUP_RESTORE,
+      sandbox_mode: PENDING,
+      timeout_seconds: 10,
+      network_required: false,
+      supports_dry_run: true,
+    }
+  run_shell:
+    {
+      base_risk: HIGH,
+      side_effect_type: PROCESS,
+      reversibility: NON_REVERSIBLE,
+      sandbox_mode: DISABLED_PHASE_0,
+      timeout_seconds: 10,
+      network_required: false,
+      supports_dry_run: true,
+    }
+  download_url:
+    {
+      base_risk: MEDIUM,
+      side_effect_type: WRITE,
+      reversibility: ATOMIC,
+      sandbox_mode: QUARANTINE,
+      timeout_seconds: 30,
+      network_required: true,
+      supports_dry_run: true,
+    }
+  memory_read:
+    {
+      base_risk: LOW,
+      side_effect_type: READ,
+      reversibility: ATOMIC,
+      sandbox_mode: NONE,
+      timeout_seconds: 5,
+      network_required: false,
+      supports_dry_run: true,
+    }
+  memory_write:
+    {
+      base_risk: MEDIUM,
+      side_effect_type: WRITE,
+      reversibility: ATOMIC,
+      sandbox_mode: PENDING,
+      timeout_seconds: 5,
+      network_required: false,
+      supports_dry_run: true,
+    }
