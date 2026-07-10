@@ -22,16 +22,39 @@ Agent Planner → ToolCallRequest → Runtime Scheduler
 - `tests/`：Contract、单元、集成及后续安全/回滚/e2e 测试入口。
 - `docs/`：P0 冻结文档、ADR、策划书和冻结报告。
 
-## 快速开始（Windows PowerShell）
+## 环境安装
+
+环境要求：Git、Python 3.11；需要运行前端时再安装 Node.js 22。后端不使用手写 `requirements.txt`，依赖声明与精确版本分别位于 `backend/pyproject.toml` 和 `backend/uv.lock`。
+
+克隆仓库后，在项目根目录执行：
 
 ```powershell
+git clone https://github.com/Skylar-Jiang/aegis-agent-runtime.git
+cd aegis-agent-runtime
+
+# 安装 uv，并按锁文件创建 backend/.venv
 py -3.11 -m pip install --user uv
 py -3.11 -m uv sync --project backend --group dev
+
+# 激活虚拟环境
 .\backend\.venv\Scripts\Activate.ps1
+
+# 确认解释器与后端依赖可用
+python --version
+python -c "import fastapi, pydantic, langgraph; print('backend environment ready')"
+```
+
+macOS/Linux 的激活命令为 `source backend/.venv/bin/activate`。如果 PowerShell 不允许执行激活脚本，也可以直接使用 `backend\.venv\Scripts\python.exe`，不需要修改系统执行策略。
+
+需要运行前端时再执行：
+
+```powershell
 corepack pnpm --dir frontend install --frozen-lockfile
 ```
 
 复制 `.env.example` 为 `.env` 后只在本地填写密钥，禁止提交真实密钥。
+
+## 启动与检查
 
 ```powershell
 py -3.11 -m uv run --project backend uvicorn ra_agent.main:app --reload
