@@ -1,3 +1,3 @@
 # Pages
 
-Route-level pages will be introduced after Phase 0.
+Route-level pages are outside the current Phase 1 runtime-foundation scope.

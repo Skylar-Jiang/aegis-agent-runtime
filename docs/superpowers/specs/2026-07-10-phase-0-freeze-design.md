@@ -9,7 +9,7 @@
 ## 技术基线
 
 - 后端：CPython 3.11、uv、FastAPI、Pydantic v2、pydantic-settings、LangGraph、asyncio、httpx、SQLAlchemy 2、Alembic、SQLite/aiosqlite、PyYAML、structlog。
-- 前端：Node.js 22 LTS（`>=22.12 <23`）、pnpm 10、React 19、TypeScript 5、Vite 7、React Router 7、TanStack Query 5、Zustand 5、React Flow 12、ECharts 6、Tailwind CSS 4、Vitest、Testing Library、Playwright、ESLint、Prettier。
+- 当前有效前端基线：Node.js 24.14.0（`>=24.14.0 <25`）、pnpm 10.12.4、React 19、TypeScript 5、Vite 7、React Router 7、TanStack Query 5、Zustand 5、React Flow 12、ECharts 6、Tailwind CSS 4、Vitest、Testing Library、Playwright、ESLint、Prettier。
 - 通信：任务命令与查询使用 REST；运行轨迹使用单向 SSE；OpenAPI 由 FastAPI 自动生成。
 - 数据：开发期使用 SQLite；审计事件最终持久化，Phase 0 只交付内存 sink 和数据库接口骨架。
 - 配置：非密钥规则使用 YAML；密钥只从 `.env`/环境变量读取，真实 `.env` 不进入 Git。

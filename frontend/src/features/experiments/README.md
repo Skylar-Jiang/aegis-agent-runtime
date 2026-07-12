@@ -1,3 +1,3 @@
 # Experiments feature
 
-Baseline comparison charts will be implemented after Phase 0.
+Baseline comparison charts are outside the current Phase 1 runtime-foundation scope.

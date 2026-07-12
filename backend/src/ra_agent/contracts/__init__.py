@@ -9,6 +9,7 @@ from .enums import (
     PolicyDecision,
     RecoverabilityType,
     RiskLevel,
+    SourceType,
     StepStatus,
 )
 from .execution import (
@@ -18,9 +19,11 @@ from .execution import (
     RollbackResult,
     ToolExecutionResult,
 )
-from .risk import PermissionDecision, RiskVerdict
+from .risk import PermissionCheckResult, PermissionDecision, RiskVerdict
 from .tasks import TaskCreateRequest, TaskResponse, TaskStep
 from .tools import ToolCallRequest, ToolSpec
+
+CONTRACT_VERSION = "0.2"
 
 __all__ = [
     "APIError",
@@ -31,9 +34,11 @@ __all__ = [
     "AuditEventType",
     "CheckpointResult",
     "CommitResult",
+    "CONTRACT_VERSION",
     "DeepCheckResult",
     "ExecutionStatus",
     "PermissionDecision",
+    "PermissionCheckResult",
     "PermissionStatus",
     "PermissionType",
     "PolicyDecision",
@@ -41,6 +46,7 @@ __all__ = [
     "RiskLevel",
     "RiskVerdict",
     "RollbackResult",
+    "SourceType",
     "StepStatus",
     "TaskCreateRequest",
     "TaskResponse",

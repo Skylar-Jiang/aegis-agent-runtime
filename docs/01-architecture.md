@@ -15,4 +15,4 @@ Planner 只生成计划与 `ToolCallRequest`。Scheduler 是所有副作用的�
 - 前端只消费 REST、OpenAPI Contract 和 SSE AuditEvent，不读取 Python 内部对象。
 - LangGraph 只负责 Planner/Agent 状态流转，不代替 Scheduler、安全模块或提交语义。
 
-Phase 0 是模块化单体，不拆微服务。SQLite 是开发数据库，PostgreSQL 仅是可选部署目标。
+Phase 1 仍采用模块化单体，不拆微服务。SQLite 是未来开发数据库，PostgreSQL 仅是可选部署目标；当前 Runtime 不实现数据库持久化。

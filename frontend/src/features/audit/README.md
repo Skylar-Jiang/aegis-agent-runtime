@@ -1,3 +1,3 @@
 # Audit feature
 
-SSE event history and filtering will be implemented after Phase 0.
+SSE event history and filtering are outside the current Phase 1 runtime-foundation scope.

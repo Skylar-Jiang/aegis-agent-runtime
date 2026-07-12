@@ -1,5 +1,7 @@
 # 运行状态机
 
+当前阶段为 **Phase 1：Runtime 基础闭环**。
+
 终态为 `COMMITTED`、`ROLLED_BACK`、`BLOCKED`、`FAILED`、`CANCELLED`，终态禁止再次转移。
 
 ## 固定路径
@@ -8,8 +10,17 @@
 - 中风险通过：`PLANNED → RISK_CLASSIFYING → CHECKPOINT_CREATING → EXECUTING_SANDBOX → SAFETY_CHECKING → COMMITTING → COMMITTED`
 - 中风险失败：前半段相同，随后 `ROLLING_BACK → ROLLED_BACK`
 - 高风险：`RISK_CLASSIFYING → WAITING_APPROVAL → READY|BLOCKED`；获批后仍进入 checkpoint/sandbox/check/commit。
-- 禁止：`PLANNED → RISK_CLASSIFYING → BLOCKED`
+- 策略阻断：`PLANNED → RISK_CLASSIFYING → BLOCKED`
+
+请求或可信 ToolSpec 校验失败可由 `PLANNED → FAILED`。Runtime 第一阶段尚未支持的策略由 `RISK_CLASSIFYING → FAILED` 返回结构化业务结果，不能降级执行。
 
 `EXECUTING_SANDBOX` 可同时启动受控执行和深度检查；若执行先结束而检查未结束，进入 `SAFETY_CHECKING`。提交必须同时满足执行成功和检查通过。
 
 状态合法性校验不替代调度前置条件：没有 RiskVerdict 不得执行，BLOCK 不得执行，中风险写操作没有 checkpoint 不得执行，没有检查通过不得 commit，同一 `request_id` 不得重复产生副作用。
+
+## COMMITTED 语义
+
+- FAST_EXECUTE：LOW 操作直接执行，不进入 Pending，也不调用真实 CommitGate；执行成功后进入 COMMITTED，表示结果已经成为可信结果。
+- SANDBOX_CHECK：MEDIUM 结果必须先进入 Pending，通过安全检查并由 CommitGate 提交后才能进入 COMMITTED；此时 COMMITTED 表示 Pending 已进入 Trusted。该完整路径尚未实现。
+
+Runtime 在状态机前使用共享请求执行 Registry 原子声明 `request_id`。相同语义的串行或并发重试复用第一次结果；相同 ID 的不同语义请求返回 `REQUEST_ID_CONFLICT`，不进入执行状态。

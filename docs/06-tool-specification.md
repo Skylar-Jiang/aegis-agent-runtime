@@ -6,7 +6,7 @@
 | read_file    | FILE_READ        | LOW      | READ    | ATOMIC         | NONE；敏感路径动态升到 HIGH |
 | write_file   | FILE_WRITE       | MEDIUM   | WRITE   | BACKUP_RESTORE | PENDING                     |
 | delete_file  | FILE_DELETE      | HIGH     | DELETE  | BACKUP_RESTORE | PENDING + approval          |
-| run_shell    | SHELL_EXEC       | HIGH     | PROCESS | NON_REVERSIBLE | Phase 0 禁用真实执行        |
+| run_shell    | SHELL_EXEC       | HIGH     | PROCESS | NON_REVERSIBLE | Phase 1 禁用真实执行        |
 | download_url | NETWORK_DOWNLOAD | MEDIUM   | WRITE   | ATOMIC         | QUARANTINE                  |
 | memory_read  | MEMORY_READ      | LOW      | READ    | ATOMIC         | NONE                        |
 | memory_write | MEMORY_WRITE     | MEDIUM   | WRITE   | ATOMIC         | PENDING                     |

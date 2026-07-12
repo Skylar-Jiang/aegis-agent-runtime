@@ -6,7 +6,7 @@
 
 **Architecture:** 单仓库包含 FastAPI/Pydantic 后端、Vite/React 前端、共享 YAML 策略和文档。Agent 只产出工具请求，所有副作用经 Runtime Scheduler，审计事件是 UI 和实验的统一事实来源。
 
-**Tech Stack:** Python 3.11、uv、FastAPI、Pydantic v2、LangGraph、SQLite；Node 22、pnpm、React、TypeScript、Vite、Vitest。
+**Tech Stack:** Python 3.11、uv、FastAPI、Pydantic v2、LangGraph、SQLite；当前有效基线 Node.js 24.14.0、pnpm 10.12.4、React、TypeScript、Vite、Vitest。
 
 ---
 

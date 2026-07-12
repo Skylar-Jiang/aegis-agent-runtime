@@ -1,6 +1,6 @@
-from pydantic import AwareDatetime, Field
+from pydantic import Field
 
-from .common import ContractModel
+from .common import ContractModel, UTCDateTime
 from .enums import StepStatus
 
 
@@ -19,5 +19,5 @@ class TaskResponse(ContractModel):
     task_id: str
     objective: str
     status: str
-    created_at: AwareDatetime
+    created_at: UTCDateTime
     steps: list[TaskStep] = Field(default_factory=list)

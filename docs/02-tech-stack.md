@@ -1,4 +1,4 @@
-# 技术栈冻结
+# Phase 1 技术栈冻结
 
 ## 后端
 
@@ -6,12 +6,14 @@ CPython `>=3.11,<3.12`、uv、FastAPI、Pydantic v2、pydantic-settings、LangGr
 
 ## 前端
 
-Node.js `>=22.12,<23`、pnpm 10、React 19、TypeScript 5、Vite 7、React Router、TanStack Query、Zustand、React Flow、ECharts、Tailwind CSS 4、shadcn/ui 代码分发约定、Vitest、Testing Library、Playwright、ESLint 和 Prettier。Phase 0 只建立可编译占位入口，不开发业务页面。
+Node.js 固定开发版本为 `24.14.0`，允许范围为 `>=24.14.0 <25`；包管理器固定为 pnpm `10.12.4`，由 `frontend/package.json` 的 `packageManager` 和 Corepack 管理。前端其余技术为 React 19、TypeScript 5、Vite 7、React Router、TanStack Query、Zustand、React Flow、ECharts、Tailwind CSS 4、Vitest、Testing Library、Playwright、ESLint 和 Prettier。
 
 ## 版本策略
 
-`pyproject.toml` 是 Python 唯一依赖声明，核心依赖使用已知兼容的上下界，`uv.lock` 由 `uv lock` 生成；不维护手写 requirements。前端声明兼容范围并提交 `pnpm-lock.yaml`。本机 Node 24 不符合冻结版本，只用于验证，CI 使用 Node 22。
+`.nvmrc` 与 CI 固定 Node.js `24.14.0`，`.npmrc` 启用 `engine-strict=true`。`pyproject.toml` 是 Python 唯一依赖声明，`backend/uv.lock` 与 `frontend/pnpm-lock.yaml` 均提交并保持冻结；不得使用 `npm install`、擅自升级 pnpm 或为切换 Node 版本重建 lockfile。
 
-## 暂不采用
+Python 虚拟环境和 Node.js 版本管理相互独立。Windows 推荐 NVM for Windows；macOS/Linux 可使用读取 `.nvmrc` 的 nvm、fnm 或 asdf。
 
-Celery、Redis、Kafka、Kubernetes、复杂微服务、向量数据库、复杂 RAG、多 Agent、自训练模型和真实 Docker Sandbox 均不进入第一版。
+## 当前边界
+
+Phase 1 只完成 Runtime FAST_EXECUTE、BLOCK、幂等、权限一致性和内存审计基础闭环。真实 LLM、Sandbox、审批、Commit/Rollback、数据库和前端业务不在当前实现范围。

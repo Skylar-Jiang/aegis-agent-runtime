@@ -1,6 +1,14 @@
-from typing import Generic, TypeVar
+from datetime import UTC, datetime
+from typing import Annotated, Generic, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field
+
+
+def _normalize_utc(value: datetime) -> datetime:
+    return value.astimezone(UTC)
+
+
+UTCDateTime = Annotated[AwareDatetime, AfterValidator(_normalize_utc)]
 
 
 class ContractModel(BaseModel):

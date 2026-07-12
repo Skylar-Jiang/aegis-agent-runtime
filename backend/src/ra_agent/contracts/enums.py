@@ -16,6 +16,13 @@ class PolicyDecision(StrEnum):
     BLOCK = "BLOCK"
 
 
+class SourceType(StrEnum):
+    USER = "user"
+    AGENT = "agent"
+    EXTERNAL_DOCUMENT = "external_document"
+    TOOL_OUTPUT = "tool_output"
+
+
 class PermissionStatus(StrEnum):
     GRANTED = "GRANTED"
     DENIED = "DENIED"

@@ -1,6 +1,8 @@
 from typing import Any
 
-from .common import ContractModel
+from pydantic import Field
+
+from .common import ContractModel, UTCDateTime
 from .enums import ExecutionStatus
 
 
@@ -19,12 +21,20 @@ class ToolExecutionResult(ContractModel):
     status: ExecutionStatus
     output: Any = None
     error: str | None = None
+    error_code: str | None = None
+    checkpoint_id: str | None = None
+    sandbox_path: str | None = None
+    artifacts: list[dict[str, Any]] = Field(default_factory=list)
+    pending_changes: list[dict[str, Any]] = Field(default_factory=list)
+    started_at: UTCDateTime | None = None
+    finished_at: UTCDateTime | None = None
 
 
 class DeepCheckResult(ContractModel):
     request_id: str
     passed: bool
     reason: str
+    signals: list[str] = Field(default_factory=list)
 
 
 class CommitResult(ContractModel):

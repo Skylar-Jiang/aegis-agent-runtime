@@ -6,7 +6,7 @@ class LLMClient(Protocol):
 
 
 class MockLLMClient:
-    """Offline Phase 0 mock; it never calls an external model."""
+    """Offline Phase 1 mock; it never calls an external model."""
 
     async def complete(self, messages: list[dict[str, str]]) -> str:
         return f"mock response for {len(messages)} message(s)"

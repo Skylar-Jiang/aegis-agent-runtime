@@ -1,3 +1,3 @@
-"""RA-Agent Phase 0 engineering skeleton."""
+"""RA-Agent Phase 1 Runtime foundation."""
 
 __version__ = "0.1.0"

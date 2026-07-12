@@ -1,3 +1,3 @@
 # Runtime graph feature
 
-AuditEvent-driven execution visualization will be implemented after Phase 0.
+AuditEvent-driven execution visualization is outside the current Phase 1 runtime-foundation scope.

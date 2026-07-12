@@ -10,11 +10,11 @@ class DeepSafetyChecker(Protocol):
 
 
 class MockDeepSafetyChecker:
-    """Phase 0 mock; it must never be presented as a real deep checker."""
+    """Phase 1 mock; it must never be presented as a real deep checker."""
 
     async def check(self, request: ToolCallRequest, result: ToolExecutionResult) -> DeepCheckResult:
         return DeepCheckResult(
             request_id=request.request_id,
             passed=True,
-            reason="Phase 0 mock deep-check result",
+            reason="Phase 1 mock deep-check result",
         )

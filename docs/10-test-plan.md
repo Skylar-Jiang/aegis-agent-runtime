@@ -1,8 +1,12 @@
 # 测试计划
 
-## Phase 0 自动化
+## 工程骨架自动化
 
 健康检查、Contract 创建/JSON 序列化、naive datetime 拒绝、风险与策略枚举、状态机合法/非法流转、Mock ToolCallRequest 调度、AuditEvent 顺序、YAML 配置解析和前端占位渲染。
+
+## Phase 1：Runtime 基础闭环自动化
+
+Contract v0.2 字段与共享 Fixture、可信 ToolSpec 多权限检查、AuditRecorder 跨请求序号与递归脱敏、FAST_EXECUTE 单次调用与完整事件、BLOCK 零执行、未支持策略安全失败、执行/权限异常结构化结果，以及危险 Fixture 的 Mock 风险语义。
 
 ## 后续安全验收
 

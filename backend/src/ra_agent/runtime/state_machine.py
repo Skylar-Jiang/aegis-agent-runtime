@@ -6,7 +6,9 @@ class InvalidStateTransition(ValueError):
 
 
 _TRANSITIONS: dict[StepStatus, frozenset[StepStatus]] = {
-    StepStatus.PLANNED: frozenset({StepStatus.RISK_CLASSIFYING, StepStatus.CANCELLED}),
+    StepStatus.PLANNED: frozenset(
+        {StepStatus.RISK_CLASSIFYING, StepStatus.FAILED, StepStatus.CANCELLED}
+    ),
     StepStatus.RISK_CLASSIFYING: frozenset(
         {
             StepStatus.WAITING_PERMISSION,

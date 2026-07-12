@@ -10,11 +10,11 @@ export default function App() {
   return (
     <main className="shell">
       <header>
-        <p className="eyebrow">Phase 0 工程骨架</p>
+        <p className="eyebrow">Phase 1 Runtime 基础闭环</p>
         <h1>RA-Agent Runtime</h1>
         <p className="summary">
-          当前仅冻结工程边界、公共 Contract
-          与开发工具链；真实安全能力将在后续阶段实现。
+          当前已实现 LOW 风险直通与阻断路径；MEDIUM 风险的 Pending、
+          SafetyCheck 与 CommitGate 将在后续阶段实现。
         </p>
       </header>
 

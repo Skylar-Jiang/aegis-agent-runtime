@@ -1,3 +1,3 @@
 # Tasks feature
 
-Task creation and status UI will be implemented after Phase 0.
+Task creation and status UI are outside the current Phase 1 runtime-foundation scope.

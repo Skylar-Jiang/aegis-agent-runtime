@@ -1,6 +1,4 @@
-from pydantic import AwareDatetime
-
-from .common import ContractModel
+from .common import ContractModel, UTCDateTime
 
 
 class ApprovalRequest(ContractModel):
@@ -9,13 +7,13 @@ class ApprovalRequest(ContractModel):
     step_id: str
     request_id: str
     reason: str
-    requested_at: AwareDatetime
-    expires_at: AwareDatetime
+    requested_at: UTCDateTime
+    expires_at: UTCDateTime
 
 
 class ApprovalDecision(ContractModel):
     approval_id: str
     granted: bool
     decided_by: str
-    decided_at: AwareDatetime
+    decided_at: UTCDateTime
     reason: str

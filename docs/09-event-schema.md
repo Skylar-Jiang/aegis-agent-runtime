@@ -1,7 +1,11 @@
 # 审计事件 Schema
 
-`AuditEvent` 字段为 `event_id/task_id/step_id/request_id/sequence_number/event_type/timestamp/actor/status/risk_level/decision/summary/details`。同一任务 sequence_number 严格单调增加；timestamp 是 UTC aware datetime。
+`AuditEvent` 字段为 `event_id/task_id/step_id/request_id/sequence_number/event_type/timestamp/actor/status/risk_level/decision/summary/details`。同一任务 `sequence_number` 严格单调增加；不同任务分别从 1 开始；`timestamp` 是 UTC aware datetime。
+
+Scheduler 和业务模块只能调用统一 `AuditRecorder.record`，不得生成 `event_id`、`sequence_number` 或 `timestamp`。Recorder 负责构建与保存事件；公共 API 不再暴露旧 `emit`。当前 `InMemoryAuditRecorder` 用于测试和最小应用，不是 SQLite 仓库。
+
+同一 `request_id` 的不同语义请求记录 TOOL_REQUESTED 和 STEP_FAILED，失败事件 details 包含 `error_code=REQUEST_ID_CONFLICT`，且不会覆盖首个执行结果。
 
 事件类型冻结为任务/计划/工具请求、风险与权限、审批、checkpoint、执行、深检、commit、rollback、阻断、失败、完成和取消生命周期，具体枚举以 `contracts/enums.py` 为唯一来源。
 
-事件在进入 sink 前必须递归脱敏认证头、token、password、secret、API key 和敏感文件内容。Phase 0 的 `redact` 只覆盖顶层常见键，真实递归脱敏是后续安全工作，不得将当前实现用于生产日志。
+事件进入存储前递归脱敏嵌套字典和列表。键名匹配不区分大小写，当前覆盖 `api_key`、`authorization`、`password`、`secret`、`token`、`access_token` 和 `refresh_token`。

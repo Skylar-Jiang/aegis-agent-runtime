@@ -1,15 +1,15 @@
 from typing import Any
 
-from pydantic import AwareDatetime, Field
+from pydantic import Field
 
-from .common import ContractModel
-from .enums import PermissionType, RecoverabilityType, RiskLevel
+from .common import ContractModel, UTCDateTime
+from .enums import PermissionType, RecoverabilityType, RiskLevel, SourceType
 
 
 class ToolSpec(ContractModel):
     name: str
     description: str
-    required_permissions: list[PermissionType]
+    required_permissions: list[PermissionType] = Field(default_factory=list)
     base_risk: RiskLevel
     side_effect_type: str
     reversibility: RecoverabilityType
@@ -25,5 +25,8 @@ class ToolCallRequest(ContractModel):
     step_id: str
     request_id: str
     tool_name: str
-    arguments: dict[str, Any]
-    requested_at: AwareDatetime
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    objective: str = Field(min_length=1)
+    context_summary: str = Field(min_length=1)
+    source_type: SourceType
+    requested_at: UTCDateTime

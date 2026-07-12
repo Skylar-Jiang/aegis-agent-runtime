@@ -1,4 +1,4 @@
-# Phase 0 冻结报告
+# Phase 0 历史冻结报告（已由 Phase 1 基线取代）
 
 ## 原始状态
 
@@ -6,7 +6,7 @@
 
 ## 最终方案
 
-采用 `docs/now.md` 为工程规范、策划书为产品意图的方案。冻结 Python 3.11/uv/FastAPI/Pydantic/LangGraph 后端，Node 22/pnpm/React/Vite 前端骨架，SQLite 开发数据库、REST + SSE、YAML 规则与 AuditEvent 事实流。风险/策略映射、审批后受控路径和并行检查语义见 ADR-003 与状态机文档。
+本文件记录最初工程骨架；当前有效基线已升级为 Phase 1。现行环境冻结 Python 3.11 与 Node.js 24.14.0/pnpm 10.12.4，Runtime 已实现 FAST_EXECUTE、BLOCK、幂等、权限一致性和内存审计基础闭环。
 
 ## 当前真实能力
 
@@ -25,11 +25,11 @@
 - Uvicorn `/health`：实际启动并返回 `{"data":{"status":"ok","phase":"phase-0"},"error":null}`。
 - pnpm frozen lock、ESLint、TypeScript、Vitest、Prettier、Vite build：通过；Vitest 为 1 passed。
 - Playwright：桌面和 390px 视口均加载正确，最终控制台 0 errors、0 warnings。
-- 环境差异：本机 Node 24.14.0 执行前端验证时产生 engine warning；冻结和 CI 版本仍为 Node 22.12。
+- 当前 Phase 1 基线与 CI 均使用 Node.js 24.14.0，不再把本机 Node 24 视为临时环境。
 
 ## P0 环境记录
 
-uv 0.11.28 已通过可用的 PyPI 镜像解析依赖，Python 3.11.9 项目虚拟环境位于 `backend/.venv`，真实 `backend/uv.lock` 已生成。pnpm 10 已解析并生成真实 lock。本机 Node 24.14.0 高于冻结的 Node 22，只作为临时验证环境，CI 固定 Node 22。
+Python 3.11 项目虚拟环境位于 `backend/.venv`。Phase 1 固定 Node.js 24.14.0 和 pnpm 10.12.4；切换 Node 基线不重建 `frontend/pnpm-lock.yaml`。
 
 ## 下一阶段四人入口
 

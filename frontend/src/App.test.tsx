@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest'
 
 import App from './App'
 
-describe('Phase 0 shell', () => {
-  it('identifies the repository as an engineering skeleton', () => {
+describe('Phase 1 shell', () => {
+  it('identifies the current runtime foundation phase', () => {
     render(<App />)
 
     expect(
       screen.getByRole('heading', { name: 'RA-Agent Runtime' }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Phase 0 工程骨架')).toBeInTheDocument()
+    expect(screen.getByText('Phase 1 Runtime 基础闭环')).toBeInTheDocument()
   })
 })

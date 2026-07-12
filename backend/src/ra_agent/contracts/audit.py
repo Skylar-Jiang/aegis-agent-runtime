@@ -1,8 +1,8 @@
 from typing import Any
 
-from pydantic import AwareDatetime, Field
+from pydantic import Field
 
-from .common import ContractModel
+from .common import ContractModel, UTCDateTime
 from .enums import AuditEventType, PolicyDecision, RiskLevel
 
 
@@ -13,7 +13,7 @@ class AuditEvent(ContractModel):
     request_id: str | None = None
     sequence_number: int = Field(gt=0)
     event_type: AuditEventType
-    timestamp: AwareDatetime
+    timestamp: UTCDateTime
     actor: str
     status: str
     risk_level: RiskLevel | None = None

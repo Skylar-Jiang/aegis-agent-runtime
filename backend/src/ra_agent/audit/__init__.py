@@ -1,3 +1,6 @@
-from .event_bus import AuditEventSink, InMemoryAuditEventSink
+from .event_bus import AuditRecorder, InMemoryAuditRecorder
 
-__all__ = ["AuditEventSink", "InMemoryAuditEventSink"]
+__all__ = [
+    "AuditRecorder",
+    "InMemoryAuditRecorder",
+]
