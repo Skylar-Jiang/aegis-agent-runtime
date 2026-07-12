@@ -2,11 +2,11 @@
 
 ## 本阶段交付
 
-在既有工程骨架上冻结 Contract v0.2、Node.js 24.14.0/pnpm 10.12.4、模块边界和统一依赖装配；交付 FAST_EXECUTE、BLOCK、请求幂等、权限一致性、UTC Contract 和内存 AuditRecorder。
+在既有工程骨架上冻结 Contract v0.2、Node.js 24.14.0/pnpm 10.12.4、模块边界和统一依赖装配；交付四策略调度骨架、请求幂等、权限一致性、UTC Contract、内存 AuditRecorder，以及 SANDBOX_CHECK/REQUEST_APPROVAL 的无副作用 Mock 闭环。
 
 ## 本阶段不交付
 
-不实现 SANDBOX_CHECK、REQUEST_APPROVAL、真实 LLM Planner、完整风险算法、真实文件/网络/Shell 工具、完整页面、生产数据库、分布式任务、多 Agent、RAG 或模型训练。
+不实现真实 LLM Planner、完整风险算法、真实文件/网络/Shell 工具、真实 Sandbox/Checkpoint/Commit/Rollback、正式审批 API、完整页面、生产数据库、分布式任务、多 Agent、RAG 或模型训练。
 
 ## 安全能力边界
 

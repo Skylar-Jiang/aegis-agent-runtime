@@ -51,6 +51,14 @@
 
 `RequestExecutionRegistry` 是可替换的幂等接口；当前使用线程安全内存实现，成员 D 后续可提供持久化实现，但不修改其请求指纹和冲突语义。
 
+## 并行接入点
+
+- 成员 B：实现 `RiskClassifier`、`PolicyEngine`、`PermissionGate`、`DeepSafetyChecker`；返回值必须保留 request_id，不能调用工具。
+- 成员 C：实现 `ToolExecutor`、`CheckpointManager`、`CommitGate`、`RollbackManager` 与 Registry 中的 `ToolHandler`；Scheduler 仍是唯一执行入口。
+- 成员 D：实现 `AuditRecorder`、`ApprovalService`、审批 API/SSE/数据库和前端消费；不得改变两阶段审批、序号或幂等语义。
+
+`build_mock_container()` 是共享可运行基线，生产路由不得重复手工装配依赖。Mock 用于接口和编排验证，不是安全实现。
+
 ## Contract 变更流程
 
 1. 成员先提出变更原因。

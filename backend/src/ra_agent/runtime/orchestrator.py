@@ -1,3 +1,3 @@
-class RuntimeOrchestrator:
-    async def run(self, _task_id: str) -> None:
-        raise NotImplementedError("Full runtime orchestration is outside Phase 1")
+from ra_agent.agent.runtime import AgentRuntime
+
+RuntimeOrchestrator = AgentRuntime

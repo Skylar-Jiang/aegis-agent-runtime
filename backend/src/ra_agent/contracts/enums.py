@@ -31,6 +31,13 @@ class PermissionStatus(StrEnum):
     EXPIRED = "EXPIRED"
 
 
+class ApprovalStatus(StrEnum):
+    PENDING = "PENDING"
+    GRANTED = "GRANTED"
+    DENIED = "DENIED"
+    EXPIRED = "EXPIRED"
+
+
 class ExecutionStatus(StrEnum):
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
@@ -40,6 +47,7 @@ class ExecutionStatus(StrEnum):
     COMMITTED = "COMMITTED"
     CANCELLED = "CANCELLED"
     TIMEOUT = "TIMEOUT"
+    WAITING_APPROVAL = "WAITING_APPROVAL"
 
 
 class StepStatus(StrEnum):

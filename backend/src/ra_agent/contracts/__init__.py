@@ -2,6 +2,7 @@ from .approvals import ApprovalDecision, ApprovalRequest
 from .audit import AuditEvent
 from .common import APIError, APIResponse
 from .enums import (
+    ApprovalStatus,
     AuditEventType,
     ExecutionStatus,
     PermissionStatus,
@@ -30,6 +31,7 @@ __all__ = [
     "APIResponse",
     "ApprovalDecision",
     "ApprovalRequest",
+    "ApprovalStatus",
     "AuditEvent",
     "AuditEventType",
     "CheckpointResult",

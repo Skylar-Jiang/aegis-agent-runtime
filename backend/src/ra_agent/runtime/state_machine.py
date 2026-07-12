@@ -29,7 +29,12 @@ _TRANSITIONS: dict[StepStatus, frozenset[StepStatus]] = {
         {StepStatus.EXECUTING_FAST, StepStatus.CHECKPOINT_CREATING, StepStatus.CANCELLED}
     ),
     StepStatus.CHECKPOINT_CREATING: frozenset(
-        {StepStatus.EXECUTING_SANDBOX, StepStatus.FAILED, StepStatus.CANCELLED}
+        {
+            StepStatus.EXECUTING_SANDBOX,
+            StepStatus.ROLLING_BACK,
+            StepStatus.FAILED,
+            StepStatus.CANCELLED,
+        }
     ),
     StepStatus.EXECUTING_FAST: frozenset(
         {StepStatus.COMMITTED, StepStatus.FAILED, StepStatus.CANCELLED}

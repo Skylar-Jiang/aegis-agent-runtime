@@ -139,7 +139,9 @@ class TrackingExecutor:
         self.calls = 0
         self.raises = raises
 
-    async def execute(self, request: ToolCallRequest) -> ToolExecutionResult:
+    async def execute(
+        self, request: ToolCallRequest, *, checkpoint_id: str | None = None
+    ) -> ToolExecutionResult:
         self.calls += 1
         if self.raises:
             raise RuntimeError("executor failed")
@@ -153,7 +155,9 @@ class TrackingExecutor:
 
 
 class SlowTrackingExecutor(TrackingExecutor):
-    async def execute(self, request: ToolCallRequest) -> ToolExecutionResult:
+    async def execute(
+        self, request: ToolCallRequest, *, checkpoint_id: str | None = None
+    ) -> ToolExecutionResult:
         await asyncio.sleep(0.02)
         return await super().execute(request)
 
@@ -288,10 +292,8 @@ async def test_audit_sequences_continue_across_requests_and_restart_per_task() -
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "decision", [PolicyDecision.SANDBOX_CHECK, PolicyDecision.REQUEST_APPROVAL]
-)
-async def test_unimplemented_policy_returns_failure_without_execution(
+@pytest.mark.parametrize("decision", [PolicyDecision.REQUEST_APPROVAL])
+async def test_unconfigured_policy_dependency_returns_failure_without_execution(
     decision: PolicyDecision,
 ) -> None:
     scheduler, recorder, executor, _ = make_scheduler(decision)
@@ -300,7 +302,7 @@ async def test_unimplemented_policy_returns_failure_without_execution(
 
     assert executor.calls == 0
     assert result.status is ExecutionStatus.FAILED
-    assert "Runtime Phase 1 does not support" in (result.error or "")
+    assert "dependencies are not configured" in (result.error or "")
     assert recorder.events_for("task-1")[-1].event_type is AuditEventType.STEP_FAILED
 
 
@@ -492,13 +494,6 @@ async def test_permission_matrix_blocks_non_executable_statuses(
             permissions=[PermissionType.FILE_LIST, PermissionType.SENSITIVE_READ],
         ),
         StaticPermissionGate(
-            statuses=[PermissionStatus.GRANTED], result_request_id="other-request"
-        ),
-        StaticPermissionGate(
-            statuses=[PermissionStatus.GRANTED],
-            decision_request_ids=["other-request"],
-        ),
-        StaticPermissionGate(
             statuses=[PermissionStatus.GRANTED], requires_approval=True
         ),
         StaticPermissionGate(statuses=[PermissionStatus.GRANTED], allowed=False),
@@ -510,8 +505,6 @@ async def test_permission_matrix_blocks_non_executable_statuses(
     ],
     ids=[
         "extra-permission",
-        "result-request-id",
-        "decision-request-id",
         "requires-approval",
         "allowed-contradiction",
         "denied-allowed-contradiction",
@@ -530,3 +523,32 @@ async def test_permission_matrix_blocks_inconsistent_results(
     assert executor.calls == 0
     assert result.status is ExecutionStatus.BLOCKED
     assert recorder.events_for("task-1")[-1].event_type is AuditEventType.TOOL_BLOCKED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "gate",
+    [
+        StaticPermissionGate(
+            statuses=[PermissionStatus.GRANTED], result_request_id="other-request"
+        ),
+        StaticPermissionGate(
+            statuses=[PermissionStatus.GRANTED],
+            decision_request_ids=["other-request"],
+        ),
+    ],
+    ids=["result-request-id", "decision-request-id"],
+)
+async def test_permission_correlation_mismatch_fails_structurally(
+    gate: StaticPermissionGate,
+) -> None:
+    scheduler, recorder, executor, _ = make_scheduler(
+        PolicyDecision.FAST_EXECUTE, permission_gate=gate
+    )
+
+    result = await scheduler.schedule(make_request())
+
+    assert executor.calls == 0
+    assert result.status is ExecutionStatus.FAILED
+    assert result.error_code == "CORRELATION_MISMATCH"
+    assert recorder.events_for("task-1")[-1].event_type is AuditEventType.STEP_FAILED

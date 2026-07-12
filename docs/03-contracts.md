@@ -7,7 +7,7 @@
 | `TaskCreateRequest`, `TaskResponse`, `TaskStep` | 任务入口、快照和步骤状态 |
 | `ToolSpec`, `ToolCallRequest` | 可信工具元数据与唯一调用请求 |
 | `RiskVerdict`, `PermissionDecision`, `PermissionCheckResult` | 风险证据、策略建议和多权限汇总 |
-| `ApprovalRequest`, `ApprovalDecision` | 人工审批生命周期 |
+| `ApprovalRequest`, `ApprovalDecision`, `ApprovalStatus` | 人工审批生命周期和明确状态 |
 | `CheckpointResult`, `ToolExecutionResult` | 受控执行状态、产物、pending 变更和时间 |
 | `DeepCheckResult`, `CommitResult`, `RollbackResult` | pending 到 trusted 或恢复的结果 |
 | `AuditEvent` | UI、实验和追踪的统一事实 |
@@ -22,6 +22,10 @@
 `request_id` 同时是请求标识和幂等键。指纹包含任务、步骤、工具、参数、目标、上下文和来源，不包含 `requested_at`；相同语义重试返回首个结果，不同语义使用相同 ID 时安全失败。
 
 `RiskVerdict` 除风险、建议和原因外，还携带 `signals/matched_rules/requires_deep_check/requires_checkpoint`。`DeepCheckResult` 携带 `signals`。`PermissionCheckResult` 汇总每项 `PermissionDecision`，并明确 `allowed/requires_approval/reason`。
+
+`ApprovalRequest` 绑定 `approval_id/task_id/step_id/request_id/tool_name/request_fingerprint/reason/requested_at/expires_at/status`。`ApprovalDecision` 绑定同一审批、任务、步骤和请求，并使用独立 `ApprovalStatus` 区分 PENDING、GRANTED、DENIED、EXPIRED。正常等待使用 `ExecutionStatus.WAITING_APPROVAL`，不得伪装为失败或阻断。
+
+Runtime 对 Risk、Permission、Checkpoint、Execution、DeepCheck、Commit、Rollback 和 Approval 的所有返回结果执行关联校验；不匹配统一使用结构化错误并保守失败。
 
 权限检查只接受注册表中的可信 `ToolSpec`：
 

@@ -6,6 +6,10 @@
 
 Planner 只生成计划与 `ToolCallRequest`。Scheduler 是所有副作用的唯一入口。Classifier 只产生风险证据，Policy 只映射策略，Permission Gate 按需授权，Executor 只执行已授权请求，Audit 只记录事实。
 
+`RuntimeScheduler` 只负责幂等声明、风险分派和公共入口；FAST、SANDBOX 和审批恢复分别由专用 Flow 实现。`ServiceContainer` 注入所有 Protocol。`ToolRegistry` 同时保存可信 `ToolSpec` 与可选 `ToolHandler`，但 Scheduler 和 Agent 都不能直接调用 Handler；未来真实 Executor 才负责解析 Handler。
+
+REQUEST_APPROVAL 是两阶段可恢复流程：第一次调度创建内存审批并返回 `WAITING_APPROVAL`，外部服务完成决定后由独立 resume 调用恢复。批准只允许进入按 ToolSpec 选择的 FAST 或 SANDBOX 路径，不可逆或禁用 Mock 工具仍然阻断。
+
 ## 依赖规则
 
 - `contracts` 不依赖业务模块；所有模块依赖统一 Contract。

@@ -1,0 +1,417 @@
+import asyncio
+from dataclasses import dataclass
+from datetime import UTC, datetime
+
+from ra_agent.audit import AuditRecorder
+from ra_agent.contracts import (
+    AuditEventType,
+    ExecutionStatus,
+    PolicyDecision,
+    RiskVerdict,
+    StepStatus,
+    ToolCallRequest,
+    ToolExecutionResult,
+)
+from ra_agent.execution import CheckpointManager, CommitGate, RollbackManager, ToolExecutor
+from ra_agent.security import DeepSafetyChecker
+
+from .correlation import (
+    CorrelationError,
+    validate_checkpoint,
+    validate_commit,
+    validate_deep_check,
+    validate_execution,
+    validate_rollback,
+)
+from .state_machine import transition
+
+
+@dataclass(slots=True)
+class _SandboxContext:
+    state: StepStatus
+    checkpoint_id: str
+    rollback_attempted: bool = False
+
+
+class SandboxFlow:
+    """Coordinates Mock pending execution; it performs no sandbox work itself."""
+
+    def __init__(
+        self,
+        *,
+        checkpoint_manager: CheckpointManager,
+        executor: ToolExecutor,
+        deep_checker: DeepSafetyChecker,
+        commit_gate: CommitGate,
+        rollback_manager: RollbackManager,
+        audit_recorder: AuditRecorder,
+    ) -> None:
+        self.checkpoint_manager = checkpoint_manager
+        self.executor = executor
+        self.deep_checker = deep_checker
+        self.commit_gate = commit_gate
+        self.rollback_manager = rollback_manager
+        self.audit_recorder = audit_recorder
+
+    async def run(
+        self,
+        request: ToolCallRequest,
+        verdict: RiskVerdict,
+        *,
+        start_state: StepStatus = StepStatus.RISK_CLASSIFYING,
+    ) -> ToolExecutionResult:
+        state = transition(start_state, StepStatus.CHECKPOINT_CREATING)
+        try:
+            checkpoint = await self.checkpoint_manager.create(request)
+            validate_checkpoint(request, checkpoint)
+        except CorrelationError as error:
+            return await self._fail(request, state, str(error), error.error_code)
+        except Exception as error:
+            return await self._fail(request, state, self._reason(error), "CHECKPOINT_FAILED")
+
+        context = _SandboxContext(state=state, checkpoint_id=checkpoint.checkpoint_id)
+        try:
+            await self._record(
+                request,
+                AuditEventType.CHECKPOINT_CREATED,
+                state,
+                "mock checkpoint created",
+                verdict,
+                {
+                    "checkpoint_id": checkpoint.checkpoint_id,
+                    "status": checkpoint.status.value,
+                },
+            )
+            if checkpoint.status is not ExecutionStatus.SUCCESS:
+                return await self._fail(
+                    request, state, "Checkpoint creation failed", "CHECKPOINT_FAILED"
+                )
+            return await self._run_after_checkpoint(request, verdict, context)
+        except asyncio.CancelledError:
+            if not context.rollback_attempted:
+                await asyncio.shield(
+                    self._rollback(
+                        request,
+                        verdict,
+                        context,
+                        "sandbox flow cancelled",
+                        "CANCELLED",
+                    )
+                )
+            raise
+
+    async def _run_after_checkpoint(
+        self,
+        request: ToolCallRequest,
+        verdict: RiskVerdict,
+        context: _SandboxContext,
+    ) -> ToolExecutionResult:
+        context.state = transition(context.state, StepStatus.EXECUTING_SANDBOX)
+        started_at = datetime.now(UTC)
+        await self._record(
+            request,
+            AuditEventType.EXECUTION_STARTED,
+            context.state,
+            "mock sandbox execution started",
+            verdict,
+            {"checkpoint_id": context.checkpoint_id},
+        )
+        try:
+            execution = await self.executor.execute(request, checkpoint_id=context.checkpoint_id)
+        except Exception as error:
+            reason = self._reason(error)
+            await self._record(
+                request,
+                AuditEventType.EXECUTION_FINISHED,
+                context.state,
+                "mock sandbox execution failed",
+                verdict,
+                {"reason": reason},
+            )
+            return await self._rollback(request, verdict, context, reason, "EXECUTION_FAILED")
+
+        await self._record(
+            request,
+            AuditEventType.EXECUTION_FINISHED,
+            context.state,
+            "mock sandbox execution finished",
+            verdict,
+            {"status": execution.status.value},
+        )
+        try:
+            validate_execution(request, execution, checkpoint_id=context.checkpoint_id)
+        except CorrelationError as error:
+            return await self._rollback(request, verdict, context, str(error), error.error_code)
+        if execution.status is not ExecutionStatus.PENDING_COMMIT:
+            return await self._rollback(
+                request,
+                verdict,
+                context,
+                "Sandbox execution did not return PENDING_COMMIT",
+                "INVALID_PENDING_RESULT",
+            )
+
+        context.state = transition(context.state, StepStatus.SAFETY_CHECKING)
+        await self._record(
+            request,
+            AuditEventType.DEEP_CHECK_STARTED,
+            context.state,
+            "mock deep check started",
+            verdict,
+        )
+        try:
+            deep_check = await self.deep_checker.check(request, execution)
+            validate_deep_check(request, deep_check)
+        except CorrelationError as error:
+            await self._record_stage_failure(
+                request,
+                AuditEventType.DEEP_CHECK_FINISHED,
+                context.state,
+                "mock deep check failed",
+                verdict,
+                str(error),
+            )
+            return await self._rollback(request, verdict, context, str(error), error.error_code)
+        except Exception as error:
+            reason = self._reason(error)
+            await self._record_stage_failure(
+                request,
+                AuditEventType.DEEP_CHECK_FINISHED,
+                context.state,
+                "mock deep check failed",
+                verdict,
+                reason,
+            )
+            return await self._rollback(request, verdict, context, reason, "DEEP_CHECK_FAILED")
+        await self._record(
+            request,
+            AuditEventType.DEEP_CHECK_FINISHED,
+            context.state,
+            "mock deep check finished",
+            verdict,
+            {"passed": deep_check.passed, "reason": deep_check.reason},
+        )
+        if not deep_check.passed:
+            return await self._rollback(
+                request,
+                verdict,
+                context,
+                deep_check.reason,
+                "DEEP_CHECK_REJECTED",
+            )
+
+        context.state = transition(context.state, StepStatus.COMMITTING)
+        await self._record(
+            request,
+            AuditEventType.COMMIT_STARTED,
+            context.state,
+            "mock commit started",
+            verdict,
+            {"checkpoint_id": context.checkpoint_id},
+        )
+        try:
+            commit = await self.commit_gate.commit(execution, deep_check)
+            validate_commit(request, context.checkpoint_id, commit)
+        except CorrelationError as error:
+            await self._record_stage_failure(
+                request,
+                AuditEventType.COMMIT_FINISHED,
+                context.state,
+                "mock commit failed",
+                verdict,
+                str(error),
+            )
+            return await self._rollback(request, verdict, context, str(error), error.error_code)
+        except Exception as error:
+            reason = self._reason(error)
+            await self._record_stage_failure(
+                request,
+                AuditEventType.COMMIT_FINISHED,
+                context.state,
+                "mock commit failed",
+                verdict,
+                reason,
+            )
+            return await self._rollback(request, verdict, context, reason, "COMMIT_FAILED")
+        await self._record(
+            request,
+            AuditEventType.COMMIT_FINISHED,
+            context.state,
+            "mock commit finished",
+            verdict,
+            {"status": commit.status.value},
+        )
+        if commit.status is not ExecutionStatus.COMMITTED:
+            return await self._rollback(
+                request, verdict, context, "Commit did not succeed", "COMMIT_FAILED"
+            )
+
+        context.state = transition(context.state, StepStatus.COMMITTED)
+        return execution.model_copy(
+            update={
+                "status": ExecutionStatus.COMMITTED,
+                "started_at": execution.started_at or started_at,
+                "finished_at": execution.finished_at or datetime.now(UTC),
+            }
+        )
+
+    async def _rollback(
+        self,
+        request: ToolCallRequest,
+        verdict: RiskVerdict,
+        context: _SandboxContext,
+        reason: str,
+        error_code: str,
+    ) -> ToolExecutionResult:
+        context.rollback_attempted = True
+        cleanup = asyncio.create_task(
+            self._rollback_once(request, verdict, context, reason, error_code)
+        )
+        try:
+            return await asyncio.shield(cleanup)
+        except asyncio.CancelledError:
+            await cleanup
+            raise
+
+    async def _rollback_once(
+        self,
+        request: ToolCallRequest,
+        verdict: RiskVerdict,
+        context: _SandboxContext,
+        reason: str,
+        error_code: str,
+    ) -> ToolExecutionResult:
+        context.state = transition(context.state, StepStatus.ROLLING_BACK)
+        await self._record(
+            request,
+            AuditEventType.ROLLBACK_STARTED,
+            context.state,
+            "mock rollback started",
+            verdict,
+            {"checkpoint_id": context.checkpoint_id, "reason": reason},
+        )
+        try:
+            rollback = await self.rollback_manager.rollback(
+                context.checkpoint_id, request.request_id
+            )
+            validate_rollback(request, context.checkpoint_id, rollback)
+        except CorrelationError as error:
+            await self._record_stage_failure(
+                request,
+                AuditEventType.ROLLBACK_FINISHED,
+                context.state,
+                "mock rollback failed",
+                verdict,
+                str(error),
+            )
+            context.state = transition(context.state, StepStatus.FAILED)
+            return await self._fail(request, context.state, str(error), error.error_code)
+        except Exception as error:
+            failure = self._reason(error)
+            await self._record_stage_failure(
+                request,
+                AuditEventType.ROLLBACK_FINISHED,
+                context.state,
+                "mock rollback failed",
+                verdict,
+                failure,
+            )
+            context.state = transition(context.state, StepStatus.FAILED)
+            return await self._fail(request, context.state, failure, "ROLLBACK_FAILED")
+        await self._record(
+            request,
+            AuditEventType.ROLLBACK_FINISHED,
+            context.state,
+            "mock rollback finished",
+            verdict,
+            {"status": rollback.status.value},
+        )
+        if rollback.status is not ExecutionStatus.ROLLED_BACK:
+            context.state = transition(context.state, StepStatus.FAILED)
+            return await self._fail(
+                request, context.state, "Rollback did not succeed", "ROLLBACK_FAILED"
+            )
+        context.state = transition(context.state, StepStatus.ROLLED_BACK)
+        await self._record_failure(request, context.state, reason, error_code)
+        return ToolExecutionResult(
+            task_id=request.task_id,
+            step_id=request.step_id,
+            request_id=request.request_id,
+            checkpoint_id=context.checkpoint_id,
+            status=ExecutionStatus.ROLLED_BACK,
+            error=reason,
+            error_code=error_code,
+        )
+
+    async def _fail(
+        self, request: ToolCallRequest, state: StepStatus, reason: str, error_code: str
+    ) -> ToolExecutionResult:
+        if state is not StepStatus.FAILED:
+            state = transition(state, StepStatus.FAILED)
+        await self._record_failure(request, state, reason, error_code)
+        return ToolExecutionResult(
+            task_id=request.task_id,
+            step_id=request.step_id,
+            request_id=request.request_id,
+            status=ExecutionStatus.FAILED,
+            error=reason,
+            error_code=error_code,
+        )
+
+    async def _record_stage_failure(
+        self,
+        request: ToolCallRequest,
+        event_type: AuditEventType,
+        state: StepStatus,
+        summary: str,
+        verdict: RiskVerdict,
+        reason: str,
+    ) -> None:
+        await self._record(
+            request,
+            event_type,
+            state,
+            summary,
+            verdict,
+            {"status": ExecutionStatus.FAILED.value, "reason": reason},
+        )
+
+    async def _record_failure(
+        self, request: ToolCallRequest, state: StepStatus, reason: str, error_code: str
+    ) -> None:
+        await self.audit_recorder.record(
+            task_id=request.task_id,
+            step_id=request.step_id,
+            request_id=request.request_id,
+            event_type=AuditEventType.STEP_FAILED,
+            actor="runtime-sandbox-flow",
+            status=state.value,
+            summary="sandbox flow failed",
+            details={"reason": reason, "error_code": error_code},
+        )
+
+    async def _record(
+        self,
+        request: ToolCallRequest,
+        event_type: AuditEventType,
+        state: StepStatus,
+        summary: str,
+        verdict: RiskVerdict,
+        details: dict[str, object] | None = None,
+    ) -> None:
+        await self.audit_recorder.record(
+            task_id=request.task_id,
+            step_id=request.step_id,
+            request_id=request.request_id,
+            event_type=event_type,
+            actor="runtime-sandbox-flow",
+            status=state.value,
+            risk_level=verdict.risk_level,
+            decision=PolicyDecision.SANDBOX_CHECK,
+            summary=summary,
+            details=details,
+        )
+
+    @staticmethod
+    def _reason(error: Exception) -> str:
+        return str(error) or type(error).__name__

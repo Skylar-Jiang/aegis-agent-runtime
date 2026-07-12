@@ -24,5 +24,5 @@
 - 背景：策划书曾存在多套未冻结的风险决策同义词。
 - 决定：使用五级 RiskLevel 和四级 PolicyDecision；HIGH 审批，CRITICAL/FORBIDDEN 阻断。
 - 备选：四级风险；五种策略。
-- 理由：与 `docs/now.md` 的公共枚举一致，并使危险命令场景确定。
+- 理由：五级风险与四类策略是当前 Contract 和安全策略文档的唯一枚举，并使危险命令场景确定。
 - 后果：审批不能覆盖 CRITICAL/FORBIDDEN；旧词只保留在历史策划书。

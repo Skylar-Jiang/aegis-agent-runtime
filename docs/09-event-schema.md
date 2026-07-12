@@ -8,4 +8,6 @@ Scheduler 和业务模块只能调用统一 `AuditRecorder.record`，不得生�
 
 事件类型冻结为任务/计划/工具请求、风险与权限、审批、checkpoint、执行、深检、commit、rollback、阻断、失败、完成和取消生命周期，具体枚举以 `contracts/enums.py` 为唯一来源。
 
+SANDBOX Mock 按顺序记录 CHECKPOINT_CREATED、EXECUTION_STARTED/FINISHED、DEEP_CHECK_STARTED/FINISHED、COMMIT_STARTED/FINISHED 或 ROLLBACK_STARTED/FINISHED；失败额外记录 STEP_FAILED。审批创建记录 APPROVAL_REQUESTED；批准记录 APPROVAL_GRANTED；拒绝和过期记录 APPROVAL_DENIED，并在 details 中保留明确 `approval_status`。
+
 事件进入存储前递归脱敏嵌套字典和列表。键名匹配不区分大小写，当前覆盖 `api_key`、`authorization`、`password`、`secret`、`token`、`access_token` 和 `refresh_token`。

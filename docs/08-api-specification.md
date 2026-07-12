@@ -14,3 +14,5 @@
 | GET    | `/api/tasks/{task_id}/report`        | 安全报告           |
 
 JSON 接口统一返回 `{data, error}`；失败时 `error` 使用 `{code, message, details}`。SSE event 名为 `audit`，data 是 `AuditEvent` JSON。断线恢复将使用 sequence_number，正式实现前不得依赖 Phase 1 的单事件 Mock stream。OpenAPI 由 FastAPI `/openapi.json` 自动生成，不维护重复 Swagger 文件。
+
+审批 Service/Runtime resume 边界已经存在，但成员 D 尚未把 HTTP 路由接入该 Service。当前 grant/deny 路由明确返回 501，不能视为已完成 API。

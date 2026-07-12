@@ -1,11 +1,9 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
 from ra_agent.audit import AuditRecorder
 from ra_agent.contracts import (
     AuditEventType,
     ExecutionStatus,
-    PermissionCheckResult,
-    PermissionStatus,
     PolicyDecision,
     RiskLevel,
     StepStatus,
@@ -17,12 +15,17 @@ from ra_agent.execution import ToolExecutor
 from ra_agent.security import PermissionGate, PolicyEngine, RiskClassifier
 from ra_agent.tools import ToolRegistry
 
+from .approval_flow import ApprovalFlow
+from .correlation import CorrelationError, validate_risk
+from .fast_flow import FastExecutionFlow
 from .idempotency import RequestExecutionRegistry
+from .permissions import permission_failure_reason
+from .sandbox_flow import SandboxFlow
 from .state_machine import transition
 
 
 class RuntimeScheduler:
-    """The only runtime entry point that may invoke a ToolExecutor."""
+    """The only Runtime entry point that may invoke a ToolExecutor."""
 
     def __init__(
         self,
@@ -34,14 +37,21 @@ class RuntimeScheduler:
         audit_recorder: AuditRecorder,
         tool_registry: ToolRegistry,
         request_registry: RequestExecutionRegistry,
+        sandbox_flow: SandboxFlow | None = None,
+        approval_flow: ApprovalFlow | None = None,
+        fast_flow: FastExecutionFlow | None = None,
     ) -> None:
         self.classifier = classifier
         self.policy = policy
         self.permission_gate = permission_gate
-        self.executor = executor
         self.audit_recorder = audit_recorder
         self.tool_registry = tool_registry
         self.request_registry = request_registry
+        self.sandbox_flow = sandbox_flow
+        self.approval_flow = approval_flow
+        self.fast_flow = fast_flow or FastExecutionFlow(
+            executor=executor, audit_recorder=audit_recorder
+        )
 
     async def schedule(self, request: ToolCallRequest) -> ToolExecutionResult:
         claim = await self.request_registry.claim(request)
@@ -57,17 +67,20 @@ class RuntimeScheduler:
         await self.request_registry.complete(claim, result)
         return result
 
+    async def resume_after_approval(
+        self, request: ToolCallRequest, approval_id: str
+    ) -> ToolExecutionResult:
+        if self.approval_flow is None:
+            reason = "Approval dependencies are not configured"
+            await self._record_failure(request, StepStatus.WAITING_APPROVAL, reason)
+            return self._result(request, ExecutionStatus.FAILED, reason)
+        return await self.approval_flow.resume(request, approval_id)
+
     async def _schedule_once(self, request: ToolCallRequest) -> ToolExecutionResult:
         state = StepStatus.PLANNED
-        await self._record(
-            request,
-            AuditEventType.TOOL_REQUESTED,
-            state,
-            "tool requested",
-        )
-
+        await self._record(request, AuditEventType.TOOL_REQUESTED, state, "tool requested")
         try:
-            tool_spec = self.tool_registry.get(request.tool_name)
+            tool_spec = self.tool_registry.get_spec(request.tool_name)
         except KeyError:
             state = transition(state, StepStatus.FAILED)
             reason = f"Unknown tool: {request.tool_name}"
@@ -77,10 +90,20 @@ class RuntimeScheduler:
         state = transition(state, StepStatus.RISK_CLASSIFYING)
         try:
             verdict = await self.classifier.classify(request)
+            validate_risk(request, verdict)
             decision = await self.policy.decide(verdict)
-        except Exception as exc:
+        except CorrelationError as error:
             state = transition(state, StepStatus.FAILED)
-            reason = str(exc) or type(exc).__name__
+            await self._record_failure(request, state, str(error), error_code=error.error_code)
+            return self._result(
+                request,
+                ExecutionStatus.FAILED,
+                str(error),
+                error_code=error.error_code,
+            )
+        except Exception as error:
+            state = transition(state, StepStatus.FAILED)
+            reason = str(error) or type(error).__name__
             await self._record_failure(request, state, reason)
             return self._result(request, ExecutionStatus.FAILED, reason)
 
@@ -93,43 +116,50 @@ class RuntimeScheduler:
             decision=decision,
             details={"reason": verdict.reason, "signals": verdict.signals},
         )
-
         if decision is PolicyDecision.BLOCK:
-            state = transition(state, StepStatus.BLOCKED)
-            await self._record(
-                request,
-                AuditEventType.TOOL_BLOCKED,
-                state,
-                "tool blocked by policy",
-                risk_level=verdict.risk_level,
-                decision=decision,
-                details={"reason": verdict.reason},
-            )
-            return self._result(request, ExecutionStatus.BLOCKED, verdict.reason)
-
-        if decision is not PolicyDecision.FAST_EXECUTE:
+            return await self._block(request, state, verdict.reason, verdict.risk_level, decision)
+        if decision is PolicyDecision.REQUEST_APPROVAL:
+            if self.approval_flow is None:
+                state = transition(state, StepStatus.FAILED)
+                reason = "REQUEST_APPROVAL dependencies are not configured"
+                await self._record_failure(request, state, reason)
+                return self._result(request, ExecutionStatus.FAILED, reason)
+            return await self.approval_flow.request_approval(request, verdict)
+        if decision not in {PolicyDecision.FAST_EXECUTE, PolicyDecision.SANDBOX_CHECK}:
             state = transition(state, StepStatus.FAILED)
-            reason = f"Runtime Phase 1 does not support policy {decision.value}"
-            await self._record_failure(
-                request,
-                state,
-                reason,
-                risk_level=verdict.risk_level,
-                decision=decision,
-            )
+            reason = f"Unsupported policy decision: {decision}"
+            await self._record_failure(request, state, reason)
             return self._result(request, ExecutionStatus.FAILED, reason)
 
+        authorization_failure = await self._authorize(
+            request, tool_spec, state, verdict.risk_level, decision
+        )
+        if authorization_failure is not None:
+            return authorization_failure
+        if decision is PolicyDecision.SANDBOX_CHECK:
+            if self.sandbox_flow is None:
+                state = transition(state, StepStatus.FAILED)
+                reason = "SANDBOX_CHECK dependencies are not configured"
+                await self._record_failure(request, state, reason)
+                return self._result(request, ExecutionStatus.FAILED, reason)
+            return await self.sandbox_flow.run(request, verdict)
+        return await self.fast_flow.run(request, verdict.risk_level, decision)
+
+    async def _authorize(
+        self,
+        request: ToolCallRequest,
+        tool_spec: ToolSpec,
+        state: StepStatus,
+        risk_level: RiskLevel,
+        decision: PolicyDecision,
+    ) -> ToolExecutionResult | None:
         try:
             permission = await self.permission_gate.check(request, tool_spec)
-        except Exception as exc:
+        except Exception as error:
             state = transition(state, StepStatus.FAILED)
-            reason = str(exc) or type(exc).__name__
+            reason = str(error) or type(error).__name__
             await self._record_failure(
-                request,
-                state,
-                reason,
-                risk_level=verdict.risk_level,
-                decision=decision,
+                request, state, reason, risk_level=risk_level, decision=decision
             )
             return self._result(request, ExecutionStatus.FAILED, reason)
         await self._record(
@@ -137,7 +167,7 @@ class RuntimeScheduler:
             AuditEventType.PERMISSION_CHECKED,
             state,
             "permission checked",
-            risk_level=verdict.risk_level,
+            risk_level=risk_level,
             decision=decision,
             details={
                 "allowed": permission.allowed,
@@ -145,106 +175,47 @@ class RuntimeScheduler:
                 "reason": permission.reason,
             },
         )
-        permission_failure = self._permission_failure_reason(request, tool_spec, permission)
-        if permission_failure is not None:
-            state = transition(state, StepStatus.BLOCKED)
-            await self._record(
-                request,
-                AuditEventType.TOOL_BLOCKED,
-                state,
-                "tool blocked by permissions",
-                risk_level=verdict.risk_level,
-                decision=decision,
-                details={"reason": permission_failure},
-            )
-            return self._result(request, ExecutionStatus.BLOCKED, permission_failure)
-
-        state = transition(state, StepStatus.READY)
-        state = transition(state, StepStatus.EXECUTING_FAST)
-        started_at = datetime.now(UTC)
-        await self._record(
-            request,
-            AuditEventType.EXECUTION_STARTED,
-            state,
-            "fast execution started",
-            risk_level=verdict.risk_level,
-            decision=decision,
-        )
-
         try:
-            execution = await self.executor.execute(request)
-        except Exception as exc:
-            state = transition(state, StepStatus.FAILED)
-            reason = str(exc) or type(exc).__name__
-            await self._record(
-                request,
-                AuditEventType.EXECUTION_FINISHED,
-                state,
-                "fast execution finished with failure",
-                risk_level=verdict.risk_level,
-                decision=decision,
-                details={"reason": reason},
-            )
+            failure = permission_failure_reason(request, tool_spec, permission)
+        except CorrelationError as error:
+            failed_state = transition(state, StepStatus.FAILED)
             await self._record_failure(
                 request,
-                state,
-                reason,
-                risk_level=verdict.risk_level,
+                failed_state,
+                str(error),
+                risk_level=risk_level,
                 decision=decision,
+                error_code=error.error_code,
             )
             return self._result(
                 request,
                 ExecutionStatus.FAILED,
-                reason,
-                started_at=started_at,
-                finished_at=datetime.now(UTC),
+                str(error),
+                error_code=error.error_code,
             )
+        if failure is None:
+            return None
+        return await self._block(request, state, failure, risk_level, decision)
 
-        finished_at = datetime.now(UTC)
-        if execution.status is not ExecutionStatus.SUCCESS:
-            state = transition(state, StepStatus.FAILED)
-            reason = execution.error or f"Executor returned {execution.status.value}"
-            await self._record(
-                request,
-                AuditEventType.EXECUTION_FINISHED,
-                state,
-                "fast execution finished with failure",
-                risk_level=verdict.risk_level,
-                decision=decision,
-                details={"reason": reason},
-            )
-            await self._record_failure(
-                request,
-                state,
-                reason,
-                risk_level=verdict.risk_level,
-                decision=decision,
-            )
-            return execution.model_copy(
-                update={
-                    "status": ExecutionStatus.FAILED,
-                    "error": reason,
-                    "started_at": execution.started_at or started_at,
-                    "finished_at": execution.finished_at or finished_at,
-                }
-            )
-
-        state = transition(state, StepStatus.COMMITTED)
+    async def _block(
+        self,
+        request: ToolCallRequest,
+        state: StepStatus,
+        reason: str,
+        risk_level: RiskLevel,
+        decision: PolicyDecision,
+    ) -> ToolExecutionResult:
+        state = transition(state, StepStatus.BLOCKED)
         await self._record(
             request,
-            AuditEventType.EXECUTION_FINISHED,
+            AuditEventType.TOOL_BLOCKED,
             state,
-            "fast execution finished",
-            risk_level=verdict.risk_level,
+            "tool blocked",
+            risk_level=risk_level,
             decision=decision,
+            details={"reason": reason},
         )
-        return execution.model_copy(
-            update={
-                "status": ExecutionStatus.COMMITTED,
-                "started_at": execution.started_at or started_at,
-                "finished_at": execution.finished_at or finished_at,
-            }
-        )
+        return self._result(request, ExecutionStatus.BLOCKED, reason)
 
     async def _request_id_conflict(self, request: ToolCallRequest) -> ToolExecutionResult:
         state = StepStatus.PLANNED
@@ -257,56 +228,13 @@ class RuntimeScheduler:
         )
         state = transition(state, StepStatus.FAILED)
         reason = "request_id was already used for different request semantics"
-        await self._record_failure(
-            request,
-            state,
-            reason,
-            error_code="REQUEST_ID_CONFLICT",
-        )
+        await self._record_failure(request, state, reason, error_code="REQUEST_ID_CONFLICT")
         return self._result(
             request,
             ExecutionStatus.FAILED,
             reason,
             error_code="REQUEST_ID_CONFLICT",
         )
-
-    @staticmethod
-    def _permission_failure_reason(
-        request: ToolCallRequest,
-        tool_spec: ToolSpec,
-        permission: PermissionCheckResult,
-    ) -> str | None:
-        if permission.request_id != request.request_id:
-            return "Permission result request_id does not match the current request"
-        if any(item.request_id != request.request_id for item in permission.decisions):
-            return "Permission decision request_id does not match the current request"
-
-        required = set(tool_spec.required_permissions)
-        decided = [item.permission for item in permission.decisions]
-        decided_set = set(decided)
-        if len(decided) != len(decided_set):
-            return "Permission result contains duplicate permission decisions"
-        missing = required - decided_set
-        if missing:
-            names = ", ".join(sorted(item.value for item in missing))
-            return f"Permission gate returned missing permission decisions: {names}"
-        extra = decided_set - required
-        if extra:
-            names = ", ".join(sorted(item.value for item in extra))
-            return f"Permission gate returned unexpected permission decisions: {names}"
-        if permission.requires_approval:
-            return "Permission result requires approval and cannot use FAST_EXECUTE"
-
-        executable_statuses = {
-            PermissionStatus.GRANTED,
-            PermissionStatus.NOT_REQUIRED,
-        }
-        decisions_allow = all(item.status in executable_statuses for item in permission.decisions)
-        if permission.allowed != decisions_allow:
-            return "Permission result allowed flag contradicts its decisions"
-        if not permission.allowed:
-            return permission.reason or "Permission result does not allow execution"
-        return None
 
     async def _record_failure(
         self,

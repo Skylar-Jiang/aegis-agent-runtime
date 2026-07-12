@@ -6,7 +6,7 @@
 
 ## Phase 1：Runtime 基础闭环自动化
 
-Contract v0.2 字段与共享 Fixture、可信 ToolSpec 多权限检查、AuditRecorder 跨请求序号与递归脱敏、FAST_EXECUTE 单次调用与完整事件、BLOCK 零执行、未支持策略安全失败、执行/权限异常结构化结果，以及危险 Fixture 的 Mock 风险语义。
+Contract v0.2 字段与共享 Fixture、可信 ToolSpec 多权限检查、AuditRecorder 并发序号与递归脱敏、FAST_EXECUTE 单次调用、BLOCK 零执行、SANDBOX Checkpoint/Pending/DeepCheck/Commit/Rollback、REQUEST_APPROVAL 等待/恢复/拒绝/过期、Agent-Scheduler 接线、所有跨模块关联错误，以及危险 Fixture 的 Mock 风险语义。
 
 ## 后续安全验收
 

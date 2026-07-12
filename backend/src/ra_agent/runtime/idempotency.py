@@ -6,7 +6,7 @@ from hashlib import sha256
 from threading import Lock
 from typing import Protocol
 
-from ra_agent.contracts import ToolCallRequest, ToolExecutionResult
+from ra_agent.contracts import ExecutionStatus, ToolCallRequest, ToolExecutionResult
 
 
 def request_fingerprint(request: ToolCallRequest) -> str:
@@ -40,6 +40,8 @@ class RequestExecutionRegistry(Protocol):
 
     async def wait(self, claim: RequestExecutionClaim) -> ToolExecutionResult: ...
 
+    async def claim_resume(self, request: ToolCallRequest) -> RequestExecutionClaim: ...
+
     async def complete(self, claim: RequestExecutionClaim, result: ToolExecutionResult) -> None: ...
 
     async def fail(self, claim: RequestExecutionClaim, error: BaseException) -> None: ...
@@ -49,6 +51,7 @@ class RequestExecutionRegistry(Protocol):
 class _RequestEntry:
     fingerprint: str
     future: Future[ToolExecutionResult]
+    resumable: bool = False
 
 
 class InMemoryRequestExecutionRegistry:
@@ -93,12 +96,54 @@ class InMemoryRequestExecutionRegistry:
             raise ValueError("Cannot wait for a conflicting request claim")
         return await asyncio.shield(asyncio.wrap_future(claim.future))
 
+    async def claim_resume(self, request: ToolCallRequest) -> RequestExecutionClaim:
+        fingerprint = request_fingerprint(request)
+        with self._lock:
+            entry = self._entries.get(request.request_id)
+            if entry is None:
+                raise ValueError("Cannot resume a request that has not been scheduled")
+            if entry.fingerprint != fingerprint:
+                return RequestExecutionClaim(
+                    request_id=request.request_id,
+                    fingerprint=fingerprint,
+                    owns_execution=False,
+                    conflict=True,
+                    future=None,
+                )
+            if entry.resumable:
+                entry.resumable = False
+                entry.future = Future()
+                return RequestExecutionClaim(
+                    request_id=request.request_id,
+                    fingerprint=fingerprint,
+                    owns_execution=True,
+                    conflict=False,
+                    future=entry.future,
+                )
+            return RequestExecutionClaim(
+                request_id=request.request_id,
+                fingerprint=fingerprint,
+                owns_execution=False,
+                conflict=False,
+                future=entry.future,
+            )
+
     async def complete(self, claim: RequestExecutionClaim, result: ToolExecutionResult) -> None:
         if not claim.owns_execution or claim.future is None:
             raise ValueError("Only the execution owner can publish a result")
-        claim.future.set_result(result)
+        with self._lock:
+            entry = self._entries.get(claim.request_id)
+            if entry is None or entry.future is not claim.future:
+                raise ValueError("Execution claim is no longer current")
+            entry.resumable = result.status is ExecutionStatus.WAITING_APPROVAL
+            claim.future.set_result(result)
 
     async def fail(self, claim: RequestExecutionClaim, error: BaseException) -> None:
         if not claim.owns_execution or claim.future is None:
             raise ValueError("Only the execution owner can publish a failure")
-        claim.future.set_exception(error)
+        with self._lock:
+            entry = self._entries.get(claim.request_id)
+            if entry is None or entry.future is not claim.future:
+                raise ValueError("Execution claim is no longer current")
+            entry.resumable = False
+            claim.future.set_exception(error)

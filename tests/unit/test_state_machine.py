@@ -22,6 +22,13 @@ def test_execution_cannot_start_before_risk_classification() -> None:
         transition(StepStatus.PLANNED, StepStatus.EXECUTING_FAST)
 
 
+def test_created_checkpoint_can_roll_back_before_execution() -> None:
+    assert (
+        transition(StepStatus.CHECKPOINT_CREATING, StepStatus.ROLLING_BACK)
+        is StepStatus.ROLLING_BACK
+    )
+
+
 def test_terminal_state_cannot_transition() -> None:
     with pytest.raises(InvalidStateTransition):
         transition(StepStatus.BLOCKED, StepStatus.READY)
