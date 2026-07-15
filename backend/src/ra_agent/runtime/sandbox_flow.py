@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 from ra_agent.audit import AuditRecorder
 from ra_agent.contracts import (
+    ApprovalDecision,
     AuditEventType,
     ExecutionStatus,
     PolicyDecision,
@@ -30,6 +31,7 @@ from .state_machine import transition
 class _SandboxContext:
     state: StepStatus
     checkpoint_id: str
+    approval_decision: ApprovalDecision | None = None
     rollback_attempted: bool = False
 
 
@@ -59,6 +61,7 @@ class SandboxFlow:
         verdict: RiskVerdict,
         *,
         start_state: StepStatus = StepStatus.RISK_CLASSIFYING,
+        approval_decision: ApprovalDecision | None = None,
     ) -> ToolExecutionResult:
         state = transition(start_state, StepStatus.CHECKPOINT_CREATING)
         try:
@@ -69,7 +72,11 @@ class SandboxFlow:
         except Exception as error:
             return await self._fail(request, state, self._reason(error), "CHECKPOINT_FAILED")
 
-        context = _SandboxContext(state=state, checkpoint_id=checkpoint.checkpoint_id)
+        context = _SandboxContext(
+            state=state,
+            checkpoint_id=checkpoint.checkpoint_id,
+            approval_decision=approval_decision,
+        )
         try:
             await self._record(
                 request,
@@ -117,7 +124,11 @@ class SandboxFlow:
             {"checkpoint_id": context.checkpoint_id},
         )
         try:
-            execution = await self.executor.execute(request, checkpoint_id=context.checkpoint_id)
+            execution = await self.executor.execute(
+                request,
+                checkpoint_id=context.checkpoint_id,
+                approval_decision=context.approval_decision,
+            )
         except Exception as error:
             reason = self._reason(error)
             await self._record(

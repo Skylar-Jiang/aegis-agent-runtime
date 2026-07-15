@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from ra_agent.audit import AuditRecorder
 from ra_agent.contracts import (
+    ApprovalDecision,
     AuditEventType,
     ExecutionStatus,
     PolicyDecision,
@@ -28,6 +29,7 @@ class FastExecutionFlow:
         decision: PolicyDecision = PolicyDecision.FAST_EXECUTE,
         *,
         start_state: StepStatus = StepStatus.RISK_CLASSIFYING,
+        approval_decision: ApprovalDecision | None = None,
     ) -> ToolExecutionResult:
         state = transition(start_state, StepStatus.READY)
         state = transition(state, StepStatus.EXECUTING_FAST)
@@ -41,7 +43,7 @@ class FastExecutionFlow:
             decision,
         )
         try:
-            execution = await self.executor.execute(request)
+            execution = await self.executor.execute(request, approval_decision=approval_decision)
         except Exception as error:
             return await self._fail(
                 request,

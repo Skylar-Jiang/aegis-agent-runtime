@@ -17,6 +17,7 @@ Phase 1：共享 Runtime 基线已验证，进入成员 B、C、D 并行开发�
 - 权限完整性、一致性及 Risk/Permission/Checkpoint/Execution/DeepCheck/Commit/Rollback/Approval 关联校验已启用。
 - AuditRecorder 是唯一公共审计写入口；AgentRuntime 的所有工具请求只经过 RuntimeScheduler。
 - ServiceContainer 提供统一依赖装配；ToolRegistry 分离管理 ToolSpec 与 ToolHandler。
+- 审批恢复会把 Runtime 已校验并消费的 `GRANTED ApprovalDecision` 透传给 ToolExecutor；普通执行传入 `None`。
 
 ## 4. Mock 能力
 
@@ -45,7 +46,7 @@ Mock 不读写真实文件、不执行 Shell、不访问网络，不具备生产
 ## 7. 成员接入接口
 
 - 成员 B：`RiskClassifier`、`PolicyEngine`、`PermissionGate`、`DeepSafetyChecker`。
-- 成员 C：`ToolExecutor`、`ToolHandler`、`CheckpointManager`、`CommitGate`、`RollbackManager`。
+- 成员 C：`ToolExecutor`（含可选 `approval_decision`）、`ToolHandler`、`CheckpointManager`、`CommitGate`、`RollbackManager`。
 - 成员 D：`AuditRecorder`、`ApprovalService`、`RequestExecutionRegistry` 持久化实现，以及 API/SSE/数据库和前端消费。
 
 三名成员只替换 ServiceContainer 中对应实现，不复制或修改 Runtime 主流程。
