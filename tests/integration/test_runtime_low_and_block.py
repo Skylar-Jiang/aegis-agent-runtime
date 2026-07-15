@@ -5,6 +5,7 @@ import pytest
 
 from ra_agent.audit import InMemoryAuditRecorder
 from ra_agent.contracts import (
+    ApprovalDecision,
     AuditEventType,
     ExecutionStatus,
     PermissionCheckResult,
@@ -138,11 +139,17 @@ class TrackingExecutor:
     def __init__(self, *, raises: bool = False) -> None:
         self.calls = 0
         self.raises = raises
+        self.approval_decisions: list[ApprovalDecision | None] = []
 
     async def execute(
-        self, request: ToolCallRequest, *, checkpoint_id: str | None = None
+        self,
+        request: ToolCallRequest,
+        *,
+        checkpoint_id: str | None = None,
+        approval_decision: ApprovalDecision | None = None,
     ) -> ToolExecutionResult:
         self.calls += 1
+        self.approval_decisions.append(approval_decision)
         if self.raises:
             raise RuntimeError("executor failed")
         return ToolExecutionResult(
@@ -156,10 +163,14 @@ class TrackingExecutor:
 
 class SlowTrackingExecutor(TrackingExecutor):
     async def execute(
-        self, request: ToolCallRequest, *, checkpoint_id: str | None = None
+        self,
+        request: ToolCallRequest,
+        *,
+        checkpoint_id: str | None = None,
+        approval_decision: ApprovalDecision | None = None,
     ) -> ToolExecutionResult:
         await asyncio.sleep(0.02)
-        return await super().execute(request)
+        return await super().execute(request, approval_decision=approval_decision)
 
 
 def make_request(
@@ -236,6 +247,7 @@ async def test_low_request_executes_once_commits_and_audits_full_path() -> None:
     result = await scheduler.schedule(make_request())
 
     assert executor.calls == 1
+    assert executor.approval_decisions == [None]
     assert permission_gate.calls == 1
     assert result.status is ExecutionStatus.COMMITTED
     assert [event.event_type for event in recorder.events_for("task-1")] == [

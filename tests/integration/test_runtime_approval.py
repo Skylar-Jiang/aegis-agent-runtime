@@ -24,12 +24,18 @@ class CountingExecutor(MockToolExecutor):
     def __init__(self) -> None:
         self.calls = 0
         self.checkpoint_ids: list[str | None] = []
+        self.approval_decisions: list[ApprovalDecision | None] = []
 
     async def execute(
-        self, request: ToolCallRequest, *, checkpoint_id: str | None = None
+        self,
+        request: ToolCallRequest,
+        *,
+        checkpoint_id: str | None = None,
+        approval_decision: ApprovalDecision | None = None,
     ):
         self.calls += 1
         self.checkpoint_ids.append(checkpoint_id)
+        self.approval_decisions.append(approval_decision)
         return await super().execute(request, checkpoint_id=checkpoint_id)
 
 
@@ -139,13 +145,16 @@ async def test_grant_resumes_reversible_high_risk_tool_through_sandbox() -> None
     request = make_request("delete_file")
     waiting = await scheduler.schedule(request)
     approval_id = waiting.output["approval_id"]
-    await container.approval_service.grant(approval_id, "reviewer", "approved")
+    decision = await container.approval_service.grant(
+        approval_id, "reviewer", "approved"
+    )
 
     result = await scheduler.resume_after_approval(request, approval_id)
 
     assert result.status is ExecutionStatus.COMMITTED
     assert executor.calls == 1
     assert executor.checkpoint_ids == [f"checkpoint-{request.request_id}"]
+    assert executor.approval_decisions == [decision]
 
 
 @pytest.mark.asyncio
@@ -154,12 +163,15 @@ async def test_grant_can_resume_approved_read_through_fast_path() -> None:
     request = make_request("read_file")
     waiting = await scheduler.schedule(request)
     approval_id = waiting.output["approval_id"]
-    await container.approval_service.grant(approval_id, "reviewer", "approved")
+    decision = await container.approval_service.grant(
+        approval_id, "reviewer", "approved"
+    )
 
     result = await scheduler.resume_after_approval(request, approval_id)
 
     assert result.status is ExecutionStatus.COMMITTED
     assert executor.checkpoint_ids == [None]
+    assert executor.approval_decisions == [decision]
 
 
 @pytest.mark.asyncio
@@ -281,12 +293,15 @@ async def test_stricter_policy_after_approval_forces_sandbox() -> None:
     request = make_request("read_file")
     waiting = await scheduler.schedule(request)
     approval_id = waiting.output["approval_id"]
-    await container.approval_service.grant(approval_id, "reviewer", "approved")
+    decision = await container.approval_service.grant(
+        approval_id, "reviewer", "approved"
+    )
 
     result = await scheduler.resume_after_approval(request, approval_id)
 
     assert result.status is ExecutionStatus.COMMITTED
     assert executor.checkpoint_ids == [f"checkpoint-{request.request_id}"]
+    assert executor.approval_decisions == [decision]
 
 
 @pytest.mark.asyncio

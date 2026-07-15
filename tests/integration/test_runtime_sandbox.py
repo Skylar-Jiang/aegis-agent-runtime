@@ -6,6 +6,7 @@ import pytest
 
 from ra_agent.audit import InMemoryAuditRecorder
 from ra_agent.contracts import (
+    ApprovalDecision,
     AuditEventType,
     CheckpointResult,
     CommitResult,
@@ -65,7 +66,11 @@ class SpyExecutor:
         self.calls = 0
 
     async def execute(
-        self, request: ToolCallRequest, *, checkpoint_id: str | None = None
+        self,
+        request: ToolCallRequest,
+        *,
+        checkpoint_id: str | None = None,
+        approval_decision: ApprovalDecision | None = None,
     ) -> ToolExecutionResult:
         self.calls += 1
         if self.error is not None:
@@ -145,7 +150,11 @@ class SpyRollbackManager:
 
 class CancellingExecutor(SpyExecutor):
     async def execute(
-        self, request: ToolCallRequest, *, checkpoint_id: str | None = None
+        self,
+        request: ToolCallRequest,
+        *,
+        checkpoint_id: str | None = None,
+        approval_decision: ApprovalDecision | None = None,
     ) -> ToolExecutionResult:
         self.calls += 1
         raise asyncio.CancelledError

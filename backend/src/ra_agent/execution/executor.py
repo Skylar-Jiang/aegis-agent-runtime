@@ -1,11 +1,20 @@
 from typing import Protocol
 
-from ra_agent.contracts import ExecutionStatus, ToolCallRequest, ToolExecutionResult
+from ra_agent.contracts import (
+    ApprovalDecision,
+    ExecutionStatus,
+    ToolCallRequest,
+    ToolExecutionResult,
+)
 
 
 class ToolExecutor(Protocol):
     async def execute(
-        self, request: ToolCallRequest, *, checkpoint_id: str | None = None
+        self,
+        request: ToolCallRequest,
+        *,
+        checkpoint_id: str | None = None,
+        approval_decision: ApprovalDecision | None = None,
     ) -> ToolExecutionResult: ...
 
 
@@ -13,7 +22,11 @@ class MockToolExecutor:
     """Returns mock output and never invokes a real tool."""
 
     async def execute(
-        self, request: ToolCallRequest, *, checkpoint_id: str | None = None
+        self,
+        request: ToolCallRequest,
+        *,
+        checkpoint_id: str | None = None,
+        approval_decision: ApprovalDecision | None = None,
     ) -> ToolExecutionResult:
         return ToolExecutionResult(
             task_id=request.task_id,

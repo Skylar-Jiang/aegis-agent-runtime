@@ -54,8 +54,8 @@
 ## 并行接入点
 
 - 成员 B：实现 `RiskClassifier`、`PolicyEngine`、`PermissionGate`、`DeepSafetyChecker`；返回值必须保留 request_id，不能调用工具。
-- 成员 C：实现 `ToolExecutor`、`CheckpointManager`、`CommitGate`、`RollbackManager` 与 Registry 中的 `ToolHandler`；Scheduler 仍是唯一执行入口。
-- 成员 D：实现 `AuditRecorder`、`ApprovalService`、审批 API/SSE/数据库和前端消费；不得改变两阶段审批、序号或幂等语义。
+- 成员 C：实现 `ToolExecutor`、`CheckpointManager`、`CommitGate`、`RollbackManager` 与 Registry 中的 `ToolHandler`；Scheduler 仍是唯一执行入口。`ToolExecutor.execute` 必须接收可选的 `approval_decision`：普通请求为 `None`，审批恢复请求为 Runtime 已校验的 `GRANTED ApprovalDecision`。C 层可以核对关联 ID 和记录来源，但不得自行决定请求是否需要审批。
+- 成员 D：实现 `AuditRecorder`、`ApprovalService`、审批 API/SSE/数据库和前端消费；不得改变两阶段审批、序号或幂等语义。审批审计可使用 Executor 收到的 `approval_decision.approval_id` 与现有事件关联。
 
 `build_mock_container()` 是共享可运行基线，生产路由不得重复手工装配依赖。Mock 用于接口和编排验证，不是安全实现。
 
@@ -68,3 +68,11 @@
 5. 其他成员同步 `develop` 后继续开发。
 
 Contract v0.2 已冻结。成员 B、C、D 后续实现现有 Protocol 即可；除非按上述流程获批，不需要修改公共 Contract、枚举或状态机。
+
+## Executor 审批参数 handover
+
+- `ToolCallRequest` 不携带可由 Agent 伪造的 `approved` 布尔值。
+- Runtime 在调用 Executor 前完成 ApprovalRequest 指纹与 ApprovalDecision 关联校验，并只透传已原子消费的 `GRANTED` 决策。
+- FAST_EXECUTE 与 SANDBOX_CHECK 两条审批恢复路径使用同一参数；Sandbox 的 checkpoint 参数保持独立。
+- 成员 C 的真实实现只消费该审批来源，不重复读取 ApprovalService，也不绕过 Runtime 重新恢复审批。
+- 测试替身和真实实现均应保留 `approval_decision: ApprovalDecision | None = None` 关键字参数。

@@ -143,7 +143,7 @@ class ApprovalFlow:
                     f"APPROVAL_{consumed.status.value}",
                 )
             elif consumed.status is ApprovalStatus.GRANTED:
-                result = await self._run_approved(request)
+                result = await self._run_approved(request, consumed)
             else:
                 result = await self._failure(
                     request,
@@ -166,7 +166,9 @@ class ApprovalFlow:
             validate_approval_decision(approval, decision)
         return approval, decision
 
-    async def _run_approved(self, request: ToolCallRequest) -> ToolExecutionResult:
+    async def _run_approved(
+        self, request: ToolCallRequest, decision: ApprovalDecision
+    ) -> ToolExecutionResult:
         try:
             tool_spec = self.tool_registry.get_spec(request.tool_name)
             verdict = await self.classifier.classify(request)
@@ -221,12 +223,18 @@ class ApprovalFlow:
             )
 
         if routed_decision is PolicyDecision.SANDBOX_CHECK:
-            return await self.sandbox_flow.run(request, verdict, start_state=StepStatus.READY)
+            return await self.sandbox_flow.run(
+                request,
+                verdict,
+                start_state=StepStatus.READY,
+                approval_decision=decision,
+            )
         return await self.fast_flow.run(
             request,
             verdict.risk_level,
             routed_decision,
             start_state=StepStatus.WAITING_APPROVAL,
+            approval_decision=decision,
         )
 
     @staticmethod

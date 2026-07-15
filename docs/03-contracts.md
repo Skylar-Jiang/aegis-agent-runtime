@@ -15,7 +15,7 @@
 
 ## v0.2 冻结字段
 
-`ToolCallRequest` 包含 `task_id/step_id/request_id/tool_name/arguments/objective/context_summary/source_type/requested_at`。`objective` 是用户原始目标；`context_summary` 只保存产生本次调用所需的上下文摘要；`source_type` 使用 `user/agent/external_document/tool_output`。Contract 不记录、传输或要求模型隐藏推理过程。
+`ToolCallRequest` 包含 `task_id/step_id/request_id/tool_name/arguments/objective/context_summary/source_type/requested_at`。`objective` 是用户原始目标；`context_summary` 只保存产生本次调用所需的上下文摘要；`source_type` 使用 `user/agent/external_document/tool_output`。Contract 不记录、传输或要求模型隐藏推理过程，也不包含 `approved` 等由 Agent 自行声明的审批字段。
 
 `ToolExecutionResult` 包含 `task_id/step_id/request_id/status/output/error/error_code/checkpoint_id/sandbox_path/artifacts/pending_changes/started_at/finished_at`。`REQUEST_ID_CONFLICT` 使用结构化 `error_code` 表达。
 
@@ -37,5 +37,18 @@ async def check(
 ```
 
 Agent 不声明也不能覆盖工具所需权限。
+
+`ToolExecutor` 使用 Runtime 内部关键字参数接收审批来源：
+
+```python
+async def execute(
+    request: ToolCallRequest,
+    *,
+    checkpoint_id: str | None = None,
+    approval_decision: ApprovalDecision | None = None,
+) -> ToolExecutionResult: ...
+```
+
+普通执行传入 `None`。只有 Runtime 完成审批关联校验、原子消费且确认状态为 `GRANTED` 后，才把对应 `ApprovalDecision` 传给 Executor；该参数是执行来源证明，不把审批策略判断下放给 Executor。
 
 Contract 变更必须先说明原因、缺失字段和影响模块，由组长统一修改 Contract、测试和本文档；其他成员同步 `develop` 后继续开发，不得在业务模块定义同义模型、枚举或字段。
