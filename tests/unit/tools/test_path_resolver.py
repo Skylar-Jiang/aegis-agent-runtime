@@ -252,48 +252,38 @@ def test_delete_rejects_symbolic_link(
     with pytest.raises(UnsafePathError):
         resolver.resolve_delete_target("readme-link.txt")
 
+
 @pytest.mark.parametrize(
-    ("field", "values"),
+    (
+        "max_path_length",
+        "max_read_bytes",
+        "max_write_bytes",
+        "expected_message",
+    ),
     [
-        (
-            "max_path_length",
-            {
-                "max_path_length": 0,
-                "max_read_bytes": 16,
-                "max_write_bytes": 16,
-            },
-        ),
-        (
-            "max_read_bytes",
-            {
-                "max_path_length": 4096,
-                "max_read_bytes": 0,
-                "max_write_bytes": 16,
-            },
-        ),
-        (
-            "max_write_bytes",
-            {
-                "max_path_length": 4096,
-                "max_read_bytes": 16,
-                "max_write_bytes": 0,
-            },
-        ),
+        (0, 16, 16, "max_path_length"),
+        (4096, 0, 16, "max_read_bytes"),
+        (4096, 16, 0, "max_write_bytes"),
     ],
 )
 def test_limits_must_be_positive(
     workspace: Path,
-    field: str,
-    values: dict[str, int],
+    max_path_length: int,
+    max_read_bytes: int,
+    max_write_bytes: int,
+    expected_message: str,
 ) -> None:
     with pytest.raises(
         ValueError,
-        match=field,
+        match=expected_message,
     ):
         SafePathResolver(
             workspace,
-            **values,
+            max_path_length=max_path_length,
+            max_read_bytes=max_read_bytes,
+            max_write_bytes=max_write_bytes,
         )
+
 
 def test_workspace_root_must_exist(
     tmp_path: Path,
@@ -308,6 +298,7 @@ def test_workspace_root_must_exist(
             max_read_bytes=16,
             max_write_bytes=16,
         )
+
 
 def test_workspace_root_must_be_directory(
     tmp_path: Path,
@@ -328,6 +319,7 @@ def test_workspace_root_must_be_directory(
             max_read_bytes=16,
             max_write_bytes=16,
         )
+
 
 @pytest.mark.parametrize(
     "raw_path",
@@ -352,6 +344,7 @@ def test_invalid_raw_paths_are_rejected(
     with pytest.raises(UnsafePathError):
         resolver.resolve_write_target(raw_path)
 
+
 def test_non_string_path_is_rejected(
     resolver: SafePathResolver,
 ) -> None:
@@ -360,6 +353,7 @@ def test_non_string_path_is_rejected(
         match="must be a string",
     ):
         resolver.resolve_write_target(123)  # type: ignore[arg-type]
+
 
 def test_to_relative_rejects_path_outside_workspace(
     resolver: SafePathResolver,
