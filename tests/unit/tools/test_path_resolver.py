@@ -200,6 +200,7 @@ def test_to_relative_returns_posix_style_path(
 
     assert result == "docs/report.txt"
 
+
 def test_read_content_limit_is_enforced_after_reading(
     resolver: SafePathResolver,
 ) -> None:
@@ -207,6 +208,7 @@ def test_read_content_limit_is_enforced_after_reading(
 
     with pytest.raises(PathSizeError):
         resolver.validate_read_content(b"x" * 17)
+
 
 def test_symbolic_link_escape_is_rejected(
     resolver: SafePathResolver,
@@ -249,3 +251,125 @@ def test_delete_rejects_symbolic_link(
 
     with pytest.raises(UnsafePathError):
         resolver.resolve_delete_target("readme-link.txt")
+
+@pytest.mark.parametrize(
+    ("field", "values"),
+    [
+        (
+            "max_path_length",
+            {
+                "max_path_length": 0,
+                "max_read_bytes": 16,
+                "max_write_bytes": 16,
+            },
+        ),
+        (
+            "max_read_bytes",
+            {
+                "max_path_length": 4096,
+                "max_read_bytes": 0,
+                "max_write_bytes": 16,
+            },
+        ),
+        (
+            "max_write_bytes",
+            {
+                "max_path_length": 4096,
+                "max_read_bytes": 16,
+                "max_write_bytes": 0,
+            },
+        ),
+    ],
+)
+def test_limits_must_be_positive(
+    workspace: Path,
+    field: str,
+    values: dict[str, int],
+) -> None:
+    with pytest.raises(
+        ValueError,
+        match=field,
+    ):
+        SafePathResolver(
+            workspace,
+            **values,
+        )
+
+def test_workspace_root_must_exist(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(
+        PathTypeError,
+        match="does not exist",
+    ):
+        SafePathResolver(
+            tmp_path / "missing",
+            max_path_length=4096,
+            max_read_bytes=16,
+            max_write_bytes=16,
+        )
+
+def test_workspace_root_must_be_directory(
+    tmp_path: Path,
+) -> None:
+    workspace_file = tmp_path / "workspace.txt"
+    workspace_file.write_text(
+        "not a directory",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        PathTypeError,
+        match="must be a directory",
+    ):
+        SafePathResolver(
+            workspace_file,
+            max_path_length=4096,
+            max_read_bytes=16,
+            max_write_bytes=16,
+        )
+
+@pytest.mark.parametrize(
+    "raw_path",
+    [
+        "",
+        "   ",
+        "a" * 20,
+        "bad\x00path.txt",
+    ],
+)
+def test_invalid_raw_paths_are_rejected(
+    workspace: Path,
+    raw_path: str,
+) -> None:
+    resolver = SafePathResolver(
+        workspace,
+        max_path_length=10,
+        max_read_bytes=16,
+        max_write_bytes=16,
+    )
+
+    with pytest.raises(UnsafePathError):
+        resolver.resolve_write_target(raw_path)
+
+def test_non_string_path_is_rejected(
+    resolver: SafePathResolver,
+) -> None:
+    with pytest.raises(
+        UnsafePathError,
+        match="must be a string",
+    ):
+        resolver.resolve_write_target(123)  # type: ignore[arg-type]
+
+def test_to_relative_rejects_path_outside_workspace(
+    resolver: SafePathResolver,
+    tmp_path: Path,
+) -> None:
+    outside = tmp_path / "outside.txt"
+    outside.write_text(
+        "outside",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(UnsafePathError):
+        resolver.to_relative(outside)
