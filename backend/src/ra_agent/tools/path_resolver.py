@@ -187,20 +187,16 @@ class SafePathResolver:
 
         return size_bytes
 
-def validate_read_content(self, content: bytes) -> int:
-    """Validate content after reading and return its byte count."""
+    def validate_read_content(self, content: bytes) -> int:
+        """Validate content after reading and return its byte count."""
+        size_bytes = len(content)
+        if size_bytes > self._max_read_bytes:
+            raise PathSizeError(
+                "file exceeds configured read limit after reading: "
+                f"{size_bytes} > {self._max_read_bytes} bytes"
+            )
 
-    size_bytes = len(content)
-
-    if size_bytes > self._max_read_bytes:
-        raise PathSizeError(
-            "file exceeds configured read limit after reading: "
-            f"{size_bytes} > {self._max_read_bytes} bytes"
-        )
-
-    return size_bytes
-
-
+        return size_bytes
 
     def to_relative(self, path: Path) -> str:
         """Convert a trusted absolute path to a portable workspace-relative path."""
