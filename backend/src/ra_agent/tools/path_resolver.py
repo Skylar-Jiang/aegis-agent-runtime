@@ -207,6 +207,26 @@ class SafePathResolver:
         relative = os.path.relpath(resolved, self._workspace_root)
         return Path(relative).as_posix()
 
+    def is_sensitive_path(self, path: Path) -> bool:
+        """Return whether a workspace path matches a sensitive pattern."""
+
+        resolved = path.resolve(strict=False)
+        self._ensure_within_workspace(resolved)
+
+        relative = Path(
+            os.path.relpath(
+                resolved,
+                self._workspace_root,
+            )
+        )
+
+        try:
+            self._reject_sensitive_path(relative)
+        except SensitivePathError:
+            return True
+
+        return False
+
     def _resolve_existing(self, relative_path: Path) -> Path:
         candidate = self._workspace_root / relative_path
 
