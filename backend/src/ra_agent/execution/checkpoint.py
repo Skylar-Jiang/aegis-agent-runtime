@@ -6,7 +6,7 @@ import os
 import re
 import shutil
 import stat
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from hashlib import sha256
@@ -45,6 +45,7 @@ class UnsupportedCheckpointToolError(CheckpointStoreError):
 
 class CheckpointStatus(StrEnum):
     CREATED = "CREATED"
+    COMMITTED = "COMMITTED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +130,32 @@ class FilesystemCheckpointManager:
 
         async with self._lock:
             return await asyncio.to_thread(self._verify_integrity_sync, checkpoint_id)
+
+    async def mark_committed(self, checkpoint_id: str) -> None:
+        """Persist the COMMITTED state after a successful workspace commit."""
+
+        self._validate_identifier(checkpoint_id, "checkpoint_id")
+
+        async with self._lock:
+            await asyncio.to_thread(
+                self._mark_committed_sync,
+                checkpoint_id,
+            )
+
+    def _mark_committed_sync(self, checkpoint_id: str) -> None:
+        record = self._read_record_sync(checkpoint_id)
+
+        if record.status is CheckpointStatus.COMMITTED:
+            return
+
+        if not self._verify_integrity_sync(checkpoint_id):
+            raise CheckpointIntegrityError("checkpoint failed integrity verification")
+
+        updated = replace(
+            record,
+            status=CheckpointStatus.COMMITTED,
+        )
+        self._write_record_sync(updated)
 
     async def cleanup(self, checkpoint_id: str) -> None:
         """Remove one checkpoint directory. Repeated cleanup is safe."""
