@@ -452,3 +452,30 @@ async def test_read_file_rejects_invalid_path_argument(
                 arguments=arguments,
             )
         )
+
+
+@pytest.mark.asyncio
+async def test_list_dir_hides_sensitive_entries(
+    list_handler: ListDirHandler,
+    workspace: Path,
+) -> None:
+    (workspace / ".env").write_text(
+        "SECRET=value",
+        encoding="utf-8",
+    )
+    (workspace / "private.key").write_text(
+        "private",
+        encoding="utf-8",
+    )
+
+    result = await list_handler(
+        make_request(
+            "list_dir",
+            arguments={"path": "."},
+        )
+    )
+
+    names = {entry["name"] for entry in result.output["entries"]}
+
+    assert ".env" not in names
+    assert "private.key" not in names

@@ -64,6 +64,8 @@ class ListDirHandler:
             # 第一版保守处理：不展示和跟随符号链接。
             if entry.is_symlink():
                 continue
+            if self._path_resolver.is_sensitive_path(entry):
+                continue
 
             if entry.is_file() or entry.is_dir():
                 candidates.append(entry)
