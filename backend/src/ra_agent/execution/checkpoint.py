@@ -46,6 +46,7 @@ class UnsupportedCheckpointToolError(CheckpointStoreError):
 class CheckpointStatus(StrEnum):
     CREATED = "CREATED"
     COMMITTED = "COMMITTED"
+    ROLLED_BACK = "ROLLED_BACK"
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,11 +143,41 @@ class FilesystemCheckpointManager:
                 checkpoint_id,
             )
 
+    async def mark_rolled_back(self, checkpoint_id: str) -> None:
+        """Persist the ROLLED_BACK state after workspace recovery succeeds."""
+
+        self._validate_identifier(checkpoint_id, "checkpoint_id")
+
+        async with self._lock:
+            await asyncio.to_thread(
+                self._mark_rolled_back_sync,
+                checkpoint_id,
+            )
+
+    async def read_backup(
+        self,
+        checkpoint_id: str,
+        backup_path: str,
+    ) -> bytes:
+        """Read and verify one backup payload referenced by a checkpoint."""
+
+        self._validate_identifier(checkpoint_id, "checkpoint_id")
+
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._read_backup_sync,
+                checkpoint_id,
+                backup_path,
+            )
+
     def _mark_committed_sync(self, checkpoint_id: str) -> None:
         record = self._read_record_sync(checkpoint_id)
 
         if record.status is CheckpointStatus.COMMITTED:
             return
+
+        if record.status is CheckpointStatus.ROLLED_BACK:
+            raise CheckpointConflictError("a rolled-back checkpoint cannot be marked committed")
 
         if not self._verify_integrity_sync(checkpoint_id):
             raise CheckpointIntegrityError("checkpoint failed integrity verification")
@@ -156,6 +187,65 @@ class FilesystemCheckpointManager:
             status=CheckpointStatus.COMMITTED,
         )
         self._write_record_sync(updated)
+
+    def _mark_rolled_back_sync(self, checkpoint_id: str) -> None:
+        record = self._read_record_sync(checkpoint_id)
+
+        if record.status is CheckpointStatus.ROLLED_BACK:
+            return
+
+        if not self._verify_integrity_sync(checkpoint_id):
+            raise CheckpointIntegrityError("checkpoint failed integrity verification")
+
+        updated = replace(
+            record,
+            status=CheckpointStatus.ROLLED_BACK,
+        )
+        self._write_record_sync(updated)
+
+    def _read_backup_sync(
+        self,
+        checkpoint_id: str,
+        backup_path: str,
+    ) -> bytes:
+        normalized = self._validate_relative_file_path(
+            backup_path,
+            "backup_path",
+        )
+        record = self._read_record_sync(checkpoint_id)
+        backup = next(
+            (candidate for candidate in record.backups if candidate.backup_path == normalized),
+            None,
+        )
+
+        if (
+            backup is None
+            or not backup.existed
+            or backup.sha256 is None
+            or backup.size_bytes is None
+        ):
+            raise CheckpointIntegrityError("checkpoint does not contain the requested backup")
+
+        if not self._verify_integrity_sync(checkpoint_id):
+            raise CheckpointIntegrityError("checkpoint failed integrity verification")
+
+        resolved = self._resolve_checkpoint_relative_path(
+            checkpoint_id,
+            normalized,
+        )
+
+        if not resolved.is_file() or resolved.is_symlink():
+            raise CheckpointIntegrityError("checkpoint backup must be a regular file")
+
+        payload = resolved.read_bytes()
+
+        if len(payload) != backup.size_bytes:
+            raise CheckpointIntegrityError("checkpoint backup size does not match manifest")
+
+        if sha256(payload).hexdigest() != backup.sha256:
+            raise CheckpointIntegrityError("checkpoint backup hash does not match manifest")
+
+        return payload
 
     async def cleanup(self, checkpoint_id: str) -> None:
         """Remove one checkpoint directory. Repeated cleanup is safe."""
