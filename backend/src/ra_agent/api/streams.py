@@ -47,8 +47,42 @@ async def _event_generator(
             if unsubscribe is not None:
                 await unsubscribe(task_id, queue)
     else:
-        ready = json.dumps({"task_id": task_id, "status": "stream_ready"})
-        yield f"event: audit\ndata: {ready}\n\n"
+        # Fallback for recorders without subscribe (InMemoryAuditRecorder):
+        # send existing events, then poll for new ones
+        sent_seq = 0
+        try:
+            while True:
+                events: list[dict[str, object]] = []
+                if hasattr(recorder, "events_for"):
+                    try:
+                        events = await recorder.events_for(  # type: ignore[union-attr]
+                            task_id, limit=100, offset=0
+                        )
+                    except TypeError:
+                        raw = recorder.events_for(task_id)  # type: ignore[union-attr]
+                        events = [
+                            {
+                                "event_id": e.event_id,
+                                "task_id": e.task_id,
+                                "event_type": e.event_type.value
+                                if hasattr(e.event_type, "value")
+                                else str(e.event_type),
+                                "timestamp": str(e.timestamp),
+                                "actor": e.actor,
+                                "status": e.status,
+                                "summary": e.summary,
+                            }
+                            for e in raw
+                        ]
+                for evt in events:
+                    seq_raw = evt.get("sequence_number", 0)
+                    seq = int(seq_raw) if isinstance(seq_raw, (int, float, str)) else 0
+                    if seq > sent_seq:
+                        sent_seq = seq
+                        yield f"event: audit\ndata: {json.dumps(evt, default=str)}\n\n"
+                await asyncio.sleep(2)
+        except asyncio.CancelledError:
+            pass
 
 
 @router.get("/{task_id}/stream")

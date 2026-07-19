@@ -18,12 +18,27 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = await res.json();
+      // FastAPI HTTPException format: {"detail": "..."}
+      if (body.detail) {
+        message = body.detail;
+      } else if (body.error?.message) {
+        message = body.error.message;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new ApiError(res.status, 'HTTP_ERROR', message);
+  }
   const body: APIResponse<T> = await res.json();
-  if (!res.ok || body.error) {
+  if (body.error) {
     throw new ApiError(
       res.status,
-      body.error?.code ?? 'UNKNOWN',
-      body.error?.message ?? res.statusText,
+      body.error.code ?? 'UNKNOWN',
+      body.error.message ?? 'Unexpected error',
     );
   }
   return body.data as T;
