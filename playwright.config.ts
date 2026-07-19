@@ -15,7 +15,7 @@ export default defineConfig({
       reuseExistingServer: true,
     },
     {
-      command: 'cd frontend && corepack pnpm dev',
+      command: 'cd frontend && corepack pnpm dev -- --host 127.0.0.1',
       port: 5173,
       reuseExistingServer: true,
     },
