@@ -7,11 +7,12 @@ import type { AuditEvent } from '../types/contracts';
 
 export function TasksPage() {
   const [objective, setObjective] = useState('');
-  const [cancelledIds, setCancelledIds] = useState<Set<string>>(new Set());
   const taskHistory = useUIStore((s) => s.taskHistory);
   const addTask = useUIStore((s) => s.addTask);
   const selectedTaskId = useUIStore((s) => s.selectedTaskId);
   const setSelectedTask = useUIStore((s) => s.setSelectedTask);
+  const cancelledTaskIds = useUIStore((s) => s.cancelledTaskIds);
+  const markCancelled = useUIStore((s) => s.markCancelled);
 
   const create = useMutation({
     mutationFn: () => createTask(objective),
@@ -37,7 +38,7 @@ export function TasksPage() {
   const cancel = useMutation({
     mutationFn: () => cancelTask(selectedTaskId!),
     onSuccess: () => {
-      setCancelledIds((prev) => new Set(prev).add(selectedTaskId!));
+      markCancelled(selectedTaskId!);
     },
   });
 
@@ -75,7 +76,7 @@ export function TasksPage() {
           <div className="flex flex-wrap gap-2">
             {taskHistory.map((t) => {
               const isSelected = t.taskId === selectedTaskId;
-              const isCancelled = cancelledIds.has(t.taskId);
+              const isCancelled = cancelledTaskIds.includes(t.taskId);
               return (
                 <button
                   key={t.taskId}
@@ -104,7 +105,7 @@ export function TasksPage() {
           </h2>
           <div className="flex items-center gap-2">
             <StatusBadge
-              status={cancelledIds.has(selectedTaskId) ? 'CANCELLED' : 'ACTIVE'}
+              status={cancelledTaskIds.includes(selectedTaskId) ? 'CANCELLED' : 'ACTIVE'}
             />
             {cancel.isPending && <span className="text-xs text-gray-500">cancelling...</span>}
             {cancel.isError && (
@@ -144,7 +145,7 @@ export function TasksPage() {
             </div>
           )}
 
-          {!cancelledIds.has(selectedTaskId) && (
+          {!cancelledTaskIds.includes(selectedTaskId) && (
             <button
               className="mt-3 rounded border border-red-800 px-3 py-1 text-xs text-red-400 hover:bg-red-900/30 disabled:opacity-50"
               onClick={() => cancel.mutate()}
