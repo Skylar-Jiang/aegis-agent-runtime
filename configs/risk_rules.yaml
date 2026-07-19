@@ -1,17 +1,99 @@
 version: 1
 default_risk: HIGH
 default_decision: REQUEST_APPROVAL
+
 decision_by_risk:
   LOW: FAST_EXECUTE
   MEDIUM: SANDBOX_CHECK
   HIGH: REQUEST_APPROVAL
   CRITICAL: BLOCK
   FORBIDDEN: BLOCK
+
 signals:
   dangerous_shell:
     risk: CRITICAL
-    examples: ["rm -rf", "format", "shutdown", "reboot", "mkfs"]
-  sensitive_read:
+    patterns:
+      - "rm -rf"
+      - "remove-item -recurse"
+      - "del /s"
+      - "rd /s"
+      - "format "
+      - "shutdown"
+      - "reboot"
+      - "mkfs"
+      - ":(){:|:&};:"
+  sensitive_path:
     risk: HIGH
+    patterns: []
+  path_traversal:
+    risk: CRITICAL
+    patterns: []
+  unapproved_network:
+    risk: HIGH
+    patterns: []
+  blocked_network:
+    risk: CRITICAL
+    patterns: []
+  indirect_injection:
+    risk: HIGH
+    patterns:
+      - "ignore previous instructions"
+      - "ignore all previous"
+      - "reveal the system prompt"
+      - "bypass safety"
+      - "disable security"
+      - "exfiltrate"
+      - "忽略之前的指令"
+      - "忽略以上指令"
+      - "绕过安全"
+      - "泄露系统提示"
+  memory_poisoning:
+    risk: CRITICAL
+    patterns: []
   policy_modification:
     risk: FORBIDDEN
+    patterns: []
+  unknown_tool:
+    risk: HIGH
+    patterns: []
+  missing_network_target:
+    risk: HIGH
+    patterns: []
+
+network:
+  allowed_schemes: [https]
+  allowed_hosts:
+    - example.com
+    - "*.example.com"
+    - github.com
+    - raw.githubusercontent.com
+    - objects.githubusercontent.com
+    - pypi.org
+    - files.pythonhosted.org
+  blocked_hosts:
+    - localhost
+    - "*.localhost"
+    - 127.0.0.1
+    - "::1"
+    - 169.254.169.254
+    - metadata.google.internal
+
+protected_paths:
+  - configs/risk_rules.yaml
+  - configs/permissions.yaml
+  - configs/sensitive_paths.yaml
+  - backend/src/ra_agent/contracts/*
+  - backend/src/ra_agent/runtime/*
+  - backend/src/ra_agent/core/container.py
+  - backend/src/ra_agent/core/bootstrap.py
+  - backend/pyproject.toml
+  - backend/uv.lock
+
+deep_check:
+  max_pending_changes: 20
+  max_output_characters: 100000
+  secret_patterns:
+    - '(?i)\b(?:api[_-]?key|token|password|secret)\b\s*[:=]\s*[A-Za-z0-9_./+=-]{8,}'
+    - '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+    - '\bsk-[A-Za-z0-9_-]{16,}\b'
+    - '\bAKIA[0-9A-Z]{16}\b'

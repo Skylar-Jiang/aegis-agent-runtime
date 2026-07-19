@@ -127,7 +127,7 @@ async def test_list_dir_lists_nested_directory(
             "name": "report.txt",
             "path": "docs/report.txt",
             "type": "file",
-            "size_bytes": len("test report".encode("utf-8")),
+            "size_bytes": len(b"test report"),
         }
     ]
 

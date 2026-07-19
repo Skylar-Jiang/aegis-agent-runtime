@@ -21,8 +21,8 @@ from ra_agent.contracts import (
     ToolExecutionResult,
     ToolSpec,
 )
-from ra_agent.runtime.scheduler import RuntimeScheduler
 from ra_agent.runtime.idempotency import InMemoryRequestExecutionRegistry
+from ra_agent.runtime.scheduler import RuntimeScheduler
 from ra_agent.security import MockPolicyEngine
 from ra_agent.tools import ToolRegistry
 

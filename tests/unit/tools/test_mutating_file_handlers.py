@@ -347,7 +347,7 @@ async def test_delete_file_stages_marker_without_deleting_file(
         {
             "operation": "DELETE",
             "target_path": "old.txt",
-            "original_size_bytes": len("keep until commit".encode("utf-8")),
+            "original_size_bytes": len(b"keep until commit"),
             "status": "PENDING",
         }
     ]

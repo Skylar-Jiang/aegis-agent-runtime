@@ -1,12 +1,34 @@
 version: 1
-default: PENDING
+default: DENIED
+
 tool_permissions:
   list_dir: [FILE_LIST]
   read_file: [FILE_READ]
   write_file: [FILE_WRITE]
   delete_file: [FILE_DELETE]
   run_shell: [SHELL_EXEC]
-  download_url: [NETWORK_DOWNLOAD]
+  download_url: [NETWORK_DOWNLOAD, FILE_WRITE]
   memory_read: [MEMORY_READ]
   memory_write: [MEMORY_WRITE]
+
+permission_statuses:
+  list_dir:
+    FILE_LIST: GRANTED
+  read_file:
+    FILE_READ: GRANTED
+  write_file:
+    FILE_WRITE: GRANTED
+  delete_file:
+    FILE_DELETE: GRANTED
+  run_shell:
+    SHELL_EXEC: DENIED
+  download_url:
+    NETWORK_DOWNLOAD: GRANTED
+    FILE_WRITE: GRANTED
+  memory_read:
+    MEMORY_READ: GRANTED
+  memory_write:
+    MEMORY_WRITE: GRANTED
+
+approval_required: [FILE_DELETE, SHELL_EXEC]
 delayed_authorization: true

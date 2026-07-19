@@ -8,11 +8,113 @@ from ra_agent.contracts import (
     ToolSpec,
 )
 
+from .rule_engine import RuleEngine
+
 
 class PermissionGate(Protocol):
     async def check(
         self, request: ToolCallRequest, tool_spec: ToolSpec
     ) -> PermissionCheckResult: ...
+
+
+class RuleBasedPermissionGate:
+    """Evaluates every trusted ToolSpec permission and fails closed on drift."""
+
+    _EXECUTABLE_STATUSES = {
+        PermissionStatus.GRANTED,
+        PermissionStatus.NOT_REQUIRED,
+    }
+
+    def __init__(self, rules: RuleEngine) -> None:
+        self.rules = rules
+
+    async def check(self, request: ToolCallRequest, tool_spec: ToolSpec) -> PermissionCheckResult:
+        if not self.rules.valid:
+            return self._deny_all(
+                request,
+                tool_spec,
+                f"Security configuration is invalid: {self.rules.error}",
+            )
+        if tool_spec.name != request.tool_name:
+            return self._deny_all(
+                request,
+                tool_spec,
+                "Trusted ToolSpec name does not match the current request",
+            )
+
+        configured = self.rules.permissions_for(tool_spec.name)
+        if configured is None:
+            return self._deny_all(
+                request,
+                tool_spec,
+                f"No permission policy exists for tool {tool_spec.name}",
+            )
+        required = tuple(tool_spec.required_permissions)
+        if len(required) != len(set(required)):
+            return self._deny_all(
+                request,
+                tool_spec,
+                "Trusted ToolSpec contains duplicate required permissions",
+            )
+        if set(configured) != set(required):
+            return self._deny_all(
+                request,
+                tool_spec,
+                "Configured permissions do not match trusted ToolSpec permissions",
+            )
+
+        decisions = [
+            PermissionDecision(
+                request_id=request.request_id,
+                permission=permission,
+                status=self.rules.permission_status_for(tool_spec.name, permission),
+                reason=f"Configured status for {tool_spec.name}:{permission.value}",
+            )
+            for permission in tool_spec.required_permissions
+        ]
+        allowed = all(decision.status in self._EXECUTABLE_STATUSES for decision in decisions)
+        requires_approval = any(
+            self.rules.permission_requires_approval(decision.permission) for decision in decisions
+        )
+        if allowed and requires_approval:
+            reason = "Permissions are granted but Runtime approval is required"
+        elif allowed:
+            reason = "All required permissions are granted"
+        else:
+            blocked = ", ".join(
+                f"{decision.permission.value}={decision.status.value}"
+                for decision in decisions
+                if decision.status not in self._EXECUTABLE_STATUSES
+            )
+            reason = f"Non-executable permission status: {blocked}"
+        return PermissionCheckResult(
+            request_id=request.request_id,
+            decisions=decisions,
+            allowed=allowed,
+            requires_approval=requires_approval,
+            reason=reason,
+        )
+
+    @staticmethod
+    def _deny_all(
+        request: ToolCallRequest, tool_spec: ToolSpec, reason: str
+    ) -> PermissionCheckResult:
+        decisions = [
+            PermissionDecision(
+                request_id=request.request_id,
+                permission=permission,
+                status=PermissionStatus.DENIED,
+                reason=reason,
+            )
+            for permission in tool_spec.required_permissions
+        ]
+        return PermissionCheckResult(
+            request_id=request.request_id,
+            decisions=decisions,
+            allowed=False,
+            requires_approval=False,
+            reason=reason,
+        )
 
 
 class MockPermissionGate:

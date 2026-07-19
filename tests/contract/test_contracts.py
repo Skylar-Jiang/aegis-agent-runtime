@@ -7,11 +7,11 @@ from pydantic import ValidationError
 
 from ra_agent.contracts import (
     CONTRACT_VERSION,
-    AuditEvent,
-    AuditEventType,
     ApprovalDecision,
     ApprovalRequest,
     ApprovalStatus,
+    AuditEvent,
+    AuditEventType,
     DeepCheckResult,
     ExecutionStatus,
     PermissionCheckResult,

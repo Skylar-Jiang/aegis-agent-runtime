@@ -2,10 +2,15 @@ version: 1
 case_sensitive: false
 patterns:
   - .env
+  - .env.*
   - "*.pem"
   - "*.key"
   - id_rsa
+  - id_ed25519
   - credentials
+  - credentials.*
   - secrets
+  - secrets.*
   - .git
-note: Pattern matching is only the first layer and is not a complete safety detector.
+  - .ssh
+note: Pattern matching is one deterministic layer; execution still enforces workspace paths.
