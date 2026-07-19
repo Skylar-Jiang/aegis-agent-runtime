@@ -48,7 +48,9 @@ async def _event_generator(
                 await unsubscribe(task_id, queue)
     else:
         # Fallback for recorders without subscribe (InMemoryAuditRecorder):
-        # send existing events, then poll for new ones
+        # send an immediate ready event so the browser knows the connection is alive,
+        # then poll for new events every 2 seconds
+        yield f"event: audit\ndata: {json.dumps({'task_id': task_id, 'status': 'connected'})}\n\n"
         sent_seq = 0
         try:
             while True:

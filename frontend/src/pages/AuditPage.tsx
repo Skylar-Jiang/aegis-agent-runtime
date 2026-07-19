@@ -19,19 +19,32 @@ export function AuditPage() {
   useEffect(() => {
     if (!taskId) return;
     loadEvents();
+
     const url = createTaskStreamUrl(taskId);
     const es = new EventSource(url);
+
     es.addEventListener('audit', (e) => {
       try {
         const evt = JSON.parse(e.data) as AuditEvent;
+        // 'connected' status events don't have event_id
+        if (evt.status === 'connected') {
+          setConnected(true);
+          return;
+        }
         if (evt.event_id) {
           setEvents((prev) => [...prev.slice(-499), evt]);
         }
       } catch { /* ignore parse errors */ }
     });
+
     es.onopen = () => setConnected(true);
-    es.onerror = () => { setConnected(false); es.close(); };
-    return () => es.close();
+    es.onerror = () => setConnected(false);
+    // Don't call es.close() — let EventSource auto-reconnect
+
+    return () => {
+      setConnected(false);
+      es.close();
+    };
   }, [taskId, loadEvents]);
 
   const filtered = filterType === 'ALL' ? events : events.filter((e) => e.event_type === filterType);
