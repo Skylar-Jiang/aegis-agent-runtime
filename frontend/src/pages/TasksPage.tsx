@@ -7,17 +7,27 @@ import type { AuditEvent } from '../types/contracts';
 export function TasksPage() {
   const [objective, setObjective] = useState('');
   const [createdId, setCreatedId] = useState<string | null>(null);
+  const [cancelled, setCancelled] = useState(false);
   const queryClient = useQueryClient();
 
   const create = useMutation({
     mutationFn: () => createTask(objective),
     onSuccess: (data) => {
       setCreatedId(data.task_id);
+      setCancelled(false);
       queryClient.invalidateQueries({ queryKey: ['task-events', data.task_id] });
     },
   });
 
-  const { data: events, isLoading } = useQuery({
+  const cancel = useMutation({
+    mutationFn: () => cancelTask(createdId!),
+    onSuccess: () => {
+      setCancelled(true);
+      queryClient.invalidateQueries({ queryKey: ['task-events', createdId] });
+    },
+  });
+
+  const { data: events, isLoading, error: eventsError } = useQuery({
     queryKey: ['task-events', createdId],
     queryFn: () => getTaskEvents(createdId!),
     enabled: createdId !== null,
@@ -43,15 +53,22 @@ export function TasksPage() {
           {create.isPending ? 'Creating...' : 'Create Task'}
         </button>
       </div>
-      {create.isError && <p className="text-red-400 text-sm">Error: {(create.error as Error).message}</p>}
+      {create.isError && <p className="text-red-400 text-sm">Create Error: {(create.error as Error).message}</p>}
       {createdId && (
         <div className="rounded border border-gray-800 bg-gray-900 p-4">
           <h2 className="mb-2 text-sm font-medium">
             Task <span className="text-blue-400">{createdId}</span>
           </h2>
-          <StatusBadge status="ACTIVE" />
+          <div className="flex items-center gap-2">
+            <StatusBadge status={cancelled ? 'CANCELLED' : 'ACTIVE'} />
+            {cancel.isPending && <span className="text-xs text-gray-500">cancelling...</span>}
+            {cancel.isError && <span className="text-xs text-red-400">Cancel failed</span>}
+          </div>
+
           {isLoading && <p className="mt-2 text-sm text-gray-500">Loading events...</p>}
-          {events && (
+          {eventsError && <p className="mt-2 text-sm text-red-400">Events error: {(eventsError as Error).message}</p>}
+
+          {events && events.events && (events.events as AuditEvent[]).length > 0 && (
             <div className="mt-3 max-h-64 overflow-y-auto">
               <table className="w-full text-xs text-gray-400">
                 <thead>
@@ -71,12 +88,16 @@ export function TasksPage() {
               </table>
             </div>
           )}
-          <button
-            className="mt-3 rounded border border-red-800 px-3 py-1 text-xs text-red-400 hover:bg-red-900/30"
-            onClick={() => cancelTask(createdId)}
-          >
-            Cancel Task
-          </button>
+
+          {!cancelled && (
+            <button
+              className="mt-3 rounded border border-red-800 px-3 py-1 text-xs text-red-400 hover:bg-red-900/30 disabled:opacity-50"
+              onClick={() => cancel.mutate()}
+              disabled={cancel.isPending}
+            >
+              {cancel.isPending ? 'Cancelling...' : 'Cancel Task'}
+            </button>
+          )}
         </div>
       )}
     </div>

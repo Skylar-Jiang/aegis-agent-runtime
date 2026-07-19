@@ -71,9 +71,31 @@ async def get_events(
     recorder = services.audit_recorder
     events: list[dict[str, Any]] = []
     if hasattr(recorder, "events_for"):
-        events = await recorder.events_for(  # type: ignore[union-attr]
-            task_id, limit=limit, offset=offset
-        )
+        try:
+            events = await recorder.events_for(  # type: ignore[union-attr]
+                task_id, limit=limit, offset=offset
+            )
+        except TypeError:
+            # Fallback for InMemoryAuditRecorder which only takes task_id
+            raw = recorder.events_for(task_id)  # type: ignore[union-attr]
+            events = [
+                {
+                    "event_id": e.event_id,
+                    "task_id": e.task_id,
+                    "step_id": e.step_id,
+                    "request_id": e.request_id,
+                    "sequence_number": e.sequence_number,
+                    "event_type": e.event_type.value,
+                    "timestamp": str(e.timestamp),
+                    "actor": e.actor,
+                    "status": e.status,
+                    "risk_level": e.risk_level.value if e.risk_level else None,
+                    "decision": e.decision.value if e.decision else None,
+                    "summary": e.summary,
+                    "details": e.details,
+                }
+                for e in raw
+            ][offset : offset + limit]
     return APIResponse(
         data={"task_id": task_id, "events": events, "count": len(events)}
     )
