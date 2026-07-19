@@ -2,6 +2,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 
+from ra_agent.audit.report_generator import generate_report
 from ra_agent.contracts import APIResponse
 from ra_agent.core.container import ServiceContainer
 
@@ -22,15 +23,5 @@ async def report(
             task_id, limit=500, offset=0
         )
 
-    event_types: dict[str, int] = {}
-    for evt in events:
-        et = str(evt.get("event_type", ""))
-        event_types[et] = event_types.get(et, 0) + 1
-
-    return APIResponse(
-        data={
-            "task_id": task_id,
-            "total_events": len(events),
-            "event_summary": event_types,
-        }
-    )
+    report_data = generate_report(task_id, events=events)
+    return APIResponse(data=report_data)
