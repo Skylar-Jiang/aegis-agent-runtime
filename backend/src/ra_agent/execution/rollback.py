@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import stat
 import tempfile
 from hashlib import sha256
 from pathlib import Path
@@ -10,6 +11,7 @@ from typing import Protocol
 from ra_agent.contracts import ExecutionStatus, RollbackResult
 from ra_agent.tools.path_resolver import SafePathResolver
 
+from ._temp_files import transaction_temp_token
 from .checkpoint import (
     BackupRecord,
     CheckpointRecord,
@@ -120,6 +122,7 @@ class FilesystemRollbackManager:
                 checkpoint,
                 backup,
                 backup_payload,
+                pending,
             )
 
             await self._pending_store.cleanup(request_id)
@@ -228,6 +231,7 @@ class FilesystemRollbackManager:
         checkpoint: CheckpointRecord,
         backup: BackupRecord,
         backup_payload: bytes | None,
+        pending: PendingRecord | None,
     ) -> None:
         try:
             target = self._path_resolver.resolve_write_target(backup.target_path)
@@ -257,32 +261,262 @@ class FilesystemRollbackManager:
             if sha256(backup_payload).hexdigest() != backup.sha256:
                 raise RollbackIntegrityError("checkpoint backup hash does not match manifest")
 
+        if self._cleanup_interrupted_empty_quarantine(
+            target,
+            checkpoint.request_id,
+            backup,
+        ):
+            self._cleanup_commit_temp_files(target, checkpoint.request_id)
+            return
+
+        quarantined = self._existing_quarantine(target, checkpoint.request_id)
+
+        if quarantined is None:
+            # Reject stable conflicts before taking custody so later user data
+            # stays at its original path. Revalidate again after custody.
+            if not self._matches_backup_state(target, backup) and not (
+                self._matches_pending_state(target, pending)
+            ):
+                raise RollbackConflictError(
+                    "rollback target no longer matches checkpoint or transaction state"
+                )
+
+            quarantined = self._take_target_custody(target, checkpoint.request_id)
+
+        if not self._matches_backup_state(quarantined, backup) and not (
+            self._matches_pending_state(quarantined, pending)
+        ):
+            raise RollbackConflictError(
+                "quarantined rollback target does not match transaction state"
+            )
+
+        if target.exists() or target.is_symlink():
+            if backup.existed and self._matches_backup_state(target, backup):
+                self._discard_quarantine(quarantined)
+                self._cleanup_commit_temp_files(target, checkpoint.request_id)
+                return
+
+            raise RollbackConflictError(
+                "workspace target conflicts with interrupted rollback quarantine"
+            )
+
+        if backup.existed:
+            if backup_payload is None or backup.mode is None or backup.mtime_ns is None:
+                raise RollbackIntegrityError("checkpoint backup is missing restoration metadata")
+
             self._restore_file_atomically(
                 target,
                 backup_payload,
+                request_id=checkpoint.request_id,
                 mode=backup.mode,
                 mtime_ns=backup.mtime_ns,
             )
+            self._discard_quarantine(quarantined)
         else:
-            self._remove_created_target(target)
+            self._discard_quarantine(quarantined)
 
-        self._cleanup_commit_temp_files(target)
+            if target.exists() or target.is_symlink():
+                raise RollbackConflictError("a concurrent target appeared during rollback")
+
+        self._cleanup_commit_temp_files(target, checkpoint.request_id)
+
+    @staticmethod
+    def _matches_backup_state(target: Path | None, backup: BackupRecord) -> bool:
+        if not backup.existed:
+            return target is None or (not target.exists() and not target.is_symlink())
+
+        if (
+            backup.sha256 is None
+            or backup.size_bytes is None
+            or backup.mtime_ns is None
+            or backup.mode is None
+        ):
+            raise RollbackIntegrityError("checkpoint backup is missing state metadata")
+
+        return target is not None and FilesystemRollbackManager._matches_file_state(
+            target,
+            size_bytes=backup.size_bytes,
+            digest=backup.sha256,
+            mtime_ns=backup.mtime_ns,
+            mode=backup.mode,
+        )
+
+    @staticmethod
+    def _matches_pending_state(
+        target: Path | None,
+        pending: PendingRecord | None,
+    ) -> bool:
+        if pending is None:
+            return False
+
+        if pending.operation is PendingOperation.DELETE:
+            return target is None or (not target.exists() and not target.is_symlink())
+
+        if pending.content_sha256 is None or pending.size_bytes is None:
+            raise RollbackIntegrityError("pending write is missing expected state metadata")
+
+        return target is not None and FilesystemRollbackManager._matches_file_state(
+            target,
+            size_bytes=pending.size_bytes,
+            digest=pending.content_sha256,
+        )
+
+    @staticmethod
+    def _matches_file_state(
+        target: Path,
+        *,
+        size_bytes: int,
+        digest: str,
+        mtime_ns: int | None = None,
+        mode: int | None = None,
+    ) -> bool:
+        try:
+            if target.is_symlink() or not target.is_file():
+                return False
+
+            before = target.stat()
+            payload = target.read_bytes()
+            after = target.stat()
+        except OSError:
+            return False
+
+        return (
+            FilesystemRollbackManager._file_identity(before)
+            == FilesystemRollbackManager._file_identity(after)
+            and len(payload) == size_bytes
+            and sha256(payload).hexdigest() == digest
+            and (mtime_ns is None or after.st_mtime_ns == mtime_ns)
+            and (mode is None or stat.S_IMODE(after.st_mode) == mode)
+        )
+
+    @staticmethod
+    def _file_identity(stat_result: os.stat_result) -> tuple[int, int, int, int]:
+        return (
+            stat_result.st_dev,
+            stat_result.st_ino,
+            stat_result.st_size,
+            stat_result.st_mtime_ns,
+        )
+
+    @staticmethod
+    def _existing_quarantine(target: Path, request_id: str) -> Path | None:
+        token = transaction_temp_token(request_id)
+        quarantine_dir = target.parent / f".{target.name}.{token}.rollback-quarantine"
+
+        if not quarantine_dir.exists() and not quarantine_dir.is_symlink():
+            return None
+
+        quarantined = quarantine_dir / "target"
+
+        if (
+            quarantine_dir.is_symlink()
+            or not quarantine_dir.is_dir()
+            or quarantined.is_symlink()
+            or not quarantined.is_file()
+        ):
+            raise RollbackConflictError("rollback quarantine is not recoverable")
+
+        return quarantined
+
+    @staticmethod
+    def _cleanup_interrupted_empty_quarantine(
+        target: Path,
+        request_id: str,
+        backup: BackupRecord,
+    ) -> bool:
+        token = transaction_temp_token(request_id)
+        quarantine_dir = target.parent / f".{target.name}.{token}.rollback-quarantine"
+        quarantined = quarantine_dir / "target"
+
+        if not quarantine_dir.exists() and not quarantine_dir.is_symlink():
+            return False
+        if (
+            quarantine_dir.is_symlink()
+            or not quarantine_dir.is_dir()
+            or quarantined.exists()
+            or quarantined.is_symlink()
+            or not FilesystemRollbackManager._matches_backup_state(target, backup)
+        ):
+            return False
+
+        try:
+            quarantine_dir.rmdir()
+        except OSError:
+            return False
+
+        FilesystemRollbackManager._fsync_directory(target.parent)
+        return True
+
+    @staticmethod
+    def _take_target_custody(target: Path, request_id: str) -> Path | None:
+        token = transaction_temp_token(request_id)
+        quarantine_dir = target.parent / f".{target.name}.{token}.rollback-quarantine"
+        quarantined = quarantine_dir / "target"
+
+        if quarantine_dir.exists():
+            if target.exists() or target.is_symlink():
+                raise RollbackConflictError(
+                    "rollback quarantine and workspace target both exist"
+                )
+
+            if quarantined.is_file() and not quarantined.is_symlink():
+                return quarantined
+
+            raise RollbackConflictError("rollback quarantine is not recoverable")
+
+        quarantine_dir.mkdir(mode=0o700)
+
+        try:
+            os.replace(target, quarantined)
+        except FileNotFoundError:
+            quarantine_dir.rmdir()
+            return None
+        except OSError as error:
+            try:
+                quarantine_dir.rmdir()
+            except OSError:
+                pass
+            raise RollbackConflictError("rollback could not take atomic target custody") from error
+
+        FilesystemRollbackManager._fsync_directory(target.parent)
+        return quarantined
+
+    @staticmethod
+    def _discard_quarantine(quarantined: Path | None) -> None:
+        if quarantined is None:
+            return
+
+        try:
+            quarantined.unlink()
+        except FileNotFoundError:
+            pass
+
+        try:
+            quarantined.parent.rmdir()
+        except FileNotFoundError:
+            pass
+
+        FilesystemRollbackManager._fsync_directory(quarantined.parent.parent)
 
     @staticmethod
     def _restore_file_atomically(
         target: Path,
         payload: bytes,
         *,
+        request_id: str,
         mode: int,
         mtime_ns: int,
     ) -> None:
         temporary_name: str | None = None
+        preserve_temporary = False
 
         try:
             with tempfile.NamedTemporaryFile(
                 mode="wb",
                 dir=target.parent,
-                prefix=f".{target.name}.rollback.",
+                prefix=(
+                    f".{target.name}.{transaction_temp_token(request_id)}.rollback-backup."
+                ),
                 suffix=".tmp",
                 delete=False,
             ) as temporary:
@@ -296,34 +530,32 @@ class FilesystemRollbackManager:
 
             temporary_path = Path(temporary_name)
             os.chmod(temporary_path, mode)
-            os.replace(temporary_path, target)
-            temporary_name = None
             os.utime(
-                target,
+                temporary_path,
                 ns=(mtime_ns, mtime_ns),
             )
+
+            try:
+                os.link(temporary_path, target)
+            except OSError as error:
+                preserve_temporary = True
+                raise RollbackConflictError(
+                    "rollback backup could not be installed without overwrite"
+                ) from error
+
             FilesystemRollbackManager._fsync_directory(target.parent)
         finally:
-            if temporary_name is not None:
+            if temporary_name is not None and not preserve_temporary:
                 temporary_path = Path(temporary_name)
 
-                if temporary_path.exists():
+                try:
                     temporary_path.unlink()
+                except FileNotFoundError:
+                    pass
 
     @staticmethod
-    def _remove_created_target(target: Path) -> None:
-        if not target.exists() and not target.is_symlink():
-            return
-
-        if target.is_symlink() or not target.is_file():
-            raise RollbackConflictError("rollback target is not a regular file")
-
-        target.unlink()
-        FilesystemRollbackManager._fsync_directory(target.parent)
-
-    @staticmethod
-    def _cleanup_commit_temp_files(target: Path) -> None:
-        prefix = f".{target.name}."
+    def _cleanup_commit_temp_files(target: Path, request_id: str) -> None:
+        prefix = f".{target.name}.{transaction_temp_token(request_id)}."
         suffix = ".tmp"
 
         for child in target.parent.iterdir():
@@ -333,7 +565,10 @@ class FilesystemRollbackManager:
             if child.is_symlink() or not child.is_file():
                 continue
 
-            child.unlink()
+            try:
+                child.unlink()
+            except FileNotFoundError:
+                continue
 
         FilesystemRollbackManager._fsync_directory(target.parent)
 

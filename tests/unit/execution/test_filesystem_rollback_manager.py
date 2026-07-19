@@ -21,6 +21,7 @@ from ra_agent.execution.checkpoint import (
     CheckpointStatus,
     FilesystemCheckpointManager,
 )
+from ra_agent.execution._temp_files import transaction_temp_token
 from ra_agent.execution.commit_gate import FilesystemCommitGate
 from ra_agent.execution.pending_store import PendingStore
 from ra_agent.execution.rollback import (
@@ -289,6 +290,304 @@ async def test_restores_existing_file_after_committed_write(
 
 
 @pytest.mark.asyncio
+async def test_committed_write_rollback_rejects_later_workspace_edit(
+    rollback_manager: FilesystemRollbackManager,
+    resolver: SafePathResolver,
+    pending_store: PendingStore,
+    checkpoint_manager: FilesystemCheckpointManager,
+    commit_gate: FilesystemCommitGate,
+    workspace: Path,
+) -> None:
+    target = workspace / "reports" / "result.md"
+    request = make_request(
+        "write_file",
+        path="reports/result.md",
+        content="committed content",
+        request_id="request-write-later-edit",
+    )
+    execution = await prepare_committed(
+        request,
+        resolver=resolver,
+        pending_store=pending_store,
+        checkpoint_manager=checkpoint_manager,
+        commit_gate=commit_gate,
+    )
+    target.write_text("legitimate later edit", encoding="utf-8")
+
+    with pytest.raises(RollbackConflictError):
+        await rollback_manager.rollback(
+            execution.checkpoint_id or "",
+            request.request_id,
+        )
+
+    assert target.read_text(encoding="utf-8") == "legitimate later edit"
+
+
+@pytest.mark.asyncio
+async def test_committed_write_rollback_preserves_edit_racing_after_validation(
+    rollback_manager: FilesystemRollbackManager,
+    resolver: SafePathResolver,
+    pending_store: PendingStore,
+    checkpoint_manager: FilesystemCheckpointManager,
+    commit_gate: FilesystemCommitGate,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = workspace / "reports" / "result.md"
+    request = make_request(
+        "write_file",
+        path="reports/result.md",
+        content="committed content",
+        request_id="request-write-race",
+    )
+    execution = await prepare_committed(
+        request,
+        resolver=resolver,
+        pending_store=pending_store,
+        checkpoint_manager=checkpoint_manager,
+        commit_gate=commit_gate,
+    )
+    original_restore = rollback_manager._restore_file_atomically
+
+    def edit_before_restore(
+        restore_target: Path,
+        payload: bytes,
+        *,
+        request_id: str,
+        mode: int,
+        mtime_ns: int,
+    ) -> None:
+        restore_target.write_text("racing later edit", encoding="utf-8")
+        original_restore(
+            restore_target,
+            payload,
+            request_id=request_id,
+            mode=mode,
+            mtime_ns=mtime_ns,
+        )
+
+    monkeypatch.setattr(rollback_manager, "_restore_file_atomically", edit_before_restore)
+
+    with pytest.raises(RollbackConflictError):
+        await rollback_manager.rollback(
+            execution.checkpoint_id or "",
+            request.request_id,
+        )
+
+    assert target.read_text(encoding="utf-8") == "racing later edit"
+    token = transaction_temp_token(request.request_id)
+    assert list(target.parent.glob(f".result.md.{token}.rollback-*"))
+
+
+@pytest.mark.asyncio
+async def test_retry_recovers_interruption_after_custody_before_backup_install(
+    rollback_manager: FilesystemRollbackManager,
+    resolver: SafePathResolver,
+    pending_store: PendingStore,
+    checkpoint_manager: FilesystemCheckpointManager,
+    commit_gate: FilesystemCommitGate,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = workspace / "reports" / "result.md"
+    original = target.read_bytes()
+    request = make_request(
+        "write_file",
+        path="reports/result.md",
+        content="committed content",
+        request_id="request-interrupt-before-install",
+    )
+    execution = await prepare_committed(
+        request,
+        resolver=resolver,
+        pending_store=pending_store,
+        checkpoint_manager=checkpoint_manager,
+        commit_gate=commit_gate,
+    )
+    original_restore = rollback_manager._restore_file_atomically
+
+    def interrupt_before_install(
+        restore_target: Path,
+        payload: bytes,
+        *,
+        request_id: str,
+        mode: int,
+        mtime_ns: int,
+    ) -> None:
+        raise OSError("simulated interruption before backup install")
+
+    monkeypatch.setattr(
+        rollback_manager,
+        "_restore_file_atomically",
+        interrupt_before_install,
+    )
+
+    with pytest.raises(OSError, match="before backup install"):
+        await rollback_manager.rollback(
+            execution.checkpoint_id or "",
+            request.request_id,
+        )
+
+    token = transaction_temp_token(request.request_id)
+    quarantine = target.parent / f".result.md.{token}.rollback-quarantine"
+    quarantine_was_retained = quarantine.is_dir()
+    assert not target.exists()
+
+    monkeypatch.setattr(
+        rollback_manager,
+        "_restore_file_atomically",
+        original_restore,
+    )
+    result = await rollback_manager.rollback(
+        execution.checkpoint_id or "",
+        request.request_id,
+    )
+
+    assert quarantine_was_retained
+    assert result.status is ExecutionStatus.ROLLED_BACK
+    assert target.read_bytes() == original
+    assert not quarantine.exists()
+
+
+@pytest.mark.asyncio
+async def test_retry_finishes_interruption_after_backup_install_before_quarantine_discard(
+    rollback_manager: FilesystemRollbackManager,
+    resolver: SafePathResolver,
+    pending_store: PendingStore,
+    checkpoint_manager: FilesystemCheckpointManager,
+    commit_gate: FilesystemCommitGate,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = workspace / "reports" / "result.md"
+    original = target.read_bytes()
+    request = make_request(
+        "write_file",
+        path="reports/result.md",
+        content="committed content",
+        request_id="request-interrupt-after-install",
+    )
+    execution = await prepare_committed(
+        request,
+        resolver=resolver,
+        pending_store=pending_store,
+        checkpoint_manager=checkpoint_manager,
+        commit_gate=commit_gate,
+    )
+    original_restore = rollback_manager._restore_file_atomically
+
+    def interrupt_after_install(
+        restore_target: Path,
+        payload: bytes,
+        *,
+        request_id: str,
+        mode: int,
+        mtime_ns: int,
+    ) -> None:
+        original_restore(
+            restore_target,
+            payload,
+            request_id=request_id,
+            mode=mode,
+            mtime_ns=mtime_ns,
+        )
+        raise OSError("simulated interruption after backup install")
+
+    monkeypatch.setattr(
+        rollback_manager,
+        "_restore_file_atomically",
+        interrupt_after_install,
+    )
+
+    with pytest.raises(OSError, match="after backup install"):
+        await rollback_manager.rollback(
+            execution.checkpoint_id or "",
+            request.request_id,
+        )
+
+    token = transaction_temp_token(request.request_id)
+    quarantine = target.parent / f".result.md.{token}.rollback-quarantine"
+    quarantine_was_retained = quarantine.is_dir()
+    assert target.read_bytes() == original
+
+    monkeypatch.setattr(
+        rollback_manager,
+        "_restore_file_atomically",
+        original_restore,
+    )
+    result = await rollback_manager.rollback(
+        execution.checkpoint_id or "",
+        request.request_id,
+    )
+
+    assert quarantine_was_retained
+    assert result.status is ExecutionStatus.ROLLED_BACK
+    assert target.read_bytes() == original
+    assert not quarantine.exists()
+
+
+@pytest.mark.asyncio
+async def test_retry_finishes_interruption_between_quarantine_file_and_directory_cleanup(
+    rollback_manager: FilesystemRollbackManager,
+    resolver: SafePathResolver,
+    pending_store: PendingStore,
+    checkpoint_manager: FilesystemCheckpointManager,
+    commit_gate: FilesystemCommitGate,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = workspace / "reports" / "result.md"
+    original = target.read_bytes()
+    request = make_request(
+        "write_file",
+        path="reports/result.md",
+        content="committed content",
+        request_id="request-interrupt-during-quarantine-cleanup",
+    )
+    execution = await prepare_committed(
+        request,
+        resolver=resolver,
+        pending_store=pending_store,
+        checkpoint_manager=checkpoint_manager,
+        commit_gate=commit_gate,
+    )
+    original_discard = rollback_manager._discard_quarantine
+
+    def interrupt_after_quarantine_file_removal(quarantined: Path | None) -> None:
+        assert quarantined is not None
+        quarantined.unlink()
+        raise OSError("simulated interruption during quarantine cleanup")
+
+    monkeypatch.setattr(
+        rollback_manager,
+        "_discard_quarantine",
+        interrupt_after_quarantine_file_removal,
+    )
+
+    with pytest.raises(OSError, match="during quarantine cleanup"):
+        await rollback_manager.rollback(
+            execution.checkpoint_id or "",
+            request.request_id,
+        )
+
+    token = transaction_temp_token(request.request_id)
+    quarantine = target.parent / f".result.md.{token}.rollback-quarantine"
+    assert target.read_bytes() == original
+    assert quarantine.is_dir()
+    assert not any(quarantine.iterdir())
+
+    monkeypatch.setattr(rollback_manager, "_discard_quarantine", original_discard)
+    result = await rollback_manager.rollback(
+        execution.checkpoint_id or "",
+        request.request_id,
+    )
+
+    assert result.status is ExecutionStatus.ROLLED_BACK
+    assert target.read_bytes() == original
+    assert not quarantine.exists()
+
+
+@pytest.mark.asyncio
 async def test_removes_new_file_created_by_commit(
     rollback_manager: FilesystemRollbackManager,
     resolver: SafePathResolver,
@@ -383,6 +682,98 @@ async def test_restores_file_after_committed_delete(
 
     assert target.read_bytes() == original
     assert not (pending_store.pending_root / request.request_id).exists()
+
+
+@pytest.mark.asyncio
+async def test_committed_delete_rollback_rejects_later_recreated_file(
+    rollback_manager: FilesystemRollbackManager,
+    resolver: SafePathResolver,
+    pending_store: PendingStore,
+    checkpoint_manager: FilesystemCheckpointManager,
+    commit_gate: FilesystemCommitGate,
+    workspace: Path,
+) -> None:
+    target = workspace / "old.txt"
+    request = make_request(
+        "delete_file",
+        path="old.txt",
+        request_id="request-delete-later-recreate",
+    )
+    execution = await prepare_committed(
+        request,
+        resolver=resolver,
+        pending_store=pending_store,
+        checkpoint_manager=checkpoint_manager,
+        commit_gate=commit_gate,
+    )
+    target.write_text("legitimate replacement", encoding="utf-8")
+
+    with pytest.raises(RollbackConflictError):
+        await rollback_manager.rollback(
+            execution.checkpoint_id or "",
+            request.request_id,
+        )
+
+    assert target.read_text(encoding="utf-8") == "legitimate replacement"
+
+
+@pytest.mark.asyncio
+async def test_committed_delete_rollback_preserves_recreate_racing_after_validation(
+    rollback_manager: FilesystemRollbackManager,
+    resolver: SafePathResolver,
+    pending_store: PendingStore,
+    checkpoint_manager: FilesystemCheckpointManager,
+    commit_gate: FilesystemCommitGate,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = workspace / "old.txt"
+    request = make_request(
+        "delete_file",
+        path="old.txt",
+        request_id="request-delete-race",
+    )
+    execution = await prepare_committed(
+        request,
+        resolver=resolver,
+        pending_store=pending_store,
+        checkpoint_manager=checkpoint_manager,
+        commit_gate=commit_gate,
+    )
+    original_restore = rollback_manager._restore_file_atomically
+
+    def recreate_before_restore(
+        restore_target: Path,
+        payload: bytes,
+        *,
+        request_id: str,
+        mode: int,
+        mtime_ns: int,
+    ) -> None:
+        restore_target.write_text("racing recreation", encoding="utf-8")
+        original_restore(
+            restore_target,
+            payload,
+            request_id=request_id,
+            mode=mode,
+            mtime_ns=mtime_ns,
+        )
+
+    monkeypatch.setattr(
+        rollback_manager,
+        "_restore_file_atomically",
+        recreate_before_restore,
+    )
+
+    with pytest.raises(RollbackConflictError):
+        await rollback_manager.rollback(
+            execution.checkpoint_id or "",
+            request.request_id,
+        )
+
+    assert target.read_text(encoding="utf-8") == "racing recreation"
+    token = transaction_temp_token(request.request_id)
+    assert list(target.parent.glob(f".old.txt.{token}.rollback-*"))
 
 
 @pytest.mark.asyncio
@@ -637,7 +1028,7 @@ async def test_rejects_tampered_pending_payload(
 
 
 @pytest.mark.asyncio
-async def test_cleans_orphan_commit_temp_files(
+async def test_cleans_only_this_transaction_commit_temp_files(
     rollback_manager: FilesystemRollbackManager,
     resolver: SafePathResolver,
     pending_store: PendingStore,
@@ -657,15 +1048,161 @@ async def test_cleans_orphan_commit_temp_files(
         pending_store=pending_store,
         checkpoint_manager=checkpoint_manager,
     )
-    orphan = target.parent / ".result.md.orphan.tmp"
-    orphan.write_bytes(b"partial")
+    token = transaction_temp_token(request.request_id)
+    owned = target.parent / f".result.md.{token}.orphan.tmp"
+    unrelated = target.parent / ".result.md.unrelated.tmp"
+    owned.write_bytes(b"partial")
+    unrelated.write_bytes(b"keep")
 
     await rollback_manager.rollback(
         execution.checkpoint_id or "",
         request.request_id,
     )
 
-    assert not orphan.exists()
+    assert not owned.exists()
+    assert unrelated.read_bytes() == b"keep"
+
+
+@pytest.mark.asyncio
+async def test_temp_cleanup_does_not_match_prefix_related_request_id(
+    rollback_manager: FilesystemRollbackManager,
+    resolver: SafePathResolver,
+    pending_store: PendingStore,
+    checkpoint_manager: FilesystemCheckpointManager,
+    commit_gate: FilesystemCommitGate,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = workspace / "reports" / "result.md"
+    original_replace = os.replace
+    original_unlink = Path.unlink
+
+    async def leave_commit_temp(request_id: str, content: str) -> ToolExecutionResult:
+        request = make_request(
+            "write_file",
+            path="reports/result.md",
+            content=content,
+            request_id=request_id,
+        )
+        execution = await prepare_pending(
+            request,
+            resolver=resolver,
+            pending_store=pending_store,
+            checkpoint_manager=checkpoint_manager,
+        )
+        existing_temps = set(target.parent.glob(".result.md.*.tmp"))
+
+        def fail_target_replace(
+            source: str,
+            destination: str | os.PathLike[str],
+        ) -> None:
+            if Path(destination) == target:
+                raise OSError("simulated commit replace failure")
+            original_replace(source, destination)
+
+        def preserve_commit_temp(path: Path, *, missing_ok: bool = False) -> None:
+            if path.parent == target.parent and path.name.endswith(".tmp"):
+                return
+            original_unlink(path, missing_ok=missing_ok)
+
+        with monkeypatch.context() as patcher:
+            patcher.setattr(os, "replace", fail_target_replace)
+            patcher.setattr(Path, "unlink", preserve_commit_temp)
+
+            with pytest.raises(OSError, match="simulated commit replace failure"):
+                await commit_gate.commit(
+                    execution,
+                    passed_deep_check(request_id),
+                )
+
+        new_temps = set(target.parent.glob(".result.md.*.tmp")) - existing_temps
+        assert len(new_temps) == 1
+        return execution
+
+    await leave_commit_temp("abc.def", "other transaction")
+    related_temp = next(target.parent.glob(".result.md.*.tmp"))
+    execution = await leave_commit_temp("abc", "owned transaction")
+    owned_temp = next(
+        temp
+        for temp in target.parent.glob(".result.md.*.tmp")
+        if temp != related_temp
+    )
+
+    await rollback_manager.rollback(
+        execution.checkpoint_id or "",
+        "abc",
+    )
+
+    assert not owned_temp.exists()
+    assert related_temp.read_bytes() == b"other transaction"
+
+
+def test_temp_cleanup_ignores_owned_file_disappearing_before_unlink(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = workspace / "reports" / "result.md"
+    request_id = "request-temp-disappears"
+    token = transaction_temp_token(request_id)
+    owned = target.parent / f".result.md.{token}.orphan.tmp"
+    owned.write_bytes(b"partial")
+    original_unlink = Path.unlink
+
+    def disappear_before_unlink(path: Path, *, missing_ok: bool = False) -> None:
+        if path == owned and path.exists():
+            original_unlink(path)
+        original_unlink(path, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", disappear_before_unlink)
+
+    FilesystemRollbackManager._cleanup_commit_temp_files(target, request_id)
+
+    assert not owned.exists()
+
+
+@pytest.mark.asyncio
+async def test_commit_failure_after_workspace_write_can_be_rolled_back(
+    rollback_manager: FilesystemRollbackManager,
+    resolver: SafePathResolver,
+    pending_store: PendingStore,
+    checkpoint_manager: FilesystemCheckpointManager,
+    commit_gate: FilesystemCommitGate,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = workspace / "reports" / "result.md"
+    request = make_request(
+        "write_file",
+        path="reports/result.md",
+        content="partially committed",
+        request_id="request-immediate-commit-failure",
+    )
+    execution = await prepare_pending(
+        request,
+        resolver=resolver,
+        pending_store=pending_store,
+        checkpoint_manager=checkpoint_manager,
+    )
+
+    async def fail_mark_committed(request_id: str) -> None:
+        raise OSError(f"simulated metadata failure for {request_id}")
+
+    monkeypatch.setattr(pending_store, "mark_committed", fail_mark_committed)
+
+    with pytest.raises(OSError, match="simulated metadata failure"):
+        await commit_gate.commit(
+            execution,
+            passed_deep_check(request.request_id),
+        )
+
+    assert target.read_text(encoding="utf-8") == "partially committed"
+
+    await rollback_manager.rollback(
+        execution.checkpoint_id or "",
+        request.request_id,
+    )
+
+    assert target.read_text(encoding="utf-8") == "old content"
 
 
 @pytest.mark.asyncio

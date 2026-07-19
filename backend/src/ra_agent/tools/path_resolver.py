@@ -135,6 +135,7 @@ class SafePathResolver:
             raise PathTypeError(f"parent directory does not exist: {raw_path}") from error
 
         self._ensure_within_workspace(resolved_parent)
+        self._reject_resolved_sensitive_path(resolved_parent)
 
         if not resolved_parent.is_dir():
             raise PathTypeError(f"parent path is not a directory: {raw_path}")
@@ -237,6 +238,7 @@ class SafePathResolver:
 
         # resolve() 后再判断，才能发现符号链接逃逸。
         self._ensure_within_workspace(resolved)
+        self._reject_resolved_sensitive_path(resolved)
 
         return resolved
 
@@ -316,6 +318,10 @@ class SafePathResolver:
             # 普通模式匹配任意一级路径组件。
             if any(fnmatch.fnmatchcase(component, normalized_pattern) for component in components):
                 raise SensitivePathError(f"sensitive path is not allowed: {relative_text}")
+
+    def _reject_resolved_sensitive_path(self, path: Path) -> None:
+        relative = Path(os.path.relpath(path, self._workspace_root))
+        self._reject_sensitive_path(relative)
 
     def _ensure_within_workspace(self, path: Path) -> None:
         """

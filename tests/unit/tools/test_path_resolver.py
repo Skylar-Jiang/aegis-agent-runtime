@@ -1,3 +1,5 @@
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -235,6 +237,50 @@ def test_symbolic_link_escape_is_rejected(
 
     with pytest.raises(UnsafePathError):
         resolver.resolve_existing_file("outside-link/public.txt")
+
+
+def test_existing_file_rejects_symlink_alias_to_sensitive_file(
+    resolver: SafePathResolver,
+    workspace: Path,
+) -> None:
+    sensitive = workspace / ".env"
+    sensitive.write_text("sensitive", encoding="utf-8")
+    alias = workspace / "settings.txt"
+
+    try:
+        alias.symlink_to(sensitive)
+    except (NotImplementedError, OSError) as error:
+        pytest.skip(f"symbolic links are unavailable: {error}")
+
+    with pytest.raises(SensitivePathError):
+        resolver.resolve_existing_file("settings.txt")
+
+
+def test_write_target_rejects_symlink_parent_to_sensitive_directory(
+    resolver: SafePathResolver,
+    workspace: Path,
+) -> None:
+    sensitive = workspace / ".ssh"
+    sensitive.mkdir()
+    alias = workspace / "documents"
+
+    try:
+        alias.symlink_to(sensitive, target_is_directory=True)
+    except (NotImplementedError, OSError) as error:
+        if os.name != "nt":
+            pytest.skip(f"symbolic links are unavailable: {error}")
+
+        junction = subprocess.run(
+            ("cmd", "/c", "mklink", "/J", str(alias), str(sensitive)),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if junction.returncode != 0:
+            pytest.skip(f"filesystem aliases are unavailable: {error}")
+
+    with pytest.raises(SensitivePathError):
+        resolver.resolve_write_target("documents/config")
 
 
 def test_delete_rejects_symbolic_link(

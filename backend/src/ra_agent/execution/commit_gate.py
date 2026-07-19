@@ -15,6 +15,7 @@ from ra_agent.contracts import (
 )
 from ra_agent.tools.path_resolver import SafePathResolver
 
+from ._temp_files import transaction_temp_token
 from .checkpoint import (
     BackupRecord,
     CheckpointRecord,
@@ -238,6 +239,7 @@ class FilesystemCommitGate:
         self._atomic_replace_target(
             target,
             payload,
+            request_id=pending.request_id,
             existing_mode=backup.mode if backup.existed else None,
             reserve_new_name=not backup.existed,
         )
@@ -367,6 +369,7 @@ class FilesystemCommitGate:
         target: Path,
         payload: bytes,
         *,
+        request_id: str,
         existing_mode: int | None,
         reserve_new_name: bool,
     ) -> None:
@@ -377,7 +380,7 @@ class FilesystemCommitGate:
             with tempfile.NamedTemporaryFile(
                 mode="wb",
                 dir=target.parent,
-                prefix=f".{target.name}.",
+                prefix=f".{target.name}.{transaction_temp_token(request_id)}.",
                 suffix=".tmp",
                 delete=False,
             ) as temporary:
