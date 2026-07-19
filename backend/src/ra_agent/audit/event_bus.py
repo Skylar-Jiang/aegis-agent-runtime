@@ -92,25 +92,25 @@ class PersistentAuditRecorder:
         decision: PolicyDecision | None = None,
         details: dict[str, Any] | None = None,
     ) -> AuditEvent:
-        count = await self._repo.count_for_task(task_id)
-        sequence_number = count + 1
-        event = AuditEvent(
-            event_id=new_id("event"),
-            task_id=task_id,
-            step_id=step_id,
-            request_id=request_id,
-            sequence_number=sequence_number,
-            event_type=event_type,
-            timestamp=datetime.now(UTC),
-            actor=actor,
-            status=status,
-            risk_level=risk_level,
-            decision=decision,
-            summary=summary,
-            details=redact(details or {}),
-        )
-        await self._repo.append(event)
         async with self._lock:
+            count = await self._repo.count_for_task(task_id)
+            sequence_number = count + 1
+            event = AuditEvent(
+                event_id=new_id("event"),
+                task_id=task_id,
+                step_id=step_id,
+                request_id=request_id,
+                sequence_number=sequence_number,
+                event_type=event_type,
+                timestamp=datetime.now(UTC),
+                actor=actor,
+                status=status,
+                risk_level=risk_level,
+                decision=decision,
+                summary=summary,
+                details=redact(details or {}),
+            )
+            await self._repo.append(event)
             for queue in self._subscribers.get(task_id, []):
                 await queue.put(event)
         return event
