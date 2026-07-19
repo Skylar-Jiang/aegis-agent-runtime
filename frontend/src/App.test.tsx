@@ -3,13 +3,10 @@ import { describe, expect, it } from 'vitest'
 
 import App from './App'
 
-describe('Phase 1 shell', () => {
-  it('identifies the current runtime foundation phase', () => {
+describe('App shell', () => {
+  it('renders the Tasks page as home', () => {
     render(<App />)
-
-    expect(
-      screen.getByRole('heading', { name: 'RA-Agent Runtime' }),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Phase 1 Runtime 基础闭环')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Tasks' })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Enter task objective...')).toBeInTheDocument()
   })
 })
