@@ -89,8 +89,9 @@ class RuleBasedRiskClassifier:
         )
         if self.rules.match_signal_text("indirect_injection", context):
             risk = self._add_signal("indirect_injection", risk, signals, matched_rules)
-        if request.tool_name == "memory_write" and self.rules.match_signal_text(
-            "indirect_injection", context
+        if request.tool_name == "memory_write" and (
+            self.rules.match_signal_text("indirect_injection", context)
+            or self.rules.match_signal_text("memory_poisoning", context)
         ):
             risk = self._add_signal("memory_poisoning", risk, signals, matched_rules)
         if request.source_type in {SourceType.EXTERNAL_DOCUMENT, SourceType.TOOL_OUTPUT} and (
