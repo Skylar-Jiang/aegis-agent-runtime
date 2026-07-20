@@ -20,3 +20,16 @@ Contract v0.2 字段与共享 Fixture、可信 ToolSpec 多权限检查、AuditR
 - Rollback 失败：进入 FAILED、告警且不继续任务。
 
 所有 CI 测试使用 Mock，不调用真实外部 API 或 LLM。
+
+## Phase 2–5 集成验证
+
+- 模式装配：`offline` 不创建运行时目录；`rules-only` 使用确定性规则和 SQLite 状态；
+  `live-agent` 使用受控文件 Handler、Checkpoint、DeepCheck、Commit/Rollback。
+- Agent：DeepSeek 兼容 HTTP 请求使用 MockTransport 验证；模型缺失、失败或畸形 JSON 时，
+  AgentRuntime 必须 FAILED 且 Scheduler 零调用。
+- API/SSE：创建任务触发 AgentRunner；SSE 在订阅和历史回放重叠时无漏事件、按 sequence
+  去重；前端在重连时按 event_id 去重。
+- 持久化并发：同一 task 的 Audit sequence 通过数据库唯一约束和原子分配保持连续；同一
+  Approval 决策竞争返回领域冲突而非原始 IntegrityError。
+- 性能 smoke：使用临时 SQLite 连续记录 100 个 durable Audit 事件并验证 1..100 序列；
+  该检查只作为回归信号，不替代部署环境基准测试。
