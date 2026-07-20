@@ -1,4 +1,6 @@
-# Final Integration Validation Report
+# 历史 Phase 2 Integration Validation Report
+
+> 此报告是 2026-07-20 的 Phase 2 验证快照；后续 Phase 3 工作范围和验收以 `docs/phase3/` 为准。
 
 ## Scope
 

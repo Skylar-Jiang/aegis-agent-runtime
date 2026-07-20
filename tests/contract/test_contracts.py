@@ -13,7 +13,9 @@ from ra_agent.contracts import (
     AuditEvent,
     AuditEventType,
     DeepCheckResult,
+    ExperimentMode,
     ExecutionStatus,
+    MemoryStatus,
     PermissionCheckResult,
     PermissionDecision,
     PermissionStatus,
@@ -24,13 +26,36 @@ from ra_agent.contracts import (
     SourceType,
     TaskCreateRequest,
     TaskResponse,
+    TaskStep,
     ToolCallRequest,
     ToolExecutionResult,
 )
 
 
-def test_contract_version_is_v02() -> None:
-    assert CONTRACT_VERSION == "0.2"
+def test_contract_version_is_v03() -> None:
+    assert CONTRACT_VERSION == "0.3"
+
+
+def test_phase3_contracts_capture_checks_memory_experiments_and_dependencies() -> None:
+    from ra_agent.contracts import PostCheckResult, PreCheckResult
+
+    pre_check = PreCheckResult(request_id="request-1", passed=True, reason="safe")
+    post_check = PostCheckResult(request_id="request-1", passed=True, reason="safe")
+    step = TaskStep(
+        task_id="task-1",
+        step_id="step-1",
+        description="download logs",
+        tool_name="download_url",
+        arguments={"url": "https://example.test/logs"},
+        dependencies=["step-0"],
+        required_permissions=[PermissionType.NETWORK_DOWNLOAD],
+    )
+
+    assert pre_check.signals == []
+    assert post_check.signals == []
+    assert MemoryStatus.PENDING.value == "PENDING"
+    assert ExperimentMode.ADAPTIVE_RUNTIME.value == "ADAPTIVE_RUNTIME"
+    assert step.dependencies == ["step-0"]
 
 
 def test_task_request_and_tool_call_serialize_to_json() -> None:

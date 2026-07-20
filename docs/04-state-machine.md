@@ -1,6 +1,6 @@
 # 运行状态机
 
-当前阶段为 **Phase 1：Runtime 基础闭环**。
+> 本文件记录 Phase 1 状态机冻结历史。当前项目已完成 Phase 2；Phase 3 在不绕过既有 Scheduler 状态机的前提下扩展，详见 `docs/phase3/01-contract-v0.3.md`。
 
 终态为 `COMMITTED`、`ROLLED_BACK`、`BLOCKED`、`FAILED`、`CANCELLED`，终态禁止再次转移。
 

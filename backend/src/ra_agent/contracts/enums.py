@@ -90,6 +90,19 @@ class PermissionType(StrEnum):
     SYSTEM_MODIFY = "SYSTEM_MODIFY"
 
 
+class MemoryStatus(StrEnum):
+    PENDING = "PENDING"
+    TRUSTED = "TRUSTED"
+    REJECTED = "REJECTED"
+    ROLLED_BACK = "ROLLED_BACK"
+
+
+class ExperimentMode(StrEnum):
+    BASELINE = "BASELINE"
+    FULL_GUARD = "FULL_GUARD"
+    ADAPTIVE_RUNTIME = "ADAPTIVE_RUNTIME"
+
+
 class AuditEventType(StrEnum):
     TASK_CREATED = "TASK_CREATED"
     PLAN_CREATED = "PLAN_CREATED"

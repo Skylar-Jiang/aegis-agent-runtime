@@ -1,8 +1,8 @@
-# RA-Agent Runtime
+# Aegis Runtime：面向工具增强型智能体的风险自适应安全运行时
 
 面向工具增强型智能体的风险自适应运行时安全架构。系统把工具调用改造为“风险分级—权限调度—受控执行—检查—提交/回滚—审计”的统一运行时链路。
 
-> 当前阶段为 **Phase 2：运行时容器接入**。`offline` 保留无副作用 Mock；`rules-only` 启用确定性安全规则和持久化审计/审批/幂等状态，但不执行真实工具；`live-agent` 额外启用受控的 workspace 文件读写、Checkpoint、DeepCheck、Commit/Rollback。Shell、网络下载与 Memory 工具仍不会在此阶段获得真实 Handler。
+> Phase 0（架构/Contract/目录）和 Phase 1（Mock 编排）已冻结；Phase 2（真实文件执行、持久化审计/审批、Agent 与前端）已完成。当前进入 Phase 3：补全原始策划范围与实验验证；工作边界见 [Phase 3 基线](docs/phase3/README.md)。
 
 ## 冻结架构
 

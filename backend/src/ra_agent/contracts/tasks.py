@@ -1,7 +1,7 @@
 from pydantic import Field
 
 from .common import ContractModel, UTCDateTime
-from .enums import StepStatus
+from .enums import PermissionType, StepStatus
 
 
 class TaskCreateRequest(ContractModel):
@@ -12,6 +12,10 @@ class TaskStep(ContractModel):
     task_id: str
     step_id: str
     description: str
+    tool_name: str = ""
+    arguments: dict[str, object] = Field(default_factory=dict)
+    dependencies: list[str] = Field(default_factory=list)
+    required_permissions: list[PermissionType] = Field(default_factory=list)
     status: StepStatus = StepStatus.PLANNED
 
 

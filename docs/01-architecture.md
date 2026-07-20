@@ -19,4 +19,4 @@ REQUEST_APPROVAL 是两阶段可恢复流程：第一次调度创建内存审批
 - 前端只消费 REST、OpenAPI Contract 和 SSE AuditEvent，不读取 Python 内部对象。
 - LangGraph 只负责 Planner/Agent 状态流转，不代替 Scheduler、安全模块或提交语义。
 
-Phase 1 仍采用模块化单体，不拆微服务。SQLite 是未来开发数据库，PostgreSQL 仅是可选部署目标；当前 Runtime 不实现数据库持久化。
+项目保持模块化单体。SQLite 已用于 Phase 2 审计、审批和幂等持久化；PostgreSQL 仍是可选部署目标。Phase 3 的 Pre/Post Check、受控并行和 Memory/Download 状态边界见 `docs/phase3/01-contract-v0.3.md`。

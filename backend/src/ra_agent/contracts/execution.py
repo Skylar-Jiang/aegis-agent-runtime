@@ -37,6 +37,20 @@ class DeepCheckResult(ContractModel):
     signals: list[str] = Field(default_factory=list)
 
 
+class PreCheckResult(ContractModel):
+    request_id: str
+    passed: bool
+    reason: str
+    signals: list[str] = Field(default_factory=list)
+
+
+class PostCheckResult(ContractModel):
+    request_id: str
+    passed: bool
+    reason: str
+    signals: list[str] = Field(default_factory=list)
+
+
 class CommitResult(ContractModel):
     request_id: str
     checkpoint_id: str | None = None

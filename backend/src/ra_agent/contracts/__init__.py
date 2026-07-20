@@ -5,6 +5,8 @@ from .enums import (
     ApprovalStatus,
     AuditEventType,
     ExecutionStatus,
+    ExperimentMode,
+    MemoryStatus,
     PermissionStatus,
     PermissionType,
     PolicyDecision,
@@ -17,6 +19,8 @@ from .execution import (
     CheckpointResult,
     CommitResult,
     DeepCheckResult,
+    PostCheckResult,
+    PreCheckResult,
     RollbackResult,
     ToolExecutionResult,
 )
@@ -24,7 +28,7 @@ from .risk import PermissionCheckResult, PermissionDecision, RiskVerdict
 from .tasks import TaskCreateRequest, TaskResponse, TaskStep
 from .tools import ToolCallRequest, ToolSpec
 
-CONTRACT_VERSION = "0.2"
+CONTRACT_VERSION = "0.3"
 
 __all__ = [
     "APIError",
@@ -38,7 +42,11 @@ __all__ = [
     "CommitResult",
     "CONTRACT_VERSION",
     "DeepCheckResult",
+    "ExperimentMode",
     "ExecutionStatus",
+    "MemoryStatus",
+    "PostCheckResult",
+    "PreCheckResult",
     "PermissionDecision",
     "PermissionCheckResult",
     "PermissionStatus",

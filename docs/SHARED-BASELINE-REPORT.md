@@ -1,8 +1,10 @@
-# RA-Agent Shared Baseline Report
+# 历史 Phase 1 Shared Baseline Report
+
+> 本报告保留其 Phase 1 验证证据，不描述当前能力。Phase 2 已增加持久化、真实受控文件执行、Agent/API/SSE/前端；Phase 3 基线见 `docs/phase3/README.md`。
 
 ## 1. 当前阶段
 
-Phase 1：共享 Runtime 基线已验证，进入成员 B、C、D 并行开发阶段。
+历史 Phase 1：共享 Runtime 基线已验证，曾进入成员 B、C、D 并行开发阶段。
 
 ## 2. 版本
 

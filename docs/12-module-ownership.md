@@ -67,7 +67,7 @@
 4. 更新 Contract 测试和文档。
 5. 其他成员同步 `develop` 后继续开发。
 
-Contract v0.2 已冻结。成员 B、C、D 后续实现现有 Protocol 即可；除非按上述流程获批，不需要修改公共 Contract、枚举或状态机。
+Contract v0.3 已冻结。Phase 3 的可执行分工、分支、目录边界和合并顺序以 `docs/phase3/` 为准；除非按上述流程获批，成员不得修改公共 Contract、枚举或状态机。
 
 ## Executor 审批参数 handover
 

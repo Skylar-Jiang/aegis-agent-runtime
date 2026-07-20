@@ -1,4 +1,6 @@
-# Phase 1：Runtime 基础闭环范围
+# 历史 Phase 1：Runtime 基础闭环范围
+
+> 本文件保留为 Phase 1 历史范围快照。当前能力已进入 Phase 2；Phase 3 执行范围见 `docs/phase3/README.md`。
 
 ## 本阶段交付
 
