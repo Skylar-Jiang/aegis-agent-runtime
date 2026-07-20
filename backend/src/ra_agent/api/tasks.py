@@ -3,6 +3,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from ra_agent.agent import AgentRuntime
 from ra_agent.contracts import (
     APIResponse,
     AuditEventType,
@@ -12,7 +13,7 @@ from ra_agent.contracts import (
 from ra_agent.core.container import ServiceContainer
 from ra_agent.core.ids import new_id
 
-from .deps import get_services
+from .deps import get_agent_runner, get_services
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 async def create_task(
     request: TaskCreateRequest,
     services: Annotated[ServiceContainer, Depends(get_services)],
+    agent_runner: Annotated[AgentRuntime, Depends(get_agent_runner)],
 ) -> APIResponse[TaskResponse]:
     task_id = new_id("task")
     now = datetime.now(UTC)
@@ -34,12 +36,13 @@ async def create_task(
             details={"objective": request.objective},
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="task audit persistence unavailable") from exc
+    state = await agent_runner.run(task_id, request.objective)
     return APIResponse(
         data=TaskResponse(
             task_id=task_id,
             objective=request.objective,
-            status="CREATED",
+            status=state.status.value,
             created_at=now,
         )
     )
@@ -115,5 +118,5 @@ async def cancel_task(
             summary="Task cancelled by user",
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="task audit persistence unavailable") from exc
     return APIResponse(data={"task_id": task_id, "status": "CANCELLED"})

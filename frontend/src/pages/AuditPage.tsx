@@ -32,7 +32,10 @@ export function AuditPage() {
           return;
         }
         if (evt.event_id) {
-          setEvents((prev) => [...prev.slice(-499), evt]);
+          setEvents((prev) => {
+            if (prev.some((item) => item.event_id === evt.event_id)) return prev
+            return [...prev, evt].sort((left, right) => left.sequence_number - right.sequence_number).slice(-500)
+          });
         }
       } catch { /* ignore parse errors */ }
     });

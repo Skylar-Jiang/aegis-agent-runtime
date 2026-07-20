@@ -5,6 +5,7 @@ interface TaskEntry {
   taskId: string;
   objective: string;
   createdAt: string;
+  status: string;
 }
 
 interface UIState {

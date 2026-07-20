@@ -21,6 +21,7 @@ export function TasksPage() {
         taskId: data.task_id,
         objective: objective,
         createdAt: new Date().toISOString(),
+        status: data.status,
       });
       setSelectedTask(data.task_id);
       setObjective('');
@@ -89,7 +90,7 @@ export function TasksPage() {
                 >
                   <div className="font-mono text-blue-400">{t.taskId.slice(0, 20)}…</div>
                   <div className="mt-0.5 truncate max-w-48">{t.objective}</div>
-                  <StatusBadge status={isCancelled ? 'CANCELLED' : 'ACTIVE'} />
+                  <StatusBadge status={isCancelled ? 'CANCELLED' : t.status} />
                 </button>
               );
             })}
@@ -105,7 +106,11 @@ export function TasksPage() {
           </h2>
           <div className="flex items-center gap-2">
             <StatusBadge
-              status={cancelledTaskIds.includes(selectedTaskId) ? 'CANCELLED' : 'ACTIVE'}
+              status={
+                cancelledTaskIds.includes(selectedTaskId)
+                  ? 'CANCELLED'
+                  : taskHistory.find((task) => task.taskId === selectedTaskId)?.status ?? 'ACTIVE'
+              }
             />
             {cancel.isPending && <span className="text-xs text-gray-500">cancelling...</span>}
             {cancel.isError && (
