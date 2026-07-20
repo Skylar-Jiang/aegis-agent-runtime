@@ -1,10 +1,13 @@
 """Tests for PersistentRequestExecutionRegistry — idempotency + resume."""
 
 import asyncio
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+import pytest_asyncio
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from ra_agent.contracts import ExecutionStatus, SourceType, ToolCallRequest, ToolExecutionResult
 from ra_agent.database.models import Base
@@ -12,11 +15,24 @@ from ra_agent.database.persistent_registry import PersistentRequestExecutionRegi
 from ra_agent.database.repositories.execution import SqliteExecutionClaimRepository
 
 
-async def _init_db() -> async_sessionmaker:
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+_engines: list[AsyncEngine] = []
+
+
+async def _init_db(
+    database_url: str = "sqlite+aiosqlite:///:memory:",
+) -> async_sessionmaker:
+    engine = create_async_engine(database_url)
+    _engines.append(engine)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     return async_sessionmaker(engine, expire_on_commit=False)
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def dispose_engines() -> AsyncIterator[None]:
+    yield
+    while _engines:
+        await _engines.pop().dispose()
 
 
 def _make_registry(session_factory: async_sessionmaker) -> PersistentRequestExecutionRegistry:
@@ -230,8 +246,10 @@ async def test_recreated_registry_rejects_changed_request_fingerprint() -> None:
 
 
 @pytest.mark.asyncio
-async def test_concurrent_claims_have_one_owner_without_blocking_event_loop() -> None:
-    sf = await _init_db()
+async def test_concurrent_claims_have_one_owner_without_blocking_event_loop(
+    tmp_path: Path,
+) -> None:
+    sf = await _init_db(f"sqlite+aiosqlite:///{(tmp_path / 'registry.db').as_posix()}")
     registry = _make_registry(sf)
     request = _make_request(request_id="concurrent-request")
 
