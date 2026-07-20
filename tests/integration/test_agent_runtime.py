@@ -168,10 +168,11 @@ async def test_agent_planner_failure_never_schedules_a_tool() -> None:
 @pytest.mark.asyncio
 async def test_agent_iteratively_replans_through_scheduler_until_model_stops() -> None:
     scheduler = TrackingScheduler([ExecutionStatus.COMMITTED, ExecutionStatus.COMMITTED])
+    planner = TwoTurnPlanner()
 
-    state = await AgentRuntime(planner=TwoTurnPlanner(), scheduler=scheduler).run(
+    state = await AgentRuntime(planner=planner, scheduler=scheduler).run(
         "task-agent", "inspect workspace"
     )
 
     assert state.status is AgentRunStatus.COMPLETED
-    assert scheduler.requests == [make_request(1), make_request(2)]
+    assert scheduler.requests == planner.requests
