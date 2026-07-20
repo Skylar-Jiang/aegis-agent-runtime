@@ -24,7 +24,11 @@ class AgentRuntime:
 
     async def run(self, task_id: str, objective: str) -> AgentState:
         state = AgentState(task_id=task_id, objective=objective)
-        state.planned_requests = await self.planner.plan(task_id, objective)
+        try:
+            state.planned_requests = await self.planner.plan(task_id, objective)
+        except Exception:
+            state.status = AgentRunStatus.FAILED
+            return state
         state.status = AgentRunStatus.RUNNING
 
         for request in state.planned_requests:

@@ -9,7 +9,11 @@ from fastapi.testclient import TestClient
 
 from ra_agent.audit import InMemoryAuditRecorder, PersistentAuditRecorder
 from ra_agent.contracts import ExecutionStatus, SourceType, ToolCallRequest
-from ra_agent.core.bootstrap import build_runtime_container, build_runtime_scheduler
+from ra_agent.core.bootstrap import (
+    build_agent_runner,
+    build_runtime_container,
+    build_runtime_scheduler,
+)
 from ra_agent.core.config import RuntimeMode, Settings
 from ra_agent.database.migrate import upgrade_database
 from ra_agent.execution import MockToolExecutor
@@ -81,6 +85,13 @@ def test_live_agent_mode_uses_real_controlled_file_components(tmp_path: Path) ->
     assert isinstance(container.rollback_manager, FilesystemRollbackManager)
     assert type(container.tool_registry.get_handler("read_file")).__name__ == "ReadFileHandler"
     assert type(container.tool_registry.get_handler("write_file")).__name__ == "WriteFileHandler"
+
+
+def test_unconfigured_live_agent_runner_fails_before_tool_scheduling(tmp_path: Path) -> None:
+    container = build_runtime_container(_settings(tmp_path, RuntimeMode.LIVE_AGENT))
+    runner = build_agent_runner(_settings(tmp_path, RuntimeMode.LIVE_AGENT), container)
+
+    assert type(runner.planner).__name__ == "UnavailablePlanner"
 
 
 def test_live_agent_mode_commits_a_staged_workspace_write(tmp_path: Path) -> None:

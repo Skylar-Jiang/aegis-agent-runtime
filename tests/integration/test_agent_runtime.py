@@ -47,6 +47,11 @@ class MismatchedScheduler(TrackingScheduler):
         return result.model_copy(update={"request_id": "wrong-request"})
 
 
+class FailingPlanner:
+    async def plan(self, task_id: str, objective: str) -> list[ToolCallRequest]:
+        raise RuntimeError("planner unavailable")
+
+
 @pytest.mark.asyncio
 async def test_mock_planner_returns_fixed_tool_requests_without_execution() -> None:
     requests = [make_request(1), make_request(2)]
@@ -132,3 +137,16 @@ async def test_agent_rejects_mismatched_scheduler_result() -> None:
 
     assert state.status is AgentRunStatus.FAILED
     assert state.results[0].error_code == "CORRELATION_MISMATCH"
+
+
+@pytest.mark.asyncio
+async def test_agent_planner_failure_never_schedules_a_tool() -> None:
+    scheduler = TrackingScheduler([ExecutionStatus.COMMITTED])
+
+    state = await AgentRuntime(planner=FailingPlanner(), scheduler=scheduler).run(
+        "task-agent", "inspect workspace"
+    )
+
+    assert state.status is AgentRunStatus.FAILED
+    assert state.results == []
+    assert scheduler.requests == []

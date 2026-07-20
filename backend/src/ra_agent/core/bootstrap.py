@@ -110,6 +110,31 @@ def build_runtime_container(settings: Settings) -> ServiceContainer:
     )
 
 
+def build_agent_runner(settings: Settings, container: ServiceContainer):
+    """Build an AgentRuntime that can only submit work to RuntimeScheduler."""
+
+    from ra_agent.agent import DeepSeekClient, DeepSeekPlanner, UnavailablePlanner, build_graph
+
+    scheduler = build_runtime_scheduler(container)
+    if (
+        settings.runtime_mode is RuntimeMode.LIVE_AGENT
+        and settings.llm_base_url
+        and settings.llm_api_key
+        and settings.planner_model
+    ):
+        planner = DeepSeekPlanner(
+            DeepSeekClient(
+                base_url=settings.llm_base_url,
+                api_key=settings.llm_api_key,
+                model=settings.planner_model,
+            ),
+            allowed_tools=set(container.tool_registry.names()),
+        )
+    else:
+        planner = UnavailablePlanner("live DeepSeek planning is not configured")
+    return build_graph(planner=planner, scheduler=scheduler)
+
+
 def _tool_specs() -> dict[str, ToolSpec]:
     return {spec.name: spec.model_copy(deep=True) for spec in DEFAULT_TOOL_SPECS}
 
