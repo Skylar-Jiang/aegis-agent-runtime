@@ -132,7 +132,7 @@ def build_agent_runner(settings: Settings, container: ServiceContainer):
         )
     else:
         planner = UnavailablePlanner("live DeepSeek planning is not configured")
-    return build_graph(planner=planner, scheduler=scheduler)
+    return build_graph(planner=planner, scheduler=scheduler, max_turns=settings.max_agent_turns)
 
 
 def _tool_specs() -> dict[str, ToolSpec]:

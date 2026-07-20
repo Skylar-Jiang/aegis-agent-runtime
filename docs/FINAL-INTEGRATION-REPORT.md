@@ -16,7 +16,8 @@ the minimal task/approval/audit frontend.
   configured `.runtime/workspace`; Shell, network download, and Memory have no live
   handlers.
 - Agent plans are parsed from a strict JSON schema, receive Runtime-owned task/step/
-  request IDs, and reach tools only through `RuntimeScheduler`.
+  request IDs, and reach tools only through `RuntimeScheduler`. DeepSeek planning is
+  bounded to `MAX_AGENT_TURNS` (default 8); each turn may emit one tool call or stop.
 
 ## Verified scenarios
 
@@ -34,6 +35,12 @@ the minimal task/approval/audit frontend.
 On 2026-07-20, the disposable SQLite smoke recorded and verified 100 durable audit
 events in **363.5 ms** (**275.1 events/s**). This is a local regression datapoint,
 not a production capacity guarantee.
+
+## Final automated verification
+
+On 2026-07-20, backend pytest completed with **486 passed, 7 skipped**. Ruff and
+Pyright reported no findings. Frontend ESLint, TypeScript typecheck, Vitest (2 tests),
+and the Vite production build also completed successfully.
 
 ## Remaining deployment boundary
 

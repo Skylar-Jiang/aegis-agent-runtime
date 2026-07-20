@@ -52,6 +52,19 @@ class FailingPlanner:
         raise RuntimeError("planner unavailable")
 
 
+class TwoTurnPlanner:
+    def __init__(self) -> None:
+        self.requests = [make_request(1), make_request(2)]
+
+    async def plan(self, task_id: str, objective: str) -> list[ToolCallRequest]:
+        return []
+
+    async def next_request(
+        self, task_id: str, objective: str, results: list[ToolExecutionResult]
+    ) -> ToolCallRequest | None:
+        return self.requests[len(results)] if len(results) < len(self.requests) else None
+
+
 @pytest.mark.asyncio
 async def test_mock_planner_returns_fixed_tool_requests_without_execution() -> None:
     requests = [make_request(1), make_request(2)]
@@ -150,3 +163,15 @@ async def test_agent_planner_failure_never_schedules_a_tool() -> None:
     assert state.status is AgentRunStatus.FAILED
     assert state.results == []
     assert scheduler.requests == []
+
+
+@pytest.mark.asyncio
+async def test_agent_iteratively_replans_through_scheduler_until_model_stops() -> None:
+    scheduler = TrackingScheduler([ExecutionStatus.COMMITTED, ExecutionStatus.COMMITTED])
+
+    state = await AgentRuntime(planner=TwoTurnPlanner(), scheduler=scheduler).run(
+        "task-agent", "inspect workspace"
+    )
+
+    assert state.status is AgentRunStatus.COMPLETED
+    assert scheduler.requests == [make_request(1), make_request(2)]

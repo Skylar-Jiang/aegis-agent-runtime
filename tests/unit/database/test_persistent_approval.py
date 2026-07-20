@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -12,8 +13,8 @@ from ra_agent.database.repositories.approval import SqliteApprovalRepository
 from ra_agent.security.approval_service import PersistentApprovalService
 
 
-async def _init_db() -> async_sessionmaker:
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+async def _init_db(database_url: str = "sqlite+aiosqlite:///:memory:") -> async_sessionmaker:
+    engine = create_async_engine(database_url)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     return async_sessionmaker(engine, expire_on_commit=False)
@@ -121,8 +122,8 @@ async def test_cannot_grant_twice() -> None:
 
 
 @pytest.mark.asyncio
-async def test_concurrent_services_create_one_grant_decision() -> None:
-    sf = await _init_db()
+async def test_concurrent_services_create_one_grant_decision(tmp_path: Path) -> None:
+    sf = await _init_db(f"sqlite+aiosqlite:///{(tmp_path / 'approval.db').as_posix()}")
     first = _make_service(sf)
     second = _make_service(sf)
     await first.create(_make_approval())
@@ -173,8 +174,8 @@ async def test_consume_after_grant_returns_decision_once() -> None:
 
 
 @pytest.mark.asyncio
-async def test_concurrent_services_consume_a_decision_once() -> None:
-    sf = await _init_db()
+async def test_concurrent_services_consume_a_decision_once(tmp_path: Path) -> None:
+    sf = await _init_db(f"sqlite+aiosqlite:///{(tmp_path / 'approval.db').as_posix()}")
     first = _make_service(sf)
     second = _make_service(sf)
     await first.create(_make_approval())
@@ -247,8 +248,8 @@ async def test_expire_method_creates_expired_decision() -> None:
 
 
 @pytest.mark.asyncio
-async def test_concurrent_services_create_one_expired_decision() -> None:
-    sf = await _init_db()
+async def test_concurrent_services_create_one_expired_decision(tmp_path: Path) -> None:
+    sf = await _init_db(f"sqlite+aiosqlite:///{(tmp_path / 'approval.db').as_posix()}")
     first = _make_service(sf)
     second = _make_service(sf)
     await first.create(_make_approval())

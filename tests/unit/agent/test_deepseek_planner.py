@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 
 import httpx
 import pytest
 
 from ra_agent.agent.llm_client import DeepSeekClient
 from ra_agent.agent.planner import DeepSeekPlanner, PlanningError
+from ra_agent.contracts import ExecutionStatus, ToolExecutionResult
 
 
 def _client(transport: httpx.MockTransport) -> DeepSeekClient:
@@ -70,3 +72,63 @@ async def test_planner_owns_request_identity_and_rejects_unknown_tool() -> None:
     planner = DeepSeekPlanner(StubClient(), allowed_tools={"read_file"})
     with pytest.raises(PlanningError, match="not allowed"):
         await planner.plan("task-1", "write a note")
+
+
+@pytest.mark.asyncio
+async def test_iterative_planner_accepts_one_call_then_an_explicit_stop() -> None:
+    class TurnClient:
+        def __init__(self) -> None:
+            self.responses = [
+                json.dumps(
+                    {
+                        "tool_calls": [
+                            {
+                                "tool_name": "read_file",
+                                "arguments": {"path": "note.txt"},
+                                "context_summary": "inspect the note",
+                            }
+                        ]
+                    }
+                ),
+                '{"tool_calls": []}',
+            ]
+
+        async def complete(self, messages: list[dict[str, str]]) -> str:
+            return self.responses.pop(0)
+
+    planner = DeepSeekPlanner(TurnClient(), allowed_tools={"read_file"})
+
+    first = await planner.next_request("task-1", "inspect a note", [])
+    second = await planner.next_request("task-1", "inspect a note", [])
+
+    assert first is not None
+    assert first.tool_name == "read_file"
+    assert second is None
+
+
+@pytest.mark.asyncio
+async def test_iterative_planner_receives_bounded_redacted_result_data() -> None:
+    class CapturingClient:
+        messages: list[dict[str, str]]
+
+        async def complete(self, messages: list[dict[str, str]]) -> str:
+            self.messages = messages
+            return '{"tool_calls": []}'
+
+    client = CapturingClient()
+    planner = DeepSeekPlanner(client, allowed_tools={"read_file"})
+    result = ToolExecutionResult(
+        task_id="task-1",
+        step_id="step-1",
+        request_id="request-1",
+        status=ExecutionStatus.COMMITTED,
+        output={"content": "useful result", "api_key": "hidden-value"},
+        finished_at=datetime.now(UTC),
+    )
+
+    await planner.next_request("task-1", "inspect a note", [result])
+
+    completed = json.loads(client.messages[1]["content"])["completed"]
+    assert "useful result" in completed[0]["result"]
+    assert "hidden-value" not in completed[0]["result"]
+    assert "***REDACTED***" in completed[0]["result"]

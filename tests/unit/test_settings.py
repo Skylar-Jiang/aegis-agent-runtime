@@ -11,3 +11,4 @@ def test_settings_have_safe_local_defaults() -> None:
     assert settings.app_env == "development"
     assert settings.workspace_root == Path(".runtime/workspace")
     assert settings.llm_api_key == ""
+    assert settings.max_agent_turns == 8
