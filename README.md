@@ -2,7 +2,7 @@
 
 面向工具增强型智能体的风险自适应运行时安全架构。系统把工具调用改造为“风险分级—权限调度—受控执行—检查—提交/回滚—审计”的统一运行时链路。
 
-> 当前阶段为 **Phase 1：共享 Runtime 基线**。Runtime 已跑通 FAST_EXECUTE、BLOCK，以及无副作用 Mock 的 SANDBOX_CHECK 与可恢复 REQUEST_APPROVAL；请求幂等、UTC、权限一致性和统一审计保持启用。真实安全规则、工具、Sandbox、数据库和前端业务仍未实现，任何 Mock 都不具备生产安全能力。
+> 当前阶段为 **Phase 2：运行时容器接入**。`offline` 保留无副作用 Mock；`rules-only` 启用确定性安全规则和持久化审计/审批/幂等状态，但不执行真实工具；`live-agent` 额外启用受控的 workspace 文件读写、Checkpoint、DeepCheck、Commit/Rollback。Shell、网络下载与 Memory 工具仍不会在此阶段获得真实 Handler。
 
 ## 冻结架构
 
@@ -76,12 +76,22 @@ Pop-Location
 ## 启动与检查
 
 ```powershell
+# 默认是 offline，不创建数据库或运行时目录。
 py -3.11 -m uv run --project backend uvicorn ra_agent.main:app --reload
+
+# 启用规则和持久化状态；启动期自动执行 Alembic upgrade head。
+$env:RUNTIME_MODE = "rules-only"
+py -3.11 -m uv run --project backend uvicorn ra_agent.main:app --reload
+
+# 仅在受信任的本地 .runtime/workspace 中启用受控文件工具。
+$env:RUNTIME_MODE = "live-agent"
+py -3.11 -m uv run --project backend uvicorn ra_agent.main:app --reload
+
 corepack pnpm --dir frontend dev
 python scripts/check.py
 ```
 
-后端默认 `http://127.0.0.1:8000`，健康检查为 `/health`；前端默认 `http://127.0.0.1:5173`。
+后端默认 `http://127.0.0.1:8000`，健康检查为 `/health`（会返回当前 mode）；前端默认 `http://127.0.0.1:5173`。非 `offline` 模式只使用 `.runtime/` 下的 workspace、pending、checkpoint、quarantine 和 SQLite 数据库；不要将这些运行时文件或 `.env` 提交到 Git。
 
 ## 开发规范
 
