@@ -9,6 +9,7 @@
 | `docs/SHARED-BASELINE-REPORT.md` | Phase 1 快照 | UPDATE | README 引用且含历史决策 | 明确为历史，不删除唯一基线信息 |
 | `docs/FINAL-INTEGRATION-REPORT.md` | Phase 2 集成证据 | KEEP_WITH_REASON | 仍解释当前安全边界 | 仅标记为历史验证快照 |
 | `docs/history/phase-0-summary.md` | Phase 0 背景 | KEEP_WITH_REASON | README 直接引用 | 原始架构决策仍有价值 |
+| `docs/superpowers/plans/2026-07-20-phase3-foundation.md` | 已完成的 Phase 3 foundation 执行计划 | DELETE | `rg` 仅命中旧集成分支文本及当前 readiness 计划中的处置说明；更新集成清单后无有效引用，内容已由 `docs/phase3/` 与 Contract tests 覆盖 | 无当前唯一信息，按清理规则删除 |
 | migrations、lock、configs、contracts、tests | 可运行基线 | KEEP | 有 import/测试/运行引用 | 用户禁止删除 |
 
-未发现满足 DELETE 或 MERGE_DELETE 的候选：所有旧文件仍被引用或含唯一历史设计信息。代码候选中的 `placeholder`/`TODO` 搜索命中均为有效测试、迁移或 Phase 3 待实现边界，证据不足，保留。
+除上述已删除的 foundation 计划外，未发现满足 DELETE 或 MERGE_DELETE 的候选。代码候选中的 `placeholder`/`TODO` 搜索命中均为有效测试、迁移或 Phase 3 待实现边界，证据不足，保留。

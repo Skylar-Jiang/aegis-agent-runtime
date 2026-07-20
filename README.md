@@ -9,8 +9,10 @@
 ```text
 Agent Planner → ToolCallRequest → Runtime Scheduler
 → Risk Classifier → Policy Engine → Permission Gate
-→ Controlled Execution → Deep Check → Commit/Rollback → Audit
+→ PreCheck + Controlled Execution → PostCheck → Commit/Rollback → Audit
 ```
+
+这是 Phase 3 的目标链路；当前仓库只冻结了 Contract、Protocol/Mock 与并行协作边界，真实 PreCheck、PostCheck、并行执行和 artifacts 集成仍待 Phase 3 成员实现。
 
 后端使用 Python 3.11、uv、FastAPI、Pydantic v2、LangGraph 和 SQLite；前端骨架使用 Node.js 24.14.0、pnpm 10.12.4、React、TypeScript 和 Vite；任务 API 使用 REST，实时审计使用 SSE。
 
@@ -101,4 +103,13 @@ FAST_EXECUTE 的 LOW 结果成功后直接进入 COMMITTED。SANDBOX_CHECK Mock 
 
 ## 下一步分工
 
-成员 B、C、D 的可替换接口和验收边界见 [模块所有权](docs/12-module-ownership.md) 与 [共享基线报告](docs/SHARED-BASELINE-REPORT.md)。
+Phase 3 的真实实现仍由成员完成；当前唯一执行入口如下：
+
+- [Phase 3 基线](docs/phase3/README.md)
+- [成员 A：Runtime](docs/phase3/02-member-a-runtime.md)
+- [成员 B：Security](docs/phase3/03-member-b-security.md)
+- [成员 C：Execution](docs/phase3/04-member-c-execution.md)
+- [成员 D：Experiments/UI](docs/phase3/05-member-d-experiments-ui.md)
+- [集成清单](docs/phase3/06-integration-checklist.md)
+
+旧 Phase 1/2 报告仅作历史资料，不是当前开发入口。

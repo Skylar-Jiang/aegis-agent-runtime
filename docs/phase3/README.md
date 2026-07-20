@@ -11,6 +11,6 @@
 | C 执行 | `feat/memory-download-execution` | [04](04-member-c-execution.md) |
 | D 实验/UI | `feat/experiments-dashboard` | [05](05-member-d-experiments-ui.md) |
 
-合并顺序为 C → B → A → D；公共 Contract、枚举、状态机、`core/container.py`、`core/bootstrap.py` 只由组长修改。全部 PR 须通过 backend pytest、Ruff、Pyright、frontend lint/typecheck/tests/build、`scripts/check.py`。
+唯一共享基线是本次 readiness 提交创建后本地固定的 `phase3/original-scope-completion`；所有成员分支均从它创建，并把 PR 指向它，直到最终集成再合并到 `main`。组长 A 负责 Runtime 集成；B 负责两个真实 Checker；C 交付可检查 artifacts 与受控执行；D 只能消费稳定 Contract 边界并负责 audit/API/UI/experiments。公共 Contract、枚举、状态机、`core/container.py`、`core/bootstrap.py` 只由组长修改。全部 PR 须通过 backend pytest、Ruff、Pyright、frontend lint/typecheck/tests/build、`scripts/check.py`。
 
 六个演示：低风险 README；隔离下载并行检测；危险 Shell 阻断；外部文档提示注入阻断；Memory 投毒回滚；下载权限等待期间继续报告准备。

@@ -18,6 +18,7 @@
 - `configs/permissions.yaml`
 - `configs/sensitive_paths.yaml`
 - 安全规则测试
+- `PreExecutionChecker` 与 `PostExecutionChecker` 的两个真实实现
 
 成员 C 负责：
 
@@ -26,6 +27,7 @@
 - `memory/`
 - `configs/tool_policies.yaml`
 - rollback tests
+- 提供给 B 检查的 pending、quarantine、memory 与 execution artifacts（不实现任一 Checker）
 
 成员 D 负责：
 
@@ -34,7 +36,7 @@
 - `api/`
 - `frontend/`
 - `experiments/`
-- e2e tests
+- e2e tests；只能消费稳定 Contract、审计和 API 边界
 
 ## 公共文件
 
@@ -53,9 +55,9 @@
 
 ## 并行接入点
 
-- 成员 B：实现 `RiskClassifier`、`PolicyEngine`、`PermissionGate`、`DeepSafetyChecker`；返回值必须保留 request_id，不能调用工具。
-- 成员 C：实现 `ToolExecutor`、`CheckpointManager`、`CommitGate`、`RollbackManager` 与 Registry 中的 `ToolHandler`；Scheduler 仍是唯一执行入口。`ToolExecutor.execute` 必须接收可选的 `approval_decision`：普通请求为 `None`，审批恢复请求为 Runtime 已校验的 `GRANTED ApprovalDecision`。C 层可以核对关联 ID 和记录来源，但不得自行决定请求是否需要审批。
-- 成员 D：实现 `AuditRecorder`、`ApprovalService`、审批 API/SSE/数据库和前端消费；不得改变两阶段审批、序号或幂等语义。审批审计可使用 Executor 收到的 `approval_decision.approval_id` 与现有事件关联。
+- 成员 B：实现 `RiskClassifier`、`PolicyEngine`、`PermissionGate`、`DeepSafetyChecker`、`PreExecutionChecker` 与 `PostExecutionChecker`；返回值必须保留 request_id，不能调用工具。
+- 成员 C：实现 `ToolExecutor`、`CheckpointManager`、`CommitGate`、`RollbackManager` 与 Registry 中的 `ToolHandler`；Scheduler 仍是唯一执行入口。`ToolExecutor.execute` 必须接收可选的 `approval_decision`：普通请求为 `None`，审批恢复请求为 Runtime 已校验的 `GRANTED ApprovalDecision`。C 层可以核对关联 ID 和记录来源，但不得自行决定请求是否需要审批；只交付 B 可检查的 artifacts，不实现任何 Checker。
+- 成员 D：实现 `AuditRecorder`、`ApprovalService`、审批 API/SSE/数据库和前端消费；只能消费稳定 Contract，且不得改变两阶段审批、序号或幂等语义。审批审计可使用 Executor 收到的 `approval_decision.approval_id` 与现有事件关联。
 
 `build_mock_container()` 是共享可运行基线，生产路由不得重复手工装配依赖。Mock 用于接口和编排验证，不是安全实现。
 

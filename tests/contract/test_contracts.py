@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
@@ -56,6 +57,56 @@ def test_phase3_contracts_capture_checks_memory_experiments_and_dependencies() -
     assert MemoryStatus.PENDING.value == "PENDING"
     assert ExperimentMode.ADAPTIVE_RUNTIME.value == "ADAPTIVE_RUNTIME"
     assert step.dependencies == ["step-0"]
+
+
+def test_phase3_audit_events_serialize_for_parallel_timing() -> None:
+    event = AuditEvent(
+        event_id="event-pre-check",
+        task_id="task-1",
+        step_id="step-1",
+        request_id="request-1",
+        sequence_number=1,
+        event_type=AuditEventType.PRE_CHECK_STARTED,
+        timestamp=datetime.now(UTC),
+        actor="runtime",
+        status="started",
+        summary="pre-check started",
+    )
+
+    assert event.model_dump(mode="json")["event_type"] == "PRE_CHECK_STARTED"
+
+
+def test_phase3_checker_mocks_are_independently_importable_and_keep_request_id() -> None:
+    from ra_agent.security import MockPostExecutionChecker, MockPreExecutionChecker
+
+    request = ToolCallRequest(
+        task_id="task-1",
+        step_id="step-1",
+        request_id="request-1",
+        tool_name="list_dir",
+        objective="inspect workspace",
+        context_summary="Use the shared Contract boundary.",
+        source_type=SourceType.AGENT,
+        requested_at=datetime.now(UTC),
+    )
+    verdict = RiskVerdict(
+        request_id=request.request_id,
+        risk_level=RiskLevel.LOW,
+        recommended_decision=PolicyDecision.FAST_EXECUTE,
+        reason="read-only listing",
+    )
+    execution = ToolExecutionResult(
+        task_id=request.task_id,
+        step_id=request.step_id,
+        request_id=request.request_id,
+        status=ExecutionStatus.SUCCESS,
+    )
+
+    pre_result = asyncio.run(MockPreExecutionChecker().check(request, verdict))
+    post_result = asyncio.run(MockPostExecutionChecker().check(request, execution))
+
+    assert pre_result.request_id == request.request_id
+    assert post_result.request_id == request.request_id
 
 
 def test_task_request_and_tool_call_serialize_to_json() -> None:
