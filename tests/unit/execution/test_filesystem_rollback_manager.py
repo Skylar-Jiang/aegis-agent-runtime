@@ -15,13 +15,13 @@ from ra_agent.contracts import (
     ToolCallRequest,
     ToolExecutionResult,
 )
+from ra_agent.execution._temp_files import transaction_temp_token
 from ra_agent.execution.checkpoint import (
     CheckpointConflictError,
     CheckpointIntegrityError,
     CheckpointStatus,
     FilesystemCheckpointManager,
 )
-from ra_agent.execution._temp_files import transaction_temp_token
 from ra_agent.execution.commit_gate import FilesystemCommitGate
 from ra_agent.execution.pending_store import PendingStore
 from ra_agent.execution.rollback import (

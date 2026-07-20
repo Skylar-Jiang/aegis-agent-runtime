@@ -1,0 +1,58 @@
+import type { APIResponse } from '../types/contracts';
+
+const BASE = '/api';
+
+class ApiError extends Error {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = await res.json();
+      // FastAPI HTTPException format: {"detail": "..."}
+      if (body.detail) {
+        message = body.detail;
+      } else if (body.error?.message) {
+        message = body.error.message;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new ApiError(res.status, 'HTTP_ERROR', message);
+  }
+  const body: APIResponse<T> = await res.json();
+  if (body.error) {
+    throw new ApiError(
+      res.status,
+      body.error.code ?? 'UNKNOWN',
+      body.error.message ?? 'Unexpected error',
+    );
+  }
+  return body.data as T;
+}
+
+export function get<T>(path: string): Promise<T> {
+  return request<T>(path);
+}
+
+export function post<T>(path: string, body?: unknown): Promise<T> {
+  return request<T>(path, {
+    method: 'POST',
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+export { ApiError };

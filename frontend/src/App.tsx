@@ -1,31 +1,27 @@
-const phases = [
-  'Planner 产生 ToolCallRequest',
-  'Runtime Scheduler 统一调度',
-  'Risk / Policy / Permission 决策',
-  '受控执行与 Commit / Rollback',
-  'AuditEvent 记录事实',
-]
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+import { Layout } from './components/Layout'
+import { TasksPage } from './pages/TasksPage'
+import { ApprovalsPage } from './pages/ApprovalsPage'
+import { AuditPage } from './pages/AuditPage'
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: 1, staleTime: 5000 } },
+})
 
 export default function App() {
   return (
-    <main className="shell">
-      <header>
-        <p className="eyebrow">Phase 1 Runtime 基础闭环</p>
-        <h1>RA-Agent Runtime</h1>
-        <p className="summary">
-          当前已实现 LOW 风险直通与阻断路径；MEDIUM 风险的 Pending、
-          SafetyCheck 与 CommitGate 将在后续阶段实现。
-        </p>
-      </header>
-
-      <section aria-labelledby="execution-chain">
-        <h2 id="execution-chain">冻结执行链</h2>
-        <ol>
-          {phases.map((phase) => (
-            <li key={phase}>{phase}</li>
-          ))}
-        </ol>
-      </section>
-    </main>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/" element={<TasksPage />} />
+            <Route path="/approvals" element={<ApprovalsPage />} />
+            <Route path="/audit" element={<AuditPage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
   )
 }

@@ -58,7 +58,16 @@ class RuntimeScheduler:
         if claim.conflict:
             return await self._request_id_conflict(request)
         if not claim.owns_execution:
-            return await self.request_registry.wait(claim)
+            try:
+                return await self.request_registry.wait(claim)
+            except ValueError:
+                return self._result(
+                    request,
+                    ExecutionStatus.FAILED,
+                    "request_id has a durable prior execution that cannot be replayed "
+                    "in this process",
+                    error_code="REQUEST_REPLAY_UNAVAILABLE",
+                )
         try:
             result = await self._schedule_once(request)
         except BaseException as error:
