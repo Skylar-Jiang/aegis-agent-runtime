@@ -40,6 +40,9 @@ def _settings(tmp_path: Path, mode: RuntimeMode) -> Settings:
             "pending_root": runtime_root / "pending",
             "checkpoint_root": runtime_root / "checkpoints",
             "quarantine_root": runtime_root / "quarantine",
+            "llm_base_url": "",
+            "llm_api_key": "",
+            "planner_model": "",
         }
     )
 
