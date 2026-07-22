@@ -21,6 +21,11 @@ from ra_agent.tools.registry import (
 
 from .artifacts import ArtifactContractError, validate_execution_artifacts
 from .pending_store import PendingStore
+from .quarantine import (
+    FilesystemQuarantineStore,
+    QuarantineNotFoundError,
+    QuarantineStatus,
+)
 
 
 class ToolExecutorError(RuntimeError):
@@ -98,10 +103,12 @@ class RegistryToolExecutor:
         registry: ToolRegistry,
         pending_store: PendingStore,
         memory_store: FilesystemMemoryStore | None = None,
+        quarantine_store: FilesystemQuarantineStore | None = None,
     ) -> None:
         self._registry = registry
         self._pending_store = pending_store
         self._memory_store = memory_store
+        self._quarantine_store = quarantine_store
 
     async def execute(
         self,
@@ -156,6 +163,8 @@ class RegistryToolExecutor:
                     )
                 elif request.tool_name == "memory_write":
                     await self._validate_memory_pending(request, result)
+                elif request.tool_name == "download_url":
+                    await self._validate_quarantine_pending(request, result)
                 else:
                     raise PendingResourceUnavailableError(
                         f"pending resource routing is not implemented for {request.tool_name!r}"
@@ -167,16 +176,16 @@ class RegistryToolExecutor:
                 raise ToolResultContractError(f"invalid execution artifacts: {error}") from error
         except asyncio.CancelledError:
             await asyncio.shield(
-                self._rollback_pending_memory_on_failure(
+                self._rollback_pending_resources_on_failure(
                     request,
-                    reason="memory execution cancelled",
+                    reason="pending execution cancelled",
                 )
             )
             raise
         except Exception:
-            await self._rollback_pending_memory_on_failure(
+            await self._rollback_pending_resources_on_failure(
                 request,
-                reason="memory execution validation failed",
+                reason="pending execution validation failed",
             )
             raise
 
@@ -201,6 +210,19 @@ class RegistryToolExecutor:
             raise PendingResourceUnavailableError(
                 "memory_write requires a configured FilesystemMemoryStore"
             )
+        if spec.name == "download_url" and self._quarantine_store is None:
+            raise PendingResourceUnavailableError(
+                "download_url requires a configured FilesystemQuarantineStore"
+            )
+
+    async def _rollback_pending_resources_on_failure(
+        self,
+        request: ToolCallRequest,
+        *,
+        reason: str,
+    ) -> None:
+        await self._rollback_pending_memory_on_failure(request, reason=reason)
+        await self._rollback_quarantine_on_failure(request, reason=reason)
 
     async def _rollback_pending_memory_on_failure(
         self,
@@ -224,6 +246,77 @@ class RegistryToolExecutor:
                 )
             except Exception:
                 return
+
+    async def _rollback_quarantine_on_failure(
+        self,
+        request: ToolCallRequest,
+        *,
+        reason: str,
+    ) -> None:
+        if request.tool_name != "download_url" or self._quarantine_store is None:
+            return
+        try:
+            record = await self._quarantine_store.get(request.request_id)
+        except QuarantineNotFoundError:
+            return
+        except Exception:
+            return
+        if record.status is QuarantineStatus.QUARANTINED:
+            try:
+                await self._quarantine_store.mark_rolled_back(
+                    request.request_id,
+                    reason=reason,
+                )
+            except Exception:
+                return
+
+    async def _validate_quarantine_pending(
+        self,
+        request: ToolCallRequest,
+        result: ToolExecutionResult,
+    ) -> None:
+        if self._quarantine_store is None:
+            raise PendingResourceUnavailableError(
+                "download_url requires a configured FilesystemQuarantineStore"
+            )
+        if not await self._quarantine_store.verify_integrity(request.request_id):
+            raise ToolResultContractError("quarantined download failed integrity verification")
+        record = await self._quarantine_store.get(request.request_id)
+        if record.task_id != request.task_id:
+            raise ToolResultContractError("quarantine task_id does not match request")
+        if record.step_id != request.step_id:
+            raise ToolResultContractError("quarantine step_id does not match request")
+        if record.request_id != request.request_id:
+            raise ToolResultContractError("quarantine request_id does not match request")
+        if record.tool_name != request.tool_name:
+            raise ToolResultContractError("quarantine tool_name does not match request")
+        if record.status is not QuarantineStatus.QUARANTINED:
+            raise ToolResultContractError("download_url did not produce QUARANTINED content")
+
+        artifacts = [
+            artifact
+            for artifact in result.artifacts
+            if artifact.get("artifact_type") == "quarantined_download"
+        ]
+        if len(artifacts) != 1:
+            raise ToolResultContractError(
+                "download_url requires exactly one quarantined_download artifact"
+            )
+        artifact = artifacts[0]
+        expected: dict[str, object] = {
+            "quarantine_path": record.quarantine_path,
+            "source_url": record.source_url,
+            "final_url": record.final_url,
+            "content_type": record.content_type,
+            "status": QuarantineStatus.QUARANTINED.value,
+            "sha256": record.content_sha256,
+            "size_bytes": record.size_bytes,
+        }
+        for field_name, expected_value in expected.items():
+            if artifact.get(field_name) != expected_value:
+                raise ToolResultContractError(
+                    f"quarantined_download artifact {field_name} does not match store"
+                )
 
     async def _validate_filesystem_pending(
         self,
@@ -394,7 +487,7 @@ class RegistryToolExecutor:
         sandbox_mode = spec.sandbox_mode.upper()
 
         if result.status is ExecutionStatus.PENDING_COMMIT:
-            if sandbox_mode != "PENDING":
+            if sandbox_mode not in {"PENDING", "QUARANTINE"}:
                 raise ToolResultContractError("non-pending tool returned PENDING_COMMIT")
 
             if (
@@ -406,8 +499,10 @@ class RegistryToolExecutor:
             if not result.pending_changes:
                 raise ToolResultContractError("PENDING_COMMIT result has no pending changes")
 
-        if sandbox_mode == "PENDING" and result.status is ExecutionStatus.SUCCESS:
-            raise ToolResultContractError("pending tool returned SUCCESS instead of PENDING_COMMIT")
+        if sandbox_mode in {"PENDING", "QUARANTINE"} and result.status is ExecutionStatus.SUCCESS:
+            raise ToolResultContractError(
+                "pending or quarantine tool returned SUCCESS instead of PENDING_COMMIT"
+            )
 
 
 class MockToolExecutor:

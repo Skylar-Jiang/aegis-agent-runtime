@@ -17,7 +17,10 @@ from ra_agent.contracts import (
     ToolExecutionResult,
     ToolSpec,
 )
-from ra_agent.execution.artifacts import build_tool_output_artifact
+from ra_agent.execution.artifacts import (
+    build_quarantined_download_artifact,
+    build_tool_output_artifact,
+)
 from ra_agent.execution.executor import (
     ApprovalContextError,
     CheckpointRequiredError,
@@ -31,6 +34,10 @@ from ra_agent.execution.executor import (
     UnknownToolError,
 )
 from ra_agent.execution.pending_store import PendingConflictError, PendingStore
+from ra_agent.execution.quarantine import (
+    FilesystemQuarantineStore,
+    QuarantineStatus,
+)
 from ra_agent.memory import FilesystemMemoryStore
 from ra_agent.tools.implementations.memory_tools import MemoryWriteHandler
 from ra_agent.tools.implementations.write_file import WriteFileHandler
@@ -844,3 +851,158 @@ async def test_repeated_pending_memory_write_is_idempotent(
     assert first.pending_changes == second.pending_changes
     assert first.artifacts == second.artifacts
     assert len(list(memory_store.records_root.iterdir())) == 1
+
+
+class StubQuarantineHandler:
+    def __init__(
+        self, store: FilesystemQuarantineStore, *, tamper: bool = False
+    ) -> None:
+        self.store = store
+        self.tamper = tamper
+        self.call_count = 0
+
+    async def __call__(self, request: ToolCallRequest) -> ToolExecutionResult:
+        from hashlib import sha256
+
+        self.call_count += 1
+        payload = b"downloaded"
+        temporary = self.store.create_temporary_path(request.request_id)
+        temporary.write_bytes(payload)
+        record = await self.store.stage(
+            request,
+            source_url=str(request.arguments["url"]),
+            final_url=str(request.arguments["url"]),
+            redirect_chain=(),
+            temporary_path=temporary,
+            content_type="text/plain",
+            content_sha256=sha256(payload).hexdigest(),
+            size_bytes=len(payload),
+            http_status=200,
+        )
+        output = {
+            "downloaded": True,
+            "source_url": record.source_url,
+            "final_url": record.final_url,
+            "content_type": record.content_type,
+            "size_bytes": record.size_bytes,
+            "sha256": record.content_sha256,
+            "status": record.status.value,
+        }
+        quarantine_artifact = build_quarantined_download_artifact(
+            request,
+            quarantine_path=record.quarantine_path,
+            source_url=record.source_url,
+            final_url=record.final_url,
+            content_sha256=record.content_sha256,
+            size_bytes=record.size_bytes,
+            content_type=record.content_type,
+        )
+        if self.tamper:
+            quarantine_artifact["sha256"] = "0" * 64
+        return ToolExecutionResult(
+            task_id=request.task_id,
+            step_id=request.step_id,
+            request_id=request.request_id,
+            status=ExecutionStatus.PENDING_COMMIT,
+            output=output,
+            artifacts=[
+                build_tool_output_artifact(
+                    request, output, status=ExecutionStatus.PENDING_COMMIT
+                ),
+                quarantine_artifact,
+            ],
+            pending_changes=[
+                {
+                    "operation": "DOWNLOAD",
+                    "quarantine_path": record.quarantine_path,
+                    "source_url": record.source_url,
+                    "final_url": record.final_url,
+                    "content_sha256": record.content_sha256,
+                    "size_bytes": record.size_bytes,
+                    "status": record.status.value,
+                }
+            ],
+        )
+
+
+@pytest.mark.asyncio
+async def test_download_uses_quarantine_without_filesystem_checkpoint(
+    tmp_path: Path,
+    pending_store: PendingStore,
+) -> None:
+    quarantine_store = FilesystemQuarantineStore(
+        tmp_path / "quarantine", max_download_bytes=4096
+    )
+    registry = ToolRegistry()
+    handler = StubQuarantineHandler(quarantine_store)
+    registry.register(get_spec("download_url"), handler)
+    executor = RegistryToolExecutor(
+        registry, pending_store, quarantine_store=quarantine_store
+    )
+    request = make_request(
+        "download_url",
+        arguments={"url": "https://example.com/file"},
+        request_id="request-download-executor",
+    )
+
+    result = await executor.execute(request)
+
+    assert result.status is ExecutionStatus.PENDING_COMMIT
+    assert result.checkpoint_id is None
+    assert (await quarantine_store.get(request.request_id)).status is (
+        QuarantineStatus.QUARANTINED
+    )
+    assert not (pending_store.pending_root / request.request_id).exists()
+
+
+@pytest.mark.asyncio
+async def test_download_requires_quarantine_store_before_handler_runs(
+    tmp_path: Path,
+    pending_store: PendingStore,
+) -> None:
+    handler_store = FilesystemQuarantineStore(
+        tmp_path / "handler-quarantine", max_download_bytes=4096
+    )
+    registry = ToolRegistry()
+    handler = StubQuarantineHandler(handler_store)
+    registry.register(get_spec("download_url"), handler)
+    executor = RegistryToolExecutor(registry, pending_store)
+    request = make_request(
+        "download_url",
+        arguments={"url": "https://example.com/file"},
+        request_id="request-download-no-store",
+    )
+
+    with pytest.raises(PendingResourceUnavailableError):
+        await executor.execute(request)
+
+    assert handler.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_invalid_download_artifact_rolls_back_quarantine(
+    tmp_path: Path,
+    pending_store: PendingStore,
+) -> None:
+    quarantine_store = FilesystemQuarantineStore(
+        tmp_path / "quarantine", max_download_bytes=4096
+    )
+    registry = ToolRegistry()
+    registry.register(
+        get_spec("download_url"),
+        StubQuarantineHandler(quarantine_store, tamper=True),
+    )
+    executor = RegistryToolExecutor(
+        registry, pending_store, quarantine_store=quarantine_store
+    )
+    request = make_request(
+        "download_url",
+        arguments={"url": "https://example.com/file"},
+        request_id="request-download-invalid-artifact",
+    )
+
+    with pytest.raises(ToolResultContractError, match="quarantined_download artifact"):
+        await executor.execute(request)
+
+    record = await quarantine_store.get(request.request_id)
+    assert record.status is QuarantineStatus.ROLLED_BACK
