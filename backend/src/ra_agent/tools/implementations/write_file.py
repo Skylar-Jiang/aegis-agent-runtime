@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import PurePosixPath
 
 from ra_agent.contracts import (
@@ -11,7 +12,7 @@ from ra_agent.execution.artifacts import (
     build_pending_file_artifact,
     build_tool_output_artifact,
 )
-from ra_agent.execution.pending_store import PendingStore
+from ra_agent.execution.pending_store import PendingRecord, PendingStore
 from ra_agent.tools.path_resolver import SafePathResolver
 
 
@@ -43,10 +44,10 @@ class WriteFileHandler:
         target = self._path_resolver.resolve_write_target(raw_path)
         target_path = self._path_resolver.to_relative(target)
 
-        record = await self._pending_store.stage_write(
-            request.request_id,
-            target_path,
-            payload,
+        record = await self._stage_write_cancellation_safe(
+            request,
+            target_path=target_path,
+            payload=payload,
         )
 
         if (
@@ -90,6 +91,37 @@ class WriteFileHandler:
             ],
             pending_changes=[pending_change],
         )
+
+    async def _stage_write_cancellation_safe(
+        self,
+        request: ToolCallRequest,
+        *,
+        target_path: str,
+        payload: bytes,
+    ) -> PendingRecord:
+        stage_task = asyncio.create_task(
+            self._pending_store.stage_write(
+                request.request_id,
+                target_path,
+                payload,
+            )
+        )
+        try:
+            return await asyncio.shield(stage_task)
+        except asyncio.CancelledError as cancellation:
+            try:
+                await stage_task
+            except Exception as stage_error:
+                cancellation.add_note(
+                    f"pending write stage also failed: {type(stage_error).__name__}: {stage_error}"
+                )
+            try:
+                await asyncio.shield(self._pending_store.cleanup(request.request_id))
+            except Exception as cleanup_error:
+                cancellation.add_note(
+                    f"pending write cleanup failed: {type(cleanup_error).__name__}: {cleanup_error}"
+                )
+            raise
 
     def _validate_tool_name(
         self,

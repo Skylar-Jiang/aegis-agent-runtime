@@ -135,29 +135,53 @@ class DownloadUrlHandler:
                     f"download request_id already reached terminal state: {record.status.value}"
                 )
             return self._build_result(request, record)
-        except asyncio.CancelledError:
-            self._safe_unlink(temporary_path)
-            if record is not None and record.status is QuarantineStatus.QUARANTINED:
+        except asyncio.CancelledError as cancellation:
+            try:
                 await asyncio.shield(
-                    self._store.mark_rolled_back(
+                    self._cleanup_failed_download(
                         request.request_id,
+                        temporary_path=temporary_path,
+                        record=record,
                         reason="download execution cancelled",
                     )
                 )
-            await asyncio.shield(self._store.cleanup(request.request_id))
+            except Exception as cleanup_error:
+                cancellation.add_note(
+                    f"download cleanup failed: {type(cleanup_error).__name__}: {cleanup_error}"
+                )
             raise
-        except Exception:
-            self._safe_unlink(temporary_path)
-            if record is not None and record.status is QuarantineStatus.QUARANTINED:
-                try:
-                    await self._store.mark_rolled_back(
-                        request.request_id,
-                        reason="download result construction failed",
-                    )
-                except Exception:
-                    pass
-            await self._store.cleanup(request.request_id)
+        except Exception as error:
+            try:
+                await self._cleanup_failed_download(
+                    request.request_id,
+                    temporary_path=temporary_path,
+                    record=record,
+                    reason="download execution failed",
+                )
+            except Exception as cleanup_error:
+                error.add_note(
+                    f"download cleanup also failed: {type(cleanup_error).__name__}: {cleanup_error}"
+                )
             raise
+
+    async def _cleanup_failed_download(
+        self,
+        request_id: str,
+        *,
+        temporary_path: Path | None,
+        record: QuarantineRecord | None,
+        reason: str,
+    ) -> None:
+        self._safe_unlink(temporary_path)
+        rollback_error: Exception | None = None
+        if record is not None and record.status is QuarantineStatus.QUARANTINED:
+            try:
+                await self._store.mark_rolled_back(request_id, reason=reason)
+            except Exception as error:
+                rollback_error = error
+        await self._store.cleanup(request_id)
+        if rollback_error is not None:
+            raise rollback_error
 
     async def _load_existing(
         self,

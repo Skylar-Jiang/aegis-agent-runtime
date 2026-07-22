@@ -71,11 +71,16 @@ class MemoryWriteHandler:
                     size_bytes=record.size_bytes,
                 ),
             ]
-        except Exception:
-            await self._rollback_if_pending(
-                record,
-                reason="memory_write result construction failed",
-            )
+        except Exception as error:
+            try:
+                await self._rollback_if_pending(
+                    record,
+                    reason="memory_write result construction failed",
+                )
+            except Exception as cleanup_error:
+                error.add_note(
+                    f"memory rollback also failed: {type(cleanup_error).__name__}: {cleanup_error}"
+                )
             raise
 
         return ToolExecutionResult(
@@ -104,17 +109,32 @@ class MemoryWriteHandler:
         )
         try:
             return await asyncio.shield(stage_task)
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as cancellation:
             try:
                 record = await stage_task
-            except Exception:
-                raise
-            await asyncio.shield(
-                self._rollback_if_pending(
-                    record,
-                    reason="memory_write cancelled",
+            except Exception as stage_error:
+                cancellation.add_note(
+                    f"memory stage also failed: {type(stage_error).__name__}: {stage_error}"
                 )
-            )
+                try:
+                    await asyncio.shield(self._store.cleanup(request.request_id))
+                except Exception as cleanup_error:
+                    cancellation.add_note(
+                        f"memory temp cleanup failed: {type(cleanup_error).__name__}: "
+                        f"{cleanup_error}"
+                    )
+            else:
+                try:
+                    await asyncio.shield(
+                        self._rollback_if_pending(
+                            record,
+                            reason="memory_write cancelled",
+                        )
+                    )
+                except Exception as cleanup_error:
+                    cancellation.add_note(
+                        f"memory rollback failed: {type(cleanup_error).__name__}: {cleanup_error}"
+                    )
             raise
 
     async def _rollback_if_pending(self, record: MemoryRecord, *, reason: str) -> None:

@@ -20,6 +20,12 @@ from ra_agent.tools.registry import (
 )
 
 from .artifacts import ArtifactContractError, validate_execution_artifacts
+from .cleanup import (
+    CleanupContext,
+    CleanupIncompleteError,
+    RequestCleanupCoordinator,
+    run_cleanup_shielded,
+)
 from .pending_store import PendingStore
 from .quarantine import (
     FilesystemQuarantineStore,
@@ -104,11 +110,13 @@ class RegistryToolExecutor:
         pending_store: PendingStore,
         memory_store: FilesystemMemoryStore | None = None,
         quarantine_store: FilesystemQuarantineStore | None = None,
+        cleanup_coordinator: RequestCleanupCoordinator | None = None,
     ) -> None:
         self._registry = registry
         self._pending_store = pending_store
         self._memory_store = memory_store
         self._quarantine_store = quarantine_store
+        self._cleanup_coordinator = cleanup_coordinator
 
     async def execute(
         self,
@@ -140,10 +148,33 @@ class RegistryToolExecutor:
                     request,
                     approval_decision,
                 )
+        except asyncio.CancelledError as error:
+            await self._cleanup_after_failure_shielded(
+                request,
+                checkpoint_id=checkpoint_id,
+                reason="tool execution cancelled",
+                original_error=error,
+            )
+            raise
         except TimeoutError as error:
-            raise ToolExecutionTimeoutError(
+            timeout_error = ToolExecutionTimeoutError(
                 f"tool {request.tool_name!r} exceeded its {spec.timeout_seconds}-second timeout"
-            ) from error
+            )
+            await self._cleanup_after_failure(
+                request,
+                checkpoint_id=checkpoint_id,
+                reason="tool execution timed out",
+                original_error=timeout_error,
+            )
+            raise timeout_error from error
+        except Exception as error:
+            await self._cleanup_after_failure(
+                request,
+                checkpoint_id=checkpoint_id,
+                reason="tool handler failed",
+                original_error=error,
+            )
+            raise
 
         try:
             if not isinstance(result, ToolExecutionResult):
@@ -174,18 +205,20 @@ class RegistryToolExecutor:
                 validate_execution_artifacts(request, result)
             except ArtifactContractError as error:
                 raise ToolResultContractError(f"invalid execution artifacts: {error}") from error
-        except asyncio.CancelledError:
-            await asyncio.shield(
-                self._rollback_pending_resources_on_failure(
-                    request,
-                    reason="pending execution cancelled",
-                )
+        except asyncio.CancelledError as error:
+            await self._cleanup_after_failure_shielded(
+                request,
+                checkpoint_id=checkpoint_id,
+                reason="pending execution validation cancelled",
+                original_error=error,
             )
             raise
-        except Exception:
-            await self._rollback_pending_resources_on_failure(
+        except Exception as error:
+            await self._cleanup_after_failure(
                 request,
+                checkpoint_id=checkpoint_id,
                 reason="pending execution validation failed",
+                original_error=error,
             )
             raise
 
@@ -205,6 +238,56 @@ class RegistryToolExecutor:
             }
         )
 
+    async def _cleanup_after_failure_shielded(
+        self,
+        request: ToolCallRequest,
+        *,
+        checkpoint_id: str | None,
+        reason: str,
+        original_error: BaseException,
+    ) -> None:
+        cleanup = self._cleanup_after_failure(
+            request,
+            checkpoint_id=checkpoint_id,
+            reason=reason,
+            original_error=original_error,
+        )
+        try:
+            await run_cleanup_shielded(cleanup)
+        except Exception as cleanup_error:
+            original_error.add_note(
+                f"request cleanup also failed: {type(cleanup_error).__name__}: {cleanup_error}"
+            )
+
+    async def _cleanup_after_failure(
+        self,
+        request: ToolCallRequest,
+        *,
+        checkpoint_id: str | None,
+        reason: str,
+        original_error: BaseException,
+    ) -> None:
+        if self._cleanup_coordinator is not None:
+            context = CleanupContext(
+                task_id=request.task_id,
+                step_id=request.step_id,
+                request_id=request.request_id,
+                tool_name=request.tool_name,
+                checkpoint_id=checkpoint_id,
+            )
+            try:
+                await self._cleanup_coordinator.abort(context, reason=reason)
+            except CleanupIncompleteError as cleanup_error:
+                original_error.add_note(str(cleanup_error))
+            return
+
+        try:
+            await self._rollback_pending_resources_on_failure(request, reason=reason)
+        except Exception as cleanup_error:
+            original_error.add_note(
+                f"fallback pending cleanup failed: {type(cleanup_error).__name__}: {cleanup_error}"
+            )
+
     def _validate_pending_resource_configuration(self, spec: ToolSpec) -> None:
         if spec.name == "memory_write" and self._memory_store is None:
             raise PendingResourceUnavailableError(
@@ -221,6 +304,8 @@ class RegistryToolExecutor:
         *,
         reason: str,
     ) -> None:
+        if request.tool_name in self._FILESYSTEM_PENDING_TOOLS:
+            await self._pending_store.cleanup(request.request_id)
         await self._rollback_pending_memory_on_failure(request, reason=reason)
         await self._rollback_quarantine_on_failure(request, reason=reason)
 
