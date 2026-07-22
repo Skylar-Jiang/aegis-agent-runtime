@@ -8,16 +8,30 @@ from ra_agent.contracts import (
     ApprovalDecision,
     ApprovalStatus,
     ExecutionStatus,
+    MemoryStatus,
     ToolCallRequest,
     ToolExecutionResult,
     ToolSpec,
 )
+from ra_agent.memory.store import FilesystemMemoryStore
 from ra_agent.tools.registry import (
     ToolHandler,
     ToolRegistry,
 )
 
+from .artifacts import ArtifactContractError, validate_execution_artifacts
+from .cleanup import (
+    CleanupContext,
+    CleanupIncompleteError,
+    RequestCleanupCoordinator,
+    run_cleanup_shielded,
+)
 from .pending_store import PendingStore
+from .quarantine import (
+    FilesystemQuarantineStore,
+    QuarantineNotFoundError,
+    QuarantineStatus,
+)
 
 
 class ToolExecutorError(RuntimeError):
@@ -46,6 +60,10 @@ class CheckpointRequiredError(ToolExecutorError):
 
 class ToolResultContractError(ToolExecutorError):
     """Raised when a handler returns an invalid execution result."""
+
+
+class PendingResourceUnavailableError(ToolExecutorError):
+    """Raised when a pending tool has no matching durable resource store."""
 
 
 class ToolExecutionTimeoutError(ToolExecutorError):
@@ -84,13 +102,21 @@ class ApprovalAwareToolHandler(Protocol):
 class RegistryToolExecutor:
     """Execute registered handlers under shared runtime safeguards."""
 
+    _FILESYSTEM_PENDING_TOOLS = frozenset({"write_file", "delete_file"})
+
     def __init__(
         self,
         registry: ToolRegistry,
         pending_store: PendingStore,
+        memory_store: FilesystemMemoryStore | None = None,
+        quarantine_store: FilesystemQuarantineStore | None = None,
+        cleanup_coordinator: RequestCleanupCoordinator | None = None,
     ) -> None:
         self._registry = registry
         self._pending_store = pending_store
+        self._memory_store = memory_store
+        self._quarantine_store = quarantine_store
+        self._cleanup_coordinator = cleanup_coordinator
 
     async def execute(
         self,
@@ -111,6 +137,7 @@ class RegistryToolExecutor:
             request,
             approval_decision,
         )
+        self._validate_pending_resource_configuration(spec)
 
         started_at = datetime.now(UTC)
 
@@ -121,37 +148,79 @@ class RegistryToolExecutor:
                     request,
                     approval_decision,
                 )
+        except asyncio.CancelledError as error:
+            await self._cleanup_after_failure_shielded(
+                request,
+                checkpoint_id=checkpoint_id,
+                reason="tool execution cancelled",
+                original_error=error,
+            )
+            raise
         except TimeoutError as error:
-            raise ToolExecutionTimeoutError(
+            timeout_error = ToolExecutionTimeoutError(
                 f"tool {request.tool_name!r} exceeded its {spec.timeout_seconds}-second timeout"
-            ) from error
+            )
+            await self._cleanup_after_failure(
+                request,
+                checkpoint_id=checkpoint_id,
+                reason="tool execution timed out",
+                original_error=timeout_error,
+            )
+            raise timeout_error from error
+        except Exception as error:
+            await self._cleanup_after_failure(
+                request,
+                checkpoint_id=checkpoint_id,
+                reason="tool handler failed",
+                original_error=error,
+            )
+            raise
 
-        if not isinstance(result, ToolExecutionResult):
-            raise ToolResultContractError("tool handler did not return ToolExecutionResult")
+        try:
+            if not isinstance(result, ToolExecutionResult):
+                raise ToolResultContractError("tool handler did not return ToolExecutionResult")
 
-        self._validate_result(
-            spec,
-            result,
-            checkpoint_id,
-        )
-
-        if result.status is ExecutionStatus.PENDING_COMMIT:
-            if checkpoint_id is None:
-                raise CheckpointRequiredError("PENDING_COMMIT result requires a checkpoint")
-
-            record = await self._pending_store.bind_checkpoint(
-                request.request_id,
+            self._validate_result(
+                spec,
+                result,
                 checkpoint_id,
             )
 
-            if record.request_id != request.request_id:
-                raise ToolResultContractError("pending record request_id does not match request")
+            if result.status is ExecutionStatus.PENDING_COMMIT:
+                if request.tool_name in self._FILESYSTEM_PENDING_TOOLS:
+                    await self._validate_filesystem_pending(
+                        request,
+                        checkpoint_id,
+                    )
+                elif request.tool_name == "memory_write":
+                    await self._validate_memory_pending(request, result)
+                elif request.tool_name == "download_url":
+                    await self._validate_quarantine_pending(request, result)
+                else:
+                    raise PendingResourceUnavailableError(
+                        f"pending resource routing is not implemented for {request.tool_name!r}"
+                    )
 
-            if record.tool_name != request.tool_name:
-                raise ToolResultContractError("pending record tool_name does not match request")
-
-            if not await self._pending_store.verify_integrity(request.request_id):
-                raise ToolResultContractError("pending record failed integrity verification")
+            try:
+                validate_execution_artifacts(request, result)
+            except ArtifactContractError as error:
+                raise ToolResultContractError(f"invalid execution artifacts: {error}") from error
+        except asyncio.CancelledError as error:
+            await self._cleanup_after_failure_shielded(
+                request,
+                checkpoint_id=checkpoint_id,
+                reason="pending execution validation cancelled",
+                original_error=error,
+            )
+            raise
+        except Exception as error:
+            await self._cleanup_after_failure(
+                request,
+                checkpoint_id=checkpoint_id,
+                reason="pending execution validation failed",
+                original_error=error,
+            )
+            raise
 
         finished_at = datetime.now(UTC)
 
@@ -161,11 +230,250 @@ class RegistryToolExecutor:
                 "task_id": request.task_id,
                 "step_id": request.step_id,
                 "request_id": request.request_id,
-                "checkpoint_id": checkpoint_id,
+                "checkpoint_id": (
+                    checkpoint_id if request.tool_name in self._FILESYSTEM_PENDING_TOOLS else None
+                ),
                 "started_at": started_at,
                 "finished_at": finished_at,
             }
         )
+
+    async def _cleanup_after_failure_shielded(
+        self,
+        request: ToolCallRequest,
+        *,
+        checkpoint_id: str | None,
+        reason: str,
+        original_error: BaseException,
+    ) -> None:
+        cleanup = self._cleanup_after_failure(
+            request,
+            checkpoint_id=checkpoint_id,
+            reason=reason,
+            original_error=original_error,
+        )
+        try:
+            await run_cleanup_shielded(cleanup)
+        except Exception as cleanup_error:
+            original_error.add_note(
+                f"request cleanup also failed: {type(cleanup_error).__name__}: {cleanup_error}"
+            )
+
+    async def _cleanup_after_failure(
+        self,
+        request: ToolCallRequest,
+        *,
+        checkpoint_id: str | None,
+        reason: str,
+        original_error: BaseException,
+    ) -> None:
+        if self._cleanup_coordinator is not None:
+            context = CleanupContext(
+                task_id=request.task_id,
+                step_id=request.step_id,
+                request_id=request.request_id,
+                tool_name=request.tool_name,
+                checkpoint_id=checkpoint_id,
+            )
+            try:
+                await self._cleanup_coordinator.abort(context, reason=reason)
+            except CleanupIncompleteError as cleanup_error:
+                original_error.add_note(str(cleanup_error))
+            return
+
+        try:
+            await self._rollback_pending_resources_on_failure(request, reason=reason)
+        except Exception as cleanup_error:
+            original_error.add_note(
+                f"fallback pending cleanup failed: {type(cleanup_error).__name__}: {cleanup_error}"
+            )
+
+    def _validate_pending_resource_configuration(self, spec: ToolSpec) -> None:
+        if spec.name == "memory_write" and self._memory_store is None:
+            raise PendingResourceUnavailableError(
+                "memory_write requires a configured FilesystemMemoryStore"
+            )
+        if spec.name == "download_url" and self._quarantine_store is None:
+            raise PendingResourceUnavailableError(
+                "download_url requires a configured FilesystemQuarantineStore"
+            )
+
+    async def _rollback_pending_resources_on_failure(
+        self,
+        request: ToolCallRequest,
+        *,
+        reason: str,
+    ) -> None:
+        if request.tool_name in self._FILESYSTEM_PENDING_TOOLS:
+            await self._pending_store.cleanup(request.request_id)
+        await self._rollback_pending_memory_on_failure(request, reason=reason)
+        await self._rollback_quarantine_on_failure(request, reason=reason)
+
+    async def _rollback_pending_memory_on_failure(
+        self,
+        request: ToolCallRequest,
+        *,
+        reason: str,
+    ) -> None:
+        if request.tool_name != "memory_write" or self._memory_store is None:
+            return
+
+        try:
+            record = await self._memory_store.get(request.request_id)
+        except Exception:
+            return
+
+        if record.status is MemoryStatus.PENDING:
+            try:
+                await self._memory_store.mark_rolled_back(
+                    request.request_id,
+                    reason=reason,
+                )
+            except Exception:
+                return
+
+    async def _rollback_quarantine_on_failure(
+        self,
+        request: ToolCallRequest,
+        *,
+        reason: str,
+    ) -> None:
+        if request.tool_name != "download_url" or self._quarantine_store is None:
+            return
+        try:
+            record = await self._quarantine_store.get(request.request_id)
+        except QuarantineNotFoundError:
+            return
+        except Exception:
+            return
+        if record.status is QuarantineStatus.QUARANTINED:
+            try:
+                await self._quarantine_store.mark_rolled_back(
+                    request.request_id,
+                    reason=reason,
+                )
+            except Exception:
+                return
+
+    async def _validate_quarantine_pending(
+        self,
+        request: ToolCallRequest,
+        result: ToolExecutionResult,
+    ) -> None:
+        if self._quarantine_store is None:
+            raise PendingResourceUnavailableError(
+                "download_url requires a configured FilesystemQuarantineStore"
+            )
+        if not await self._quarantine_store.verify_integrity(request.request_id):
+            raise ToolResultContractError("quarantined download failed integrity verification")
+        record = await self._quarantine_store.get(request.request_id)
+        if record.task_id != request.task_id:
+            raise ToolResultContractError("quarantine task_id does not match request")
+        if record.step_id != request.step_id:
+            raise ToolResultContractError("quarantine step_id does not match request")
+        if record.request_id != request.request_id:
+            raise ToolResultContractError("quarantine request_id does not match request")
+        if record.tool_name != request.tool_name:
+            raise ToolResultContractError("quarantine tool_name does not match request")
+        if record.status is not QuarantineStatus.QUARANTINED:
+            raise ToolResultContractError("download_url did not produce QUARANTINED content")
+
+        artifacts = [
+            artifact
+            for artifact in result.artifacts
+            if artifact.get("artifact_type") == "quarantined_download"
+        ]
+        if len(artifacts) != 1:
+            raise ToolResultContractError(
+                "download_url requires exactly one quarantined_download artifact"
+            )
+        artifact = artifacts[0]
+        expected: dict[str, object] = {
+            "quarantine_path": record.quarantine_path,
+            "source_url": record.source_url,
+            "final_url": record.final_url,
+            "content_type": record.content_type,
+            "status": QuarantineStatus.QUARANTINED.value,
+            "sha256": record.content_sha256,
+            "size_bytes": record.size_bytes,
+        }
+        for field_name, expected_value in expected.items():
+            if artifact.get(field_name) != expected_value:
+                raise ToolResultContractError(
+                    f"quarantined_download artifact {field_name} does not match store"
+                )
+
+    async def _validate_filesystem_pending(
+        self,
+        request: ToolCallRequest,
+        checkpoint_id: str | None,
+    ) -> None:
+        if checkpoint_id is None:
+            raise CheckpointRequiredError("filesystem PENDING_COMMIT requires a checkpoint")
+
+        record = await self._pending_store.bind_checkpoint(
+            request.request_id,
+            checkpoint_id,
+        )
+
+        if record.request_id != request.request_id:
+            raise ToolResultContractError("pending record request_id does not match request")
+
+        if record.tool_name != request.tool_name:
+            raise ToolResultContractError("pending record tool_name does not match request")
+
+        if not await self._pending_store.verify_integrity(request.request_id):
+            raise ToolResultContractError("pending record failed integrity verification")
+
+    async def _validate_memory_pending(
+        self,
+        request: ToolCallRequest,
+        result: ToolExecutionResult,
+    ) -> None:
+        if self._memory_store is None:
+            raise PendingResourceUnavailableError(
+                "memory_write requires a configured FilesystemMemoryStore"
+            )
+
+        if not await self._memory_store.verify_integrity(request.request_id):
+            raise ToolResultContractError("pending memory failed integrity verification")
+
+        record = await self._memory_store.get(request.request_id)
+        if record.task_id != request.task_id:
+            raise ToolResultContractError("pending memory task_id does not match request")
+        if record.step_id != request.step_id:
+            raise ToolResultContractError("pending memory step_id does not match request")
+        if record.request_id != request.request_id:
+            raise ToolResultContractError("pending memory request_id does not match request")
+        if record.tool_name != request.tool_name:
+            raise ToolResultContractError("pending memory tool_name does not match request")
+        if record.status is not MemoryStatus.PENDING:
+            raise ToolResultContractError("memory_write did not produce PENDING memory")
+
+        pending_artifacts = [
+            artifact
+            for artifact in result.artifacts
+            if artifact.get("artifact_type") == "pending_memory"
+        ]
+        if len(pending_artifacts) != 1:
+            raise ToolResultContractError(
+                "memory_write requires exactly one pending_memory artifact"
+            )
+
+        artifact = pending_artifacts[0]
+        expected: dict[str, object] = {
+            "memory_id": record.memory_id,
+            "key": record.key,
+            "path": record.payload_path,
+            "status": MemoryStatus.PENDING.value,
+            "sha256": record.content_sha256,
+            "size_bytes": record.size_bytes,
+        }
+        for field_name, expected_value in expected.items():
+            if artifact.get(field_name) != expected_value:
+                raise ToolResultContractError(
+                    f"pending_memory artifact {field_name} does not match stored memory"
+                )
 
     def _get_spec(
         self,
@@ -211,7 +519,11 @@ class RegistryToolExecutor:
             if not checkpoint_id or checkpoint_id.isspace():
                 raise ValueError("checkpoint_id must not be empty")
 
-        if spec.sandbox_mode.upper() == "PENDING" and checkpoint_id is None:
+        if (
+            spec.name in RegistryToolExecutor._FILESYSTEM_PENDING_TOOLS
+            and spec.sandbox_mode.upper() == "PENDING"
+            and checkpoint_id is None
+        ):
             raise CheckpointRequiredError(f"tool {spec.name!r} requires a checkpoint")
 
     @staticmethod
@@ -260,17 +572,22 @@ class RegistryToolExecutor:
         sandbox_mode = spec.sandbox_mode.upper()
 
         if result.status is ExecutionStatus.PENDING_COMMIT:
-            if sandbox_mode != "PENDING":
+            if sandbox_mode not in {"PENDING", "QUARANTINE"}:
                 raise ToolResultContractError("non-pending tool returned PENDING_COMMIT")
 
-            if checkpoint_id is None:
-                raise CheckpointRequiredError("PENDING_COMMIT result requires a checkpoint")
+            if (
+                spec.name in RegistryToolExecutor._FILESYSTEM_PENDING_TOOLS
+                and checkpoint_id is None
+            ):
+                raise CheckpointRequiredError("filesystem PENDING_COMMIT requires a checkpoint")
 
             if not result.pending_changes:
                 raise ToolResultContractError("PENDING_COMMIT result has no pending changes")
 
-        if sandbox_mode == "PENDING" and result.status is ExecutionStatus.SUCCESS:
-            raise ToolResultContractError("pending tool returned SUCCESS instead of PENDING_COMMIT")
+        if sandbox_mode in {"PENDING", "QUARANTINE"} and result.status is ExecutionStatus.SUCCESS:
+            raise ToolResultContractError(
+                "pending or quarantine tool returned SUCCESS instead of PENDING_COMMIT"
+            )
 
 
 class MockToolExecutor:

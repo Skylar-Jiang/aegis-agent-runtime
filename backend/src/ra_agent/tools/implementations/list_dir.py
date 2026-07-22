@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from ra_agent.contracts import ExecutionStatus, ToolCallRequest, ToolExecutionResult
+from ra_agent.execution.artifacts import build_tool_output_artifact
 from ra_agent.tools.path_resolver import SafePathResolver
 
 
@@ -37,18 +38,26 @@ class ListDirHandler:
             self._scan_directory,
             directory,
         )
+        output = {
+            "path": self._path_resolver.to_relative(directory),
+            "entries": entries,
+            "returned_count": len(entries),
+            "truncated": truncated,
+        }
 
         return ToolExecutionResult(
             task_id=request.task_id,
             step_id=request.step_id,
             request_id=request.request_id,
             status=ExecutionStatus.SUCCESS,
-            output={
-                "path": self._path_resolver.to_relative(directory),
-                "entries": entries,
-                "returned_count": len(entries),
-                "truncated": truncated,
-            },
+            output=output,
+            artifacts=[
+                build_tool_output_artifact(
+                    request,
+                    output,
+                    status=ExecutionStatus.SUCCESS,
+                )
+            ],
         )
 
     def _scan_directory(

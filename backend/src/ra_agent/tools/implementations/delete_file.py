@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import asyncio
+
 from ra_agent.contracts import (
     ExecutionStatus,
     ToolCallRequest,
     ToolExecutionResult,
 )
-from ra_agent.execution.pending_store import PendingStore
+from ra_agent.execution.artifacts import (
+    build_pending_delete_artifact,
+    build_tool_output_artifact,
+)
+from ra_agent.execution.pending_store import PendingRecord, PendingStore
 from ra_agent.tools.path_resolver import SafePathResolver
 
 
@@ -33,9 +39,9 @@ class DeleteFileHandler:
         target_path = self._path_resolver.to_relative(target)
         original_size_bytes = target.stat().st_size
 
-        record = await self._pending_store.stage_delete(
-            request.request_id,
-            target_path,
+        record = await self._stage_delete_cancellation_safe(
+            request,
+            target_path=target_path,
         )
 
         pending_change = {
@@ -44,20 +50,59 @@ class DeleteFileHandler:
             "original_size_bytes": original_size_bytes,
             "status": record.status.value,
         }
+        output = {
+            "staged": True,
+            "operation": record.operation.value,
+            "target_path": record.target_path,
+        }
 
         return ToolExecutionResult(
             task_id=request.task_id,
             step_id=request.step_id,
             request_id=request.request_id,
             status=ExecutionStatus.PENDING_COMMIT,
-            output={
-                "staged": True,
-                "operation": record.operation.value,
-                "target_path": record.target_path,
-            },
+            output=output,
             sandbox_path=request.request_id,
+            artifacts=[
+                build_tool_output_artifact(
+                    request,
+                    output,
+                    status=ExecutionStatus.PENDING_COMMIT,
+                ),
+                build_pending_delete_artifact(request, record),
+            ],
             pending_changes=[pending_change],
         )
+
+    async def _stage_delete_cancellation_safe(
+        self,
+        request: ToolCallRequest,
+        *,
+        target_path: str,
+    ) -> PendingRecord:
+        stage_task = asyncio.create_task(
+            self._pending_store.stage_delete(
+                request.request_id,
+                target_path,
+            )
+        )
+        try:
+            return await asyncio.shield(stage_task)
+        except asyncio.CancelledError as cancellation:
+            try:
+                await stage_task
+            except Exception as stage_error:
+                cancellation.add_note(
+                    f"pending delete stage also failed: {type(stage_error).__name__}: {stage_error}"
+                )
+            try:
+                await asyncio.shield(self._pending_store.cleanup(request.request_id))
+            except Exception as cleanup_error:
+                cancellation.add_note(
+                    f"pending delete cleanup failed: {type(cleanup_error).__name__}: "
+                    f"{cleanup_error}"
+                )
+            raise
 
     def _validate_tool_name(
         self,

@@ -45,8 +45,8 @@ tools:
       base_risk: HIGH,
       side_effect_type: PROCESS,
       reversibility: NON_REVERSIBLE,
-      sandbox_mode: DISABLED_PHASE_1,
-      timeout_seconds: 10,
+      sandbox_mode: RESTRICTED,
+      timeout_seconds: 15,
       network_required: false,
       supports_dry_run: true,
     }
@@ -80,3 +80,22 @@ tools:
       network_required: false,
       supports_dry_run: true,
     }
+
+restricted_shell:
+  enabled: true
+  default_timeout_seconds: 8
+  max_timeout_seconds: 10
+  max_command_length: 4096
+  max_arguments: 32
+  max_argument_length: 1024
+  max_stdout_bytes: 1048576
+  max_stderr_bytes: 1048576
+  max_combined_output_bytes: 2097152
+  terminate_grace_seconds: 1
+  executables:
+    ruff:
+      candidates: [Scripts/ruff.exe, bin/ruff]
+      validator: ruff
+    pyright:
+      candidates: [Scripts/pyright.exe, bin/pyright]
+      validator: pyright
