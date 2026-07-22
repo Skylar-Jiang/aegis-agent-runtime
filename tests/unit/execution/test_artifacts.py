@@ -18,6 +18,7 @@ from ra_agent.execution.artifacts import (
     build_pending_file_artifact,
     build_pending_memory_artifact,
     build_quarantined_download_artifact,
+    build_shell_execution_artifact,
     build_tool_output_artifact,
     canonical_json_bytes,
     validate_artifact,
@@ -28,6 +29,7 @@ from ra_agent.execution.pending_store import (
     PendingRecord,
     PendingStatus,
 )
+from ra_agent.execution.process_runner import ProcessExecutionRecord
 
 
 def make_request(
@@ -455,3 +457,108 @@ def test_pending_memory_inspection_metadata_fails_closed(
             content_sha256="d" * 64,
             size_bytes=10,
         )
+
+
+def test_shell_execution_artifact_binds_command_and_output() -> None:
+    request = make_request("run_shell").model_copy(
+        update={"arguments": {"command": "ruff check backend", "cwd": "."}}
+    )
+    record = ProcessExecutionRecord(
+        executable="ruff",
+        arguments=("check", "backend"),
+        cwd=".",
+        exit_code=0,
+        stdout="All checks passed!\n",
+        stderr="",
+        stdout_sha256=sha256(b"All checks passed!\n").hexdigest(),
+        stdout_size_bytes=len(b"All checks passed!\n"),
+        stderr_sha256=sha256(b"").hexdigest(),
+        stderr_size_bytes=0,
+        duration_ms=12,
+        environment_keys=("LANG", "PATH"),
+    )
+    output = {
+        "executable": "ruff",
+        "arguments": ["check", "backend"],
+        "cwd": ".",
+        "exit_code": 0,
+        "stdout": "All checks passed!\n",
+        "stderr": "",
+        "duration_ms": 12,
+        "environment_keys": ["LANG", "PATH"],
+    }
+    execution = ToolExecutionResult(
+        task_id=request.task_id,
+        step_id=request.step_id,
+        request_id=request.request_id,
+        status=ExecutionStatus.SUCCESS,
+        output=output,
+        artifacts=[
+            build_tool_output_artifact(
+                request,
+                output,
+                status=ExecutionStatus.SUCCESS,
+            ),
+            build_shell_execution_artifact(
+                request,
+                command="ruff check backend",
+                record=record,
+                status=ExecutionStatus.SUCCESS,
+            ),
+        ],
+    )
+
+    validate_execution_artifacts(request, execution)
+
+
+def test_shell_execution_rejects_stale_stdout_digest() -> None:
+    request = make_request("run_shell").model_copy(
+        update={"arguments": {"command": "ruff check .", "cwd": "."}}
+    )
+    record = ProcessExecutionRecord(
+        executable="ruff",
+        arguments=("check", "."),
+        cwd=".",
+        exit_code=0,
+        stdout="ok\n",
+        stderr="",
+        stdout_sha256=sha256(b"ok\n").hexdigest(),
+        stdout_size_bytes=3,
+        stderr_sha256=sha256(b"").hexdigest(),
+        stderr_size_bytes=0,
+        duration_ms=1,
+        environment_keys=("PATH",),
+    )
+    output = {
+        "executable": "ruff",
+        "arguments": ["check", "."],
+        "cwd": ".",
+        "exit_code": 0,
+        "stdout": "tampered\n",
+        "stderr": "",
+        "duration_ms": 1,
+        "environment_keys": ["PATH"],
+    }
+    execution = ToolExecutionResult(
+        task_id=request.task_id,
+        step_id=request.step_id,
+        request_id=request.request_id,
+        status=ExecutionStatus.SUCCESS,
+        output=output,
+        artifacts=[
+            build_tool_output_artifact(
+                request,
+                output,
+                status=ExecutionStatus.SUCCESS,
+            ),
+            build_shell_execution_artifact(
+                request,
+                command="ruff check .",
+                record=record,
+                status=ExecutionStatus.SUCCESS,
+            ),
+        ],
+    )
+
+    with pytest.raises(ArtifactContractError, match="stdout"):
+        validate_execution_artifacts(request, execution)

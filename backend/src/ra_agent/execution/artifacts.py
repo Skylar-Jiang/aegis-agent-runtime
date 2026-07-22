@@ -15,12 +15,14 @@ from ra_agent.contracts import (
 )
 
 from .pending_store import PendingOperation, PendingRecord, PendingStatus
+from .process_runner import ProcessExecutionRecord
 
 TOOL_OUTPUT_ARTIFACT = "tool_output"
 PENDING_FILE_ARTIFACT = "pending_file"
 PENDING_DELETE_ARTIFACT = "pending_delete"
 QUARANTINED_DOWNLOAD_ARTIFACT = "quarantined_download"
 PENDING_MEMORY_ARTIFACT = "pending_memory"
+SHELL_EXECUTION_ARTIFACT = "shell_execution"
 
 _ALLOWED_ARTIFACT_TYPES = frozenset(
     {
@@ -29,6 +31,7 @@ _ALLOWED_ARTIFACT_TYPES = frozenset(
         PENDING_DELETE_ARTIFACT,
         QUARANTINED_DOWNLOAD_ARTIFACT,
         PENDING_MEMORY_ARTIFACT,
+        SHELL_EXECUTION_ARTIFACT,
     }
 )
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -201,6 +204,46 @@ def build_pending_memory_artifact(
     return artifact
 
 
+def build_shell_execution_artifact(
+    request: ToolCallRequest,
+    *,
+    command: str,
+    record: ProcessExecutionRecord,
+    status: ExecutionStatus,
+) -> dict[str, Any]:
+    """Build inspectable evidence for one restricted subprocess execution."""
+
+    if request.tool_name != "run_shell":
+        raise ArtifactContractError("shell execution artifact requires run_shell")
+    command_bytes = command.encode("utf-8")
+    stdout_bytes = record.stdout.encode("utf-8")
+    stderr_bytes = record.stderr.encode("utf-8")
+    combined = stdout_bytes + b"\x00" + stderr_bytes
+    artifact: dict[str, Any] = {
+        **_base_fields(request),
+        "artifact_type": SHELL_EXECUTION_ARTIFACT,
+        "status": status.value,
+        "executable": record.executable,
+        "arguments": list(record.arguments),
+        "cwd": record.cwd,
+        "exit_code": record.exit_code,
+        "duration_ms": record.duration_ms,
+        "stdout_sha256": record.stdout_sha256,
+        "stdout_size_bytes": record.stdout_size_bytes,
+        "stderr_sha256": record.stderr_sha256,
+        "stderr_size_bytes": record.stderr_size_bytes,
+        "environment_keys": list(record.environment_keys),
+        "command_sha256": sha256(command_bytes).hexdigest(),
+        "command_size_bytes": len(command_bytes),
+        "timed_out": False,
+        "output_truncated": False,
+        "sha256": sha256(combined).hexdigest(),
+        "size_bytes": len(combined),
+    }
+    validate_artifact(artifact)
+    return artifact
+
+
 def validate_artifact(artifact: Mapping[str, Any]) -> None:
     """Validate one artifact independently of its enclosing execution result."""
 
@@ -242,6 +285,8 @@ def validate_artifact(artifact: Mapping[str, Any]) -> None:
         if key is not None:
             _require_string(artifact, "key")
             _require_relative_path(artifact, "path")
+    elif artifact_type == SHELL_EXECUTION_ARTIFACT:
+        _validate_shell_execution_artifact(artifact)
 
 
 def validate_execution_artifacts(
@@ -300,6 +345,17 @@ def validate_execution_artifacts(
     if _require_string(tool_output, "status") != execution.status.value:
         raise ArtifactContractError("tool_output status does not match execution status")
 
+    shell_execution = next(
+        (
+            artifact
+            for artifact in execution.artifacts
+            if artifact.get("artifact_type") == SHELL_EXECUTION_ARTIFACT
+        ),
+        None,
+    )
+    if shell_execution is not None:
+        _validate_shell_execution_against_output(request, execution, shell_execution)
+
     required_types = {
         "list_dir": {TOOL_OUTPUT_ARTIFACT},
         "read_file": {TOOL_OUTPUT_ARTIFACT},
@@ -308,6 +364,7 @@ def validate_execution_artifacts(
         "download_url": {TOOL_OUTPUT_ARTIFACT, QUARANTINED_DOWNLOAD_ARTIFACT},
         "memory_read": {TOOL_OUTPUT_ARTIFACT},
         "memory_write": {TOOL_OUTPUT_ARTIFACT, PENDING_MEMORY_ARTIFACT},
+        "run_shell": {TOOL_OUTPUT_ARTIFACT, SHELL_EXECUTION_ARTIFACT},
     }.get(request.tool_name)
 
     if required_types is not None and artifact_types != required_types:
@@ -356,7 +413,7 @@ def _validate_tool_output_artifact(artifact: Mapping[str, Any]) -> None:
 def _artifact_identity(artifact: Mapping[str, Any]) -> tuple[str, str]:
     artifact_type = _require_string(artifact, "artifact_type")
 
-    if artifact_type == TOOL_OUTPUT_ARTIFACT:
+    if artifact_type in {TOOL_OUTPUT_ARTIFACT, SHELL_EXECUTION_ARTIFACT}:
         identity_value = "singleton"
     elif artifact_type == PENDING_FILE_ARTIFACT:
         identity_value = _require_string(artifact, "path")
@@ -370,6 +427,96 @@ def _artifact_identity(artifact: Mapping[str, Any]) -> tuple[str, str]:
         raise ArtifactContractError(f"unsupported artifact_type: {artifact_type}")
 
     return artifact_type, identity_value
+
+
+def _validate_shell_execution_artifact(artifact: Mapping[str, Any]) -> None:
+    status = _require_string(artifact, "status")
+    try:
+        ExecutionStatus(status)
+    except ValueError as error:
+        raise ArtifactContractError("shell execution status is invalid") from error
+    executable = _require_string(artifact, "executable")
+    if "/" in executable or "\\" in executable:
+        raise ArtifactContractError("shell artifact executable must be a logical name")
+    arguments = artifact.get("arguments")
+    if not isinstance(arguments, list) or not all(isinstance(item, str) for item in arguments):
+        raise ArtifactContractError("shell artifact arguments must be a string list")
+    _require_workspace_cwd(artifact, "cwd")
+    exit_code = artifact.get("exit_code")
+    if isinstance(exit_code, bool) or not isinstance(exit_code, int):
+        raise ArtifactContractError("shell artifact exit_code must be an integer")
+    for field_name in (
+        "duration_ms",
+        "stdout_size_bytes",
+        "stderr_size_bytes",
+        "command_size_bytes",
+    ):
+        _require_size(artifact, field_name)
+    for field_name in ("stdout_sha256", "stderr_sha256", "command_sha256"):
+        _require_sha256(artifact, field_name)
+    keys = artifact.get("environment_keys")
+    if not isinstance(keys, list) or not all(isinstance(item, str) and item for item in keys):
+        raise ArtifactContractError("shell artifact environment_keys must be strings")
+    if len(keys) != len(set(keys)):
+        raise ArtifactContractError("shell artifact environment_keys must be unique")
+    if artifact.get("timed_out") is not False:
+        raise ArtifactContractError("completed shell artifact must not be timed out")
+    if artifact.get("output_truncated") is not False:
+        raise ArtifactContractError("truncated shell output is not accepted")
+
+
+def _validate_shell_execution_against_output(
+    request: ToolCallRequest,
+    execution: ToolExecutionResult,
+    artifact: Mapping[str, Any],
+) -> None:
+    if request.tool_name != "run_shell":
+        raise ArtifactContractError("shell execution artifact is only valid for run_shell")
+    if not isinstance(execution.output, Mapping):
+        raise ArtifactContractError("run_shell output must be a mapping")
+    output = execution.output
+    for field_name in (
+        "executable",
+        "arguments",
+        "cwd",
+        "exit_code",
+        "duration_ms",
+        "environment_keys",
+    ):
+        if artifact.get(field_name) != output.get(field_name):
+            raise ArtifactContractError(f"shell artifact {field_name} does not match output")
+    stdout = output.get("stdout")
+    stderr = output.get("stderr")
+    if not isinstance(stdout, str) or not isinstance(stderr, str):
+        raise ArtifactContractError("run_shell stdout and stderr must be strings")
+    stdout_bytes = stdout.encode("utf-8")
+    stderr_bytes = stderr.encode("utf-8")
+    if artifact.get("stdout_size_bytes") != len(stdout_bytes):
+        raise ArtifactContractError("shell stdout size does not match output")
+    if artifact.get("stderr_size_bytes") != len(stderr_bytes):
+        raise ArtifactContractError("shell stderr size does not match output")
+    if artifact.get("stdout_sha256") != sha256(stdout_bytes).hexdigest():
+        raise ArtifactContractError("shell stdout hash does not match output")
+    if artifact.get("stderr_sha256") != sha256(stderr_bytes).hexdigest():
+        raise ArtifactContractError("shell stderr hash does not match output")
+    combined = stdout_bytes + b"\x00" + stderr_bytes
+    if artifact.get("size_bytes") != len(combined):
+        raise ArtifactContractError("shell combined output size does not match output")
+    if artifact.get("sha256") != sha256(combined).hexdigest():
+        raise ArtifactContractError("shell combined output hash does not match output")
+    command = request.arguments.get("command")
+    if not isinstance(command, str):
+        raise ArtifactContractError("run_shell command must be a string")
+    command_bytes = command.encode("utf-8")
+    if artifact.get("command_size_bytes") != len(command_bytes):
+        raise ArtifactContractError("shell command size does not match request")
+    if artifact.get("command_sha256") != sha256(command_bytes).hexdigest():
+        raise ArtifactContractError("shell command hash does not match request")
+    expected_status = (
+        ExecutionStatus.SUCCESS if output.get("exit_code") == 0 else ExecutionStatus.FAILED
+    )
+    if execution.status is not expected_status or artifact.get("status") != expected_status.value:
+        raise ArtifactContractError("shell execution status does not match exit_code")
 
 
 def _require_string(artifact: Mapping[str, Any], field_name: str) -> str:
@@ -397,6 +544,13 @@ def _require_exact_status(artifact: Mapping[str, Any], expected: str) -> None:
     actual = _require_string(artifact, "status")
     if actual != expected:
         raise ArtifactContractError(f"artifact status must be {expected}")
+
+
+def _require_workspace_cwd(artifact: Mapping[str, Any], field_name: str) -> str:
+    value = _require_string(artifact, field_name)
+    if value == ".":
+        return value
+    return _require_relative_path(artifact, field_name)
 
 
 def _require_relative_path(artifact: Mapping[str, Any], field_name: str) -> str:
