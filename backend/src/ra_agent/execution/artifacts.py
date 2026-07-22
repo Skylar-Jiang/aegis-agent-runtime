@@ -174,11 +174,16 @@ def build_pending_memory_artifact(
     memory_id: str,
     content_sha256: str,
     size_bytes: int,
+    key: str | None = None,
+    path: str | None = None,
 ) -> dict[str, Any]:
     """Build the inspectable metadata boundary for untrusted pending memory."""
 
     if request.tool_name != "memory_write":
         raise ArtifactContractError("pending memory artifact requires memory_write")
+
+    if (key is None) != (path is None):
+        raise ArtifactContractError("pending memory key and path must be provided together")
 
     artifact: dict[str, Any] = {
         **_base_fields(request),
@@ -188,6 +193,10 @@ def build_pending_memory_artifact(
         "sha256": content_sha256,
         "size_bytes": size_bytes,
     }
+    if key is not None and path is not None:
+        artifact["key"] = key
+        artifact["path"] = path
+
     validate_artifact(artifact)
     return artifact
 
@@ -224,6 +233,15 @@ def validate_artifact(artifact: Mapping[str, Any]) -> None:
     elif artifact_type == PENDING_MEMORY_ARTIFACT:
         _require_exact_status(artifact, MemoryStatus.PENDING.value)
         _require_string(artifact, "memory_id")
+        key = artifact.get("key")
+        path = artifact.get("path")
+        if (key is None) != (path is None):
+            raise ArtifactContractError(
+                "pending memory artifact key and path must be provided together"
+            )
+        if key is not None:
+            _require_string(artifact, "key")
+            _require_relative_path(artifact, "path")
 
 
 def validate_execution_artifacts(

@@ -8,10 +8,12 @@ from ra_agent.contracts import (
     ApprovalDecision,
     ApprovalStatus,
     ExecutionStatus,
+    MemoryStatus,
     ToolCallRequest,
     ToolExecutionResult,
     ToolSpec,
 )
+from ra_agent.memory.store import FilesystemMemoryStore
 from ra_agent.tools.registry import (
     ToolHandler,
     ToolRegistry,
@@ -47,6 +49,10 @@ class CheckpointRequiredError(ToolExecutorError):
 
 class ToolResultContractError(ToolExecutorError):
     """Raised when a handler returns an invalid execution result."""
+
+
+class PendingResourceUnavailableError(ToolExecutorError):
+    """Raised when a pending tool has no matching durable resource store."""
 
 
 class ToolExecutionTimeoutError(ToolExecutorError):
@@ -85,13 +91,17 @@ class ApprovalAwareToolHandler(Protocol):
 class RegistryToolExecutor:
     """Execute registered handlers under shared runtime safeguards."""
 
+    _FILESYSTEM_PENDING_TOOLS = frozenset({"write_file", "delete_file"})
+
     def __init__(
         self,
         registry: ToolRegistry,
         pending_store: PendingStore,
+        memory_store: FilesystemMemoryStore | None = None,
     ) -> None:
         self._registry = registry
         self._pending_store = pending_store
+        self._memory_store = memory_store
 
     async def execute(
         self,
@@ -112,6 +122,7 @@ class RegistryToolExecutor:
             request,
             approval_decision,
         )
+        self._validate_pending_resource_configuration(spec)
 
         started_at = datetime.now(UTC)
 
@@ -127,37 +138,47 @@ class RegistryToolExecutor:
                 f"tool {request.tool_name!r} exceeded its {spec.timeout_seconds}-second timeout"
             ) from error
 
-        if not isinstance(result, ToolExecutionResult):
-            raise ToolResultContractError("tool handler did not return ToolExecutionResult")
+        try:
+            if not isinstance(result, ToolExecutionResult):
+                raise ToolResultContractError("tool handler did not return ToolExecutionResult")
 
-        self._validate_result(
-            spec,
-            result,
-            checkpoint_id,
-        )
-
-        if result.status is ExecutionStatus.PENDING_COMMIT:
-            if checkpoint_id is None:
-                raise CheckpointRequiredError("PENDING_COMMIT result requires a checkpoint")
-
-            record = await self._pending_store.bind_checkpoint(
-                request.request_id,
+            self._validate_result(
+                spec,
+                result,
                 checkpoint_id,
             )
 
-            if record.request_id != request.request_id:
-                raise ToolResultContractError("pending record request_id does not match request")
+            if result.status is ExecutionStatus.PENDING_COMMIT:
+                if request.tool_name in self._FILESYSTEM_PENDING_TOOLS:
+                    await self._validate_filesystem_pending(
+                        request,
+                        checkpoint_id,
+                    )
+                elif request.tool_name == "memory_write":
+                    await self._validate_memory_pending(request, result)
+                else:
+                    raise PendingResourceUnavailableError(
+                        f"pending resource routing is not implemented for {request.tool_name!r}"
+                    )
 
-            if record.tool_name != request.tool_name:
-                raise ToolResultContractError("pending record tool_name does not match request")
-
-            if not await self._pending_store.verify_integrity(request.request_id):
-                raise ToolResultContractError("pending record failed integrity verification")
-
-        try:
-            validate_execution_artifacts(request, result)
-        except ArtifactContractError as error:
-            raise ToolResultContractError(f"invalid execution artifacts: {error}") from error
+            try:
+                validate_execution_artifacts(request, result)
+            except ArtifactContractError as error:
+                raise ToolResultContractError(f"invalid execution artifacts: {error}") from error
+        except asyncio.CancelledError:
+            await asyncio.shield(
+                self._rollback_pending_memory_on_failure(
+                    request,
+                    reason="memory execution cancelled",
+                )
+            )
+            raise
+        except Exception:
+            await self._rollback_pending_memory_on_failure(
+                request,
+                reason="memory execution validation failed",
+            )
+            raise
 
         finished_at = datetime.now(UTC)
 
@@ -167,11 +188,114 @@ class RegistryToolExecutor:
                 "task_id": request.task_id,
                 "step_id": request.step_id,
                 "request_id": request.request_id,
-                "checkpoint_id": checkpoint_id,
+                "checkpoint_id": (
+                    checkpoint_id if request.tool_name in self._FILESYSTEM_PENDING_TOOLS else None
+                ),
                 "started_at": started_at,
                 "finished_at": finished_at,
             }
         )
+
+    def _validate_pending_resource_configuration(self, spec: ToolSpec) -> None:
+        if spec.name == "memory_write" and self._memory_store is None:
+            raise PendingResourceUnavailableError(
+                "memory_write requires a configured FilesystemMemoryStore"
+            )
+
+    async def _rollback_pending_memory_on_failure(
+        self,
+        request: ToolCallRequest,
+        *,
+        reason: str,
+    ) -> None:
+        if request.tool_name != "memory_write" or self._memory_store is None:
+            return
+
+        try:
+            record = await self._memory_store.get(request.request_id)
+        except Exception:
+            return
+
+        if record.status is MemoryStatus.PENDING:
+            try:
+                await self._memory_store.mark_rolled_back(
+                    request.request_id,
+                    reason=reason,
+                )
+            except Exception:
+                return
+
+    async def _validate_filesystem_pending(
+        self,
+        request: ToolCallRequest,
+        checkpoint_id: str | None,
+    ) -> None:
+        if checkpoint_id is None:
+            raise CheckpointRequiredError("filesystem PENDING_COMMIT requires a checkpoint")
+
+        record = await self._pending_store.bind_checkpoint(
+            request.request_id,
+            checkpoint_id,
+        )
+
+        if record.request_id != request.request_id:
+            raise ToolResultContractError("pending record request_id does not match request")
+
+        if record.tool_name != request.tool_name:
+            raise ToolResultContractError("pending record tool_name does not match request")
+
+        if not await self._pending_store.verify_integrity(request.request_id):
+            raise ToolResultContractError("pending record failed integrity verification")
+
+    async def _validate_memory_pending(
+        self,
+        request: ToolCallRequest,
+        result: ToolExecutionResult,
+    ) -> None:
+        if self._memory_store is None:
+            raise PendingResourceUnavailableError(
+                "memory_write requires a configured FilesystemMemoryStore"
+            )
+
+        if not await self._memory_store.verify_integrity(request.request_id):
+            raise ToolResultContractError("pending memory failed integrity verification")
+
+        record = await self._memory_store.get(request.request_id)
+        if record.task_id != request.task_id:
+            raise ToolResultContractError("pending memory task_id does not match request")
+        if record.step_id != request.step_id:
+            raise ToolResultContractError("pending memory step_id does not match request")
+        if record.request_id != request.request_id:
+            raise ToolResultContractError("pending memory request_id does not match request")
+        if record.tool_name != request.tool_name:
+            raise ToolResultContractError("pending memory tool_name does not match request")
+        if record.status is not MemoryStatus.PENDING:
+            raise ToolResultContractError("memory_write did not produce PENDING memory")
+
+        pending_artifacts = [
+            artifact
+            for artifact in result.artifacts
+            if artifact.get("artifact_type") == "pending_memory"
+        ]
+        if len(pending_artifacts) != 1:
+            raise ToolResultContractError(
+                "memory_write requires exactly one pending_memory artifact"
+            )
+
+        artifact = pending_artifacts[0]
+        expected: dict[str, object] = {
+            "memory_id": record.memory_id,
+            "key": record.key,
+            "path": record.payload_path,
+            "status": MemoryStatus.PENDING.value,
+            "sha256": record.content_sha256,
+            "size_bytes": record.size_bytes,
+        }
+        for field_name, expected_value in expected.items():
+            if artifact.get(field_name) != expected_value:
+                raise ToolResultContractError(
+                    f"pending_memory artifact {field_name} does not match stored memory"
+                )
 
     def _get_spec(
         self,
@@ -217,7 +341,11 @@ class RegistryToolExecutor:
             if not checkpoint_id or checkpoint_id.isspace():
                 raise ValueError("checkpoint_id must not be empty")
 
-        if spec.sandbox_mode.upper() == "PENDING" and checkpoint_id is None:
+        if (
+            spec.name in RegistryToolExecutor._FILESYSTEM_PENDING_TOOLS
+            and spec.sandbox_mode.upper() == "PENDING"
+            and checkpoint_id is None
+        ):
             raise CheckpointRequiredError(f"tool {spec.name!r} requires a checkpoint")
 
     @staticmethod
@@ -269,8 +397,11 @@ class RegistryToolExecutor:
             if sandbox_mode != "PENDING":
                 raise ToolResultContractError("non-pending tool returned PENDING_COMMIT")
 
-            if checkpoint_id is None:
-                raise CheckpointRequiredError("PENDING_COMMIT result requires a checkpoint")
+            if (
+                spec.name in RegistryToolExecutor._FILESYSTEM_PENDING_TOOLS
+                and checkpoint_id is None
+            ):
+                raise CheckpointRequiredError("filesystem PENDING_COMMIT requires a checkpoint")
 
             if not result.pending_changes:
                 raise ToolResultContractError("PENDING_COMMIT result has no pending changes")

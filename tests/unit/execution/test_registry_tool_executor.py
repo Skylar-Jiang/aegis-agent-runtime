@@ -11,6 +11,7 @@ from ra_agent.contracts import (
     ApprovalDecision,
     ApprovalStatus,
     ExecutionStatus,
+    MemoryStatus,
     SourceType,
     ToolCallRequest,
     ToolExecutionResult,
@@ -22,6 +23,7 @@ from ra_agent.execution.executor import (
     CheckpointRequiredError,
     InvalidToolSpecError,
     MissingToolHandlerError,
+    PendingResourceUnavailableError,
     RegistryToolExecutor,
     ToolDisabledError,
     ToolExecutionTimeoutError,
@@ -29,6 +31,8 @@ from ra_agent.execution.executor import (
     UnknownToolError,
 )
 from ra_agent.execution.pending_store import PendingConflictError, PendingStore
+from ra_agent.memory import FilesystemMemoryStore
+from ra_agent.tools.implementations.memory_tools import MemoryWriteHandler
 from ra_agent.tools.implementations.write_file import WriteFileHandler
 from ra_agent.tools.path_resolver import SafePathResolver
 from ra_agent.tools.registry import ToolRegistry
@@ -729,3 +733,114 @@ async def test_mismatched_approval_is_rejected(
 
     assert handler.call_count == 0
     assert handler.approved_call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_memory_write_uses_memory_store_without_filesystem_checkpoint(
+    tmp_path: Path,
+    pending_store: PendingStore,
+) -> None:
+    memory_store = FilesystemMemoryStore(tmp_path / "memory", max_value_bytes=4096)
+    registry = ToolRegistry()
+    registry.register(get_spec("memory_write"), MemoryWriteHandler(memory_store))
+    executor = RegistryToolExecutor(registry, pending_store, memory_store)
+    request = make_request(
+        "memory_write",
+        arguments={"key": "project.note", "value": {"text": "pending"}},
+        request_id="request-memory-executor",
+    )
+
+    result = await executor.execute(request)
+
+    assert result.status is ExecutionStatus.PENDING_COMMIT
+    assert result.checkpoint_id is None
+    assert [artifact["artifact_type"] for artifact in result.artifacts] == [
+        "tool_output",
+        "pending_memory",
+    ]
+    record = await memory_store.get(request.request_id)
+    assert record.status is MemoryStatus.PENDING
+    assert not (pending_store.pending_root / request.request_id).exists()
+
+
+@pytest.mark.asyncio
+async def test_memory_write_requires_configured_memory_store_before_handler_runs(
+    tmp_path: Path,
+    pending_store: PendingStore,
+) -> None:
+    handler_store = FilesystemMemoryStore(
+        tmp_path / "handler-memory", max_value_bytes=4096
+    )
+    registry = ToolRegistry()
+    registry.register(get_spec("memory_write"), MemoryWriteHandler(handler_store))
+    executor = RegistryToolExecutor(registry, pending_store)
+    request = make_request(
+        "memory_write",
+        arguments={"key": "project.note", "value": "pending"},
+        request_id="request-memory-no-store",
+    )
+
+    with pytest.raises(PendingResourceUnavailableError):
+        await executor.execute(request)
+
+    assert not (handler_store.records_root / request.request_id).exists()
+
+
+class TamperedMemoryArtifactHandler:
+    def __init__(self, store: FilesystemMemoryStore) -> None:
+        self._handler = MemoryWriteHandler(store)
+
+    async def __call__(self, request: ToolCallRequest) -> ToolExecutionResult:
+        result = await self._handler(request)
+        artifacts = [dict(artifact) for artifact in result.artifacts]
+        artifacts[1]["sha256"] = "0" * 64
+        return result.model_copy(update={"artifacts": artifacts})
+
+
+@pytest.mark.asyncio
+async def test_invalid_memory_artifact_rolls_back_staged_memory(
+    tmp_path: Path,
+    pending_store: PendingStore,
+) -> None:
+    memory_store = FilesystemMemoryStore(tmp_path / "memory", max_value_bytes=4096)
+    registry = ToolRegistry()
+    registry.register(
+        get_spec("memory_write"),
+        TamperedMemoryArtifactHandler(memory_store),
+    )
+    executor = RegistryToolExecutor(registry, pending_store, memory_store)
+    request = make_request(
+        "memory_write",
+        arguments={"key": "project.note", "value": "pending"},
+        request_id="request-memory-invalid-artifact",
+    )
+
+    with pytest.raises(ToolResultContractError, match="pending_memory artifact"):
+        await executor.execute(request)
+
+    record = await memory_store.get(request.request_id)
+    assert record.status is MemoryStatus.ROLLED_BACK
+    assert await memory_store.get_trusted("project.note") is None
+
+
+@pytest.mark.asyncio
+async def test_repeated_pending_memory_write_is_idempotent(
+    tmp_path: Path,
+    pending_store: PendingStore,
+) -> None:
+    memory_store = FilesystemMemoryStore(tmp_path / "memory", max_value_bytes=4096)
+    registry = ToolRegistry()
+    registry.register(get_spec("memory_write"), MemoryWriteHandler(memory_store))
+    executor = RegistryToolExecutor(registry, pending_store, memory_store)
+    request = make_request(
+        "memory_write",
+        arguments={"key": "project.note", "value": {"text": "same"}},
+        request_id="request-memory-idempotent",
+    )
+
+    first = await executor.execute(request)
+    second = await executor.execute(request)
+
+    assert first.pending_changes == second.pending_changes
+    assert first.artifacts == second.artifacts
+    assert len(list(memory_store.records_root.iterdir())) == 1

@@ -412,3 +412,46 @@ def test_empty_artifact_list_remains_compatible_with_orchestration_mocks() -> No
     )
 
     validate_execution_artifacts(request, execution)
+
+
+def test_pending_memory_artifact_can_expose_safe_inspection_path_and_key() -> None:
+    request = make_request("memory_write", request_id="request-memory-inspection")
+
+    artifact = build_pending_memory_artifact(
+        request,
+        memory_id="memory-request-memory-inspection",
+        key="project.note",
+        path="records/request-memory-inspection/payload.json",
+        content_sha256="c" * 64,
+        size_bytes=21,
+    )
+
+    assert artifact["key"] == "project.note"
+    assert artifact["path"] == "records/request-memory-inspection/payload.json"
+    validate_artifact(artifact)
+
+
+@pytest.mark.parametrize(
+    ("key", "path"),
+    [
+        ("project.note", None),
+        (None, "records/request/payload.json"),
+        ("project.note", "../payload.json"),
+        ("project.note", "C:/memory/payload.json"),
+    ],
+)
+def test_pending_memory_inspection_metadata_fails_closed(
+    key: str | None,
+    path: str | None,
+) -> None:
+    request = make_request("memory_write", request_id="request-memory-invalid-path")
+
+    with pytest.raises(ArtifactContractError):
+        build_pending_memory_artifact(
+            request,
+            memory_id="memory-request-memory-invalid-path",
+            key=key,
+            path=path,
+            content_sha256="d" * 64,
+            size_bytes=10,
+        )
