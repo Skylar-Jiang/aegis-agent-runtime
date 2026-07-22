@@ -4,6 +4,7 @@ import asyncio
 from hashlib import sha256
 
 from ra_agent.contracts import ExecutionStatus, ToolCallRequest, ToolExecutionResult
+from ra_agent.execution.artifacts import build_tool_output_artifact
 from ra_agent.tools.path_resolver import SafePathResolver
 
 
@@ -36,18 +37,27 @@ class ReadFileHandler:
         except UnicodeDecodeError as error:
             raise ValueError(f"file is not valid UTF-8: {raw_path}") from error
 
+        output = {
+            "path": self._path_resolver.to_relative(resolved_path),
+            "content": content,
+            "size_bytes": size_bytes,
+            "sha256": sha256(payload).hexdigest(),
+            "encoding": "utf-8",
+        }
+
         return ToolExecutionResult(
             task_id=request.task_id,
             step_id=request.step_id,
             request_id=request.request_id,
             status=ExecutionStatus.SUCCESS,
-            output={
-                "path": self._path_resolver.to_relative(resolved_path),
-                "content": content,
-                "size_bytes": size_bytes,
-                "sha256": sha256(payload).hexdigest(),
-                "encoding": "utf-8",
-            },
+            output=output,
+            artifacts=[
+                build_tool_output_artifact(
+                    request,
+                    output,
+                    status=ExecutionStatus.SUCCESS,
+                )
+            ],
         )
 
     def _validate_tool_name(

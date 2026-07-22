@@ -16,6 +16,7 @@ from ra_agent.contracts import (
     ToolExecutionResult,
     ToolSpec,
 )
+from ra_agent.execution.artifacts import build_tool_output_artifact
 from ra_agent.execution.executor import (
     ApprovalContextError,
     CheckpointRequiredError,
@@ -65,6 +66,38 @@ class StubHandler:
             status=self.status,
             pending_changes=self.pending_changes,
             output={"handler": True},
+        )
+
+
+class ArtifactStubHandler:
+    def __init__(
+        self,
+        *,
+        mutations: dict[str, object] | None = None,
+        output: object | None = None,
+    ) -> None:
+        self.mutations = mutations or {}
+        self.output = {"handler": True} if output is None else output
+        self.call_count = 0
+
+    async def __call__(
+        self,
+        request: ToolCallRequest,
+    ) -> ToolExecutionResult:
+        self.call_count += 1
+        artifact = build_tool_output_artifact(
+            request,
+            self.output,
+            status=ExecutionStatus.SUCCESS,
+        )
+        artifact.update(self.mutations)
+        return ToolExecutionResult(
+            task_id="handler-task",
+            step_id="handler-step",
+            request_id="handler-request",
+            status=ExecutionStatus.SUCCESS,
+            output=self.output,
+            artifacts=[artifact],
         )
 
 
@@ -173,6 +206,77 @@ async def test_executor_normalizes_correlation_and_timestamps(
     assert result.started_at is not None
     assert result.finished_at is not None
     assert result.started_at <= result.finished_at
+
+
+@pytest.mark.asyncio
+async def test_executor_accepts_valid_inspectable_artifacts(
+    pending_store: PendingStore,
+) -> None:
+    registry = ToolRegistry()
+    handler = ArtifactStubHandler()
+    registry.register(get_spec("list_dir"), handler)
+    executor = RegistryToolExecutor(registry, pending_store)
+    request = make_request(
+        "list_dir",
+        arguments={"path": "."},
+        request_id="request-valid-artifact",
+    )
+
+    result = await executor.execute(request)
+
+    assert handler.call_count == 1
+    assert result.request_id == request.request_id
+    assert result.artifacts[0]["request_id"] == request.request_id
+    assert result.artifacts[0]["tool_name"] == request.tool_name
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("task_id", "other-task"),
+        ("step_id", "other-step"),
+        ("request_id", "other-request"),
+        ("tool_name", "read_file"),
+    ],
+)
+async def test_executor_rejects_artifact_correlation_mismatch(
+    pending_store: PendingStore,
+    field: str,
+    replacement: str,
+) -> None:
+    registry = ToolRegistry()
+    handler = ArtifactStubHandler(mutations={field: replacement})
+    registry.register(get_spec("list_dir"), handler)
+    executor = RegistryToolExecutor(registry, pending_store)
+
+    with pytest.raises(ToolResultContractError, match="invalid execution artifacts"):
+        await executor.execute(
+            make_request(
+                "list_dir",
+                arguments={"path": "."},
+                request_id=f"request-artifact-{field}",
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_executor_rejects_stale_tool_output_hash(
+    pending_store: PendingStore,
+) -> None:
+    registry = ToolRegistry()
+    handler = ArtifactStubHandler(mutations={"sha256": "0" * 64})
+    registry.register(get_spec("list_dir"), handler)
+    executor = RegistryToolExecutor(registry, pending_store)
+
+    with pytest.raises(ToolResultContractError, match="tool_output hash"):
+        await executor.execute(
+            make_request(
+                "list_dir",
+                arguments={"path": "."},
+                request_id="request-stale-output-artifact",
+            )
+        )
 
 
 @pytest.mark.asyncio

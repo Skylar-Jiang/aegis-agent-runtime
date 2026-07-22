@@ -17,6 +17,7 @@ from ra_agent.tools.registry import (
     ToolRegistry,
 )
 
+from .artifacts import ArtifactContractError, validate_execution_artifacts
 from .pending_store import PendingStore
 
 
@@ -152,6 +153,11 @@ class RegistryToolExecutor:
 
             if not await self._pending_store.verify_integrity(request.request_id):
                 raise ToolResultContractError("pending record failed integrity verification")
+
+        try:
+            validate_execution_artifacts(request, result)
+        except ArtifactContractError as error:
+            raise ToolResultContractError(f"invalid execution artifacts: {error}") from error
 
         finished_at = datetime.now(UTC)
 

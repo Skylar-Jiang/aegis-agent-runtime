@@ -7,6 +7,10 @@ from ra_agent.contracts import (
     ToolCallRequest,
     ToolExecutionResult,
 )
+from ra_agent.execution.artifacts import (
+    build_pending_file_artifact,
+    build_tool_output_artifact,
+)
 from ra_agent.execution.pending_store import PendingStore
 from ra_agent.tools.path_resolver import SafePathResolver
 
@@ -62,26 +66,27 @@ class WriteFileHandler:
             "size_bytes": record.size_bytes,
             "status": record.status.value,
         }
+        output = {
+            "staged": True,
+            "operation": record.operation.value,
+            "target_path": record.target_path,
+            "size_bytes": size_bytes,
+        }
 
         return ToolExecutionResult(
             task_id=request.task_id,
             step_id=request.step_id,
             request_id=request.request_id,
             status=ExecutionStatus.PENDING_COMMIT,
-            output={
-                "staged": True,
-                "operation": record.operation.value,
-                "target_path": record.target_path,
-                "size_bytes": size_bytes,
-            },
+            output=output,
             sandbox_path=pending_directory,
             artifacts=[
-                {
-                    "type": "pending_file",
-                    "path": record.pending_path,
-                    "sha256": record.content_sha256,
-                    "size_bytes": record.size_bytes,
-                }
+                build_tool_output_artifact(
+                    request,
+                    output,
+                    status=ExecutionStatus.PENDING_COMMIT,
+                ),
+                build_pending_file_artifact(request, record),
             ],
             pending_changes=[pending_change],
         )

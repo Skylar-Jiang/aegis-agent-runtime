@@ -5,6 +5,10 @@ from ra_agent.contracts import (
     ToolCallRequest,
     ToolExecutionResult,
 )
+from ra_agent.execution.artifacts import (
+    build_pending_delete_artifact,
+    build_tool_output_artifact,
+)
 from ra_agent.execution.pending_store import PendingStore
 from ra_agent.tools.path_resolver import SafePathResolver
 
@@ -44,18 +48,27 @@ class DeleteFileHandler:
             "original_size_bytes": original_size_bytes,
             "status": record.status.value,
         }
+        output = {
+            "staged": True,
+            "operation": record.operation.value,
+            "target_path": record.target_path,
+        }
 
         return ToolExecutionResult(
             task_id=request.task_id,
             step_id=request.step_id,
             request_id=request.request_id,
             status=ExecutionStatus.PENDING_COMMIT,
-            output={
-                "staged": True,
-                "operation": record.operation.value,
-                "target_path": record.target_path,
-            },
+            output=output,
             sandbox_path=request.request_id,
+            artifacts=[
+                build_tool_output_artifact(
+                    request,
+                    output,
+                    status=ExecutionStatus.PENDING_COMMIT,
+                ),
+                build_pending_delete_artifact(request, record),
+            ],
             pending_changes=[pending_change],
         )
 
