@@ -19,6 +19,7 @@ from ra_agent.contracts import (
 )
 from ra_agent.execution.artifacts import (
     build_quarantined_download_artifact,
+    build_shell_execution_artifact,
     build_tool_output_artifact,
 )
 from ra_agent.execution.executor import (
@@ -34,6 +35,7 @@ from ra_agent.execution.executor import (
     UnknownToolError,
 )
 from ra_agent.execution.pending_store import PendingConflictError, PendingStore
+from ra_agent.execution.process_runner import ProcessExecutionRecord
 from ra_agent.execution.quarantine import (
     FilesystemQuarantineStore,
     QuarantineStatus,
@@ -109,6 +111,59 @@ class ArtifactStubHandler:
             status=ExecutionStatus.SUCCESS,
             output=self.output,
             artifacts=[artifact],
+        )
+
+
+class ShellArtifactStubHandler:
+    async def __call__(
+        self,
+        request: ToolCallRequest,
+    ) -> ToolExecutionResult:
+        command = request.arguments.get("command")
+        assert isinstance(command, str)
+        record = ProcessExecutionRecord(
+            executable="ruff",
+            arguments=("check", "."),
+            cwd=".",
+            exit_code=0,
+            stdout="ok\n",
+            stderr="",
+            stdout_sha256="dc51b8c96c2d745df3bd5590d990230a482fd247123599548e0632fdbf97fc22",
+            stdout_size_bytes=3,
+            stderr_sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            stderr_size_bytes=0,
+            duration_ms=2,
+            environment_keys=("PATH",),
+        )
+        output = {
+            "executable": "ruff",
+            "arguments": ["check", "."],
+            "cwd": ".",
+            "exit_code": 0,
+            "stdout": "ok\n",
+            "stderr": "",
+            "duration_ms": 2,
+            "environment_keys": ["PATH"],
+        }
+        return ToolExecutionResult(
+            task_id=request.task_id,
+            step_id=request.step_id,
+            request_id=request.request_id,
+            status=ExecutionStatus.SUCCESS,
+            output=output,
+            artifacts=[
+                build_tool_output_artifact(
+                    request,
+                    output,
+                    status=ExecutionStatus.SUCCESS,
+                ),
+                build_shell_execution_artifact(
+                    request,
+                    command=command,
+                    record=record,
+                    status=ExecutionStatus.SUCCESS,
+                ),
+            ],
         )
 
 
@@ -330,7 +385,10 @@ async def test_disabled_tool_is_not_executed(
 ) -> None:
     registry = ToolRegistry()
     handler = StubHandler()
-    registry.register(get_spec("run_shell"), handler)
+    disabled_spec = get_spec("run_shell").model_copy(
+        update={"sandbox_mode": "DISABLED_TEST"}
+    )
+    registry.register(disabled_spec, handler)
 
     executor = RegistryToolExecutor(registry, pending_store)
 
@@ -1006,3 +1064,25 @@ async def test_invalid_download_artifact_rolls_back_quarantine(
 
     record = await quarantine_store.get(request.request_id)
     assert record.status is QuarantineStatus.ROLLED_BACK
+
+
+@pytest.mark.asyncio
+async def test_restricted_shell_result_is_validated_by_executor(
+    pending_store: PendingStore,
+) -> None:
+    registry = ToolRegistry()
+    registry.register(get_spec("run_shell"), ShellArtifactStubHandler())
+    executor = RegistryToolExecutor(registry, pending_store)
+    request = make_request(
+        "run_shell",
+        arguments={"command": "ruff check .", "cwd": "."},
+        request_id="request-restricted-shell",
+    )
+
+    result = await executor.execute(request)
+
+    assert result.status is ExecutionStatus.SUCCESS
+    assert [artifact["artifact_type"] for artifact in result.artifacts] == [
+        "tool_output",
+        "shell_execution",
+    ]
