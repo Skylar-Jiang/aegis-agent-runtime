@@ -156,6 +156,22 @@ async def test_write_file_stages_content_without_overwriting_workspace(
     assert result.pending_changes[0]["operation"] == "WRITE"
     assert result.pending_changes[0]["target_path"] == "reports/result.md"
 
+    assert [artifact["artifact_type"] for artifact in result.artifacts] == [
+        "tool_output",
+        "pending_file",
+    ]
+    output_artifact, pending_artifact = result.artifacts
+    assert output_artifact["request_id"] == result.request_id
+    assert output_artifact["tool_name"] == "write_file"
+    assert output_artifact["status"] == "PENDING_COMMIT"
+    assert pending_artifact["request_id"] == result.request_id
+    assert pending_artifact["tool_name"] == "write_file"
+    assert pending_artifact["status"] == "PENDING"
+    assert pending_artifact["path"] == record.pending_path
+    assert pending_artifact["target_path"] == record.target_path
+    assert pending_artifact["sha256"] == record.content_sha256
+    assert pending_artifact["size_bytes"] == record.size_bytes
+
 
 @pytest.mark.asyncio
 async def test_write_file_new_target_is_not_created_before_commit(
@@ -351,6 +367,21 @@ async def test_delete_file_stages_marker_without_deleting_file(
             "status": "PENDING",
         }
     ]
+
+    assert [artifact["artifact_type"] for artifact in result.artifacts] == [
+        "tool_output",
+        "pending_delete",
+    ]
+    output_artifact, delete_artifact = result.artifacts
+    assert output_artifact["request_id"] == result.request_id
+    assert output_artifact["tool_name"] == "delete_file"
+    assert output_artifact["status"] == "PENDING_COMMIT"
+    assert delete_artifact["request_id"] == result.request_id
+    assert delete_artifact["tool_name"] == "delete_file"
+    assert delete_artifact["status"] == "PENDING"
+    assert delete_artifact["target_path"] == "old.txt"
+    assert len(delete_artifact["sha256"]) == 64
+    assert delete_artifact["size_bytes"] > 0
 
 
 @pytest.mark.asyncio

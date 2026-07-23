@@ -11,16 +11,23 @@ from ra_agent.contracts import (
     ApprovalDecision,
     ApprovalStatus,
     ExecutionStatus,
+    MemoryStatus,
     SourceType,
     ToolCallRequest,
     ToolExecutionResult,
     ToolSpec,
+)
+from ra_agent.execution.artifacts import (
+    build_quarantined_download_artifact,
+    build_shell_execution_artifact,
+    build_tool_output_artifact,
 )
 from ra_agent.execution.executor import (
     ApprovalContextError,
     CheckpointRequiredError,
     InvalidToolSpecError,
     MissingToolHandlerError,
+    PendingResourceUnavailableError,
     RegistryToolExecutor,
     ToolDisabledError,
     ToolExecutionTimeoutError,
@@ -28,6 +35,13 @@ from ra_agent.execution.executor import (
     UnknownToolError,
 )
 from ra_agent.execution.pending_store import PendingConflictError, PendingStore
+from ra_agent.execution.process_runner import ProcessExecutionRecord
+from ra_agent.execution.quarantine import (
+    FilesystemQuarantineStore,
+    QuarantineStatus,
+)
+from ra_agent.memory import FilesystemMemoryStore
+from ra_agent.tools.implementations.memory_tools import MemoryWriteHandler
 from ra_agent.tools.implementations.write_file import WriteFileHandler
 from ra_agent.tools.path_resolver import SafePathResolver
 from ra_agent.tools.registry import ToolRegistry
@@ -65,6 +79,91 @@ class StubHandler:
             status=self.status,
             pending_changes=self.pending_changes,
             output={"handler": True},
+        )
+
+
+class ArtifactStubHandler:
+    def __init__(
+        self,
+        *,
+        mutations: dict[str, object] | None = None,
+        output: object | None = None,
+    ) -> None:
+        self.mutations = mutations or {}
+        self.output = {"handler": True} if output is None else output
+        self.call_count = 0
+
+    async def __call__(
+        self,
+        request: ToolCallRequest,
+    ) -> ToolExecutionResult:
+        self.call_count += 1
+        artifact = build_tool_output_artifact(
+            request,
+            self.output,
+            status=ExecutionStatus.SUCCESS,
+        )
+        artifact.update(self.mutations)
+        return ToolExecutionResult(
+            task_id="handler-task",
+            step_id="handler-step",
+            request_id="handler-request",
+            status=ExecutionStatus.SUCCESS,
+            output=self.output,
+            artifacts=[artifact],
+        )
+
+
+class ShellArtifactStubHandler:
+    async def __call__(
+        self,
+        request: ToolCallRequest,
+    ) -> ToolExecutionResult:
+        command = request.arguments.get("command")
+        assert isinstance(command, str)
+        record = ProcessExecutionRecord(
+            executable="ruff",
+            arguments=("check", "."),
+            cwd=".",
+            exit_code=0,
+            stdout="ok\n",
+            stderr="",
+            stdout_sha256="dc51b8c96c2d745df3bd5590d990230a482fd247123599548e0632fdbf97fc22",
+            stdout_size_bytes=3,
+            stderr_sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            stderr_size_bytes=0,
+            duration_ms=2,
+            environment_keys=("PATH",),
+        )
+        output = {
+            "executable": "ruff",
+            "arguments": ["check", "."],
+            "cwd": ".",
+            "exit_code": 0,
+            "stdout": "ok\n",
+            "stderr": "",
+            "duration_ms": 2,
+            "environment_keys": ["PATH"],
+        }
+        return ToolExecutionResult(
+            task_id=request.task_id,
+            step_id=request.step_id,
+            request_id=request.request_id,
+            status=ExecutionStatus.SUCCESS,
+            output=output,
+            artifacts=[
+                build_tool_output_artifact(
+                    request,
+                    output,
+                    status=ExecutionStatus.SUCCESS,
+                ),
+                build_shell_execution_artifact(
+                    request,
+                    command=command,
+                    record=record,
+                    status=ExecutionStatus.SUCCESS,
+                ),
+            ],
         )
 
 
@@ -176,6 +275,77 @@ async def test_executor_normalizes_correlation_and_timestamps(
 
 
 @pytest.mark.asyncio
+async def test_executor_accepts_valid_inspectable_artifacts(
+    pending_store: PendingStore,
+) -> None:
+    registry = ToolRegistry()
+    handler = ArtifactStubHandler()
+    registry.register(get_spec("list_dir"), handler)
+    executor = RegistryToolExecutor(registry, pending_store)
+    request = make_request(
+        "list_dir",
+        arguments={"path": "."},
+        request_id="request-valid-artifact",
+    )
+
+    result = await executor.execute(request)
+
+    assert handler.call_count == 1
+    assert result.request_id == request.request_id
+    assert result.artifacts[0]["request_id"] == request.request_id
+    assert result.artifacts[0]["tool_name"] == request.tool_name
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("task_id", "other-task"),
+        ("step_id", "other-step"),
+        ("request_id", "other-request"),
+        ("tool_name", "read_file"),
+    ],
+)
+async def test_executor_rejects_artifact_correlation_mismatch(
+    pending_store: PendingStore,
+    field: str,
+    replacement: str,
+) -> None:
+    registry = ToolRegistry()
+    handler = ArtifactStubHandler(mutations={field: replacement})
+    registry.register(get_spec("list_dir"), handler)
+    executor = RegistryToolExecutor(registry, pending_store)
+
+    with pytest.raises(ToolResultContractError, match="invalid execution artifacts"):
+        await executor.execute(
+            make_request(
+                "list_dir",
+                arguments={"path": "."},
+                request_id=f"request-artifact-{field}",
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_executor_rejects_stale_tool_output_hash(
+    pending_store: PendingStore,
+) -> None:
+    registry = ToolRegistry()
+    handler = ArtifactStubHandler(mutations={"sha256": "0" * 64})
+    registry.register(get_spec("list_dir"), handler)
+    executor = RegistryToolExecutor(registry, pending_store)
+
+    with pytest.raises(ToolResultContractError, match="tool_output hash"):
+        await executor.execute(
+            make_request(
+                "list_dir",
+                arguments={"path": "."},
+                request_id="request-stale-output-artifact",
+            )
+        )
+
+
+@pytest.mark.asyncio
 async def test_unknown_tool_is_rejected(
     pending_store: PendingStore,
 ) -> None:
@@ -215,7 +385,10 @@ async def test_disabled_tool_is_not_executed(
 ) -> None:
     registry = ToolRegistry()
     handler = StubHandler()
-    registry.register(get_spec("run_shell"), handler)
+    disabled_spec = get_spec("run_shell").model_copy(
+        update={"sandbox_mode": "DISABLED_TEST"}
+    )
+    registry.register(disabled_spec, handler)
 
     executor = RegistryToolExecutor(registry, pending_store)
 
@@ -625,3 +798,291 @@ async def test_mismatched_approval_is_rejected(
 
     assert handler.call_count == 0
     assert handler.approved_call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_memory_write_uses_memory_store_without_filesystem_checkpoint(
+    tmp_path: Path,
+    pending_store: PendingStore,
+) -> None:
+    memory_store = FilesystemMemoryStore(tmp_path / "memory", max_value_bytes=4096)
+    registry = ToolRegistry()
+    registry.register(get_spec("memory_write"), MemoryWriteHandler(memory_store))
+    executor = RegistryToolExecutor(registry, pending_store, memory_store)
+    request = make_request(
+        "memory_write",
+        arguments={"key": "project.note", "value": {"text": "pending"}},
+        request_id="request-memory-executor",
+    )
+
+    result = await executor.execute(request)
+
+    assert result.status is ExecutionStatus.PENDING_COMMIT
+    assert result.checkpoint_id is None
+    assert [artifact["artifact_type"] for artifact in result.artifacts] == [
+        "tool_output",
+        "pending_memory",
+    ]
+    record = await memory_store.get(request.request_id)
+    assert record.status is MemoryStatus.PENDING
+    assert not (pending_store.pending_root / request.request_id).exists()
+
+
+@pytest.mark.asyncio
+async def test_memory_write_requires_configured_memory_store_before_handler_runs(
+    tmp_path: Path,
+    pending_store: PendingStore,
+) -> None:
+    handler_store = FilesystemMemoryStore(
+        tmp_path / "handler-memory", max_value_bytes=4096
+    )
+    registry = ToolRegistry()
+    registry.register(get_spec("memory_write"), MemoryWriteHandler(handler_store))
+    executor = RegistryToolExecutor(registry, pending_store)
+    request = make_request(
+        "memory_write",
+        arguments={"key": "project.note", "value": "pending"},
+        request_id="request-memory-no-store",
+    )
+
+    with pytest.raises(PendingResourceUnavailableError):
+        await executor.execute(request)
+
+    assert not (handler_store.records_root / request.request_id).exists()
+
+
+class TamperedMemoryArtifactHandler:
+    def __init__(self, store: FilesystemMemoryStore) -> None:
+        self._handler = MemoryWriteHandler(store)
+
+    async def __call__(self, request: ToolCallRequest) -> ToolExecutionResult:
+        result = await self._handler(request)
+        artifacts = [dict(artifact) for artifact in result.artifacts]
+        artifacts[1]["sha256"] = "0" * 64
+        return result.model_copy(update={"artifacts": artifacts})
+
+
+@pytest.mark.asyncio
+async def test_invalid_memory_artifact_rolls_back_staged_memory(
+    tmp_path: Path,
+    pending_store: PendingStore,
+) -> None:
+    memory_store = FilesystemMemoryStore(tmp_path / "memory", max_value_bytes=4096)
+    registry = ToolRegistry()
+    registry.register(
+        get_spec("memory_write"),
+        TamperedMemoryArtifactHandler(memory_store),
+    )
+    executor = RegistryToolExecutor(registry, pending_store, memory_store)
+    request = make_request(
+        "memory_write",
+        arguments={"key": "project.note", "value": "pending"},
+        request_id="request-memory-invalid-artifact",
+    )
+
+    with pytest.raises(ToolResultContractError, match="pending_memory artifact"):
+        await executor.execute(request)
+
+    record = await memory_store.get(request.request_id)
+    assert record.status is MemoryStatus.ROLLED_BACK
+    assert await memory_store.get_trusted("project.note") is None
+
+
+@pytest.mark.asyncio
+async def test_repeated_pending_memory_write_is_idempotent(
+    tmp_path: Path,
+    pending_store: PendingStore,
+) -> None:
+    memory_store = FilesystemMemoryStore(tmp_path / "memory", max_value_bytes=4096)
+    registry = ToolRegistry()
+    registry.register(get_spec("memory_write"), MemoryWriteHandler(memory_store))
+    executor = RegistryToolExecutor(registry, pending_store, memory_store)
+    request = make_request(
+        "memory_write",
+        arguments={"key": "project.note", "value": {"text": "same"}},
+        request_id="request-memory-idempotent",
+    )
+
+    first = await executor.execute(request)
+    second = await executor.execute(request)
+
+    assert first.pending_changes == second.pending_changes
+    assert first.artifacts == second.artifacts
+    assert len(list(memory_store.records_root.iterdir())) == 1
+
+
+class StubQuarantineHandler:
+    def __init__(
+        self, store: FilesystemQuarantineStore, *, tamper: bool = False
+    ) -> None:
+        self.store = store
+        self.tamper = tamper
+        self.call_count = 0
+
+    async def __call__(self, request: ToolCallRequest) -> ToolExecutionResult:
+        from hashlib import sha256
+
+        self.call_count += 1
+        payload = b"downloaded"
+        temporary = self.store.create_temporary_path(request.request_id)
+        temporary.write_bytes(payload)
+        record = await self.store.stage(
+            request,
+            source_url=str(request.arguments["url"]),
+            final_url=str(request.arguments["url"]),
+            redirect_chain=(),
+            temporary_path=temporary,
+            content_type="text/plain",
+            content_sha256=sha256(payload).hexdigest(),
+            size_bytes=len(payload),
+            http_status=200,
+        )
+        output = {
+            "downloaded": True,
+            "source_url": record.source_url,
+            "final_url": record.final_url,
+            "content_type": record.content_type,
+            "size_bytes": record.size_bytes,
+            "sha256": record.content_sha256,
+            "status": record.status.value,
+        }
+        quarantine_artifact = build_quarantined_download_artifact(
+            request,
+            quarantine_path=record.quarantine_path,
+            source_url=record.source_url,
+            final_url=record.final_url,
+            content_sha256=record.content_sha256,
+            size_bytes=record.size_bytes,
+            content_type=record.content_type,
+        )
+        if self.tamper:
+            quarantine_artifact["sha256"] = "0" * 64
+        return ToolExecutionResult(
+            task_id=request.task_id,
+            step_id=request.step_id,
+            request_id=request.request_id,
+            status=ExecutionStatus.PENDING_COMMIT,
+            output=output,
+            artifacts=[
+                build_tool_output_artifact(
+                    request, output, status=ExecutionStatus.PENDING_COMMIT
+                ),
+                quarantine_artifact,
+            ],
+            pending_changes=[
+                {
+                    "operation": "DOWNLOAD",
+                    "quarantine_path": record.quarantine_path,
+                    "source_url": record.source_url,
+                    "final_url": record.final_url,
+                    "content_sha256": record.content_sha256,
+                    "size_bytes": record.size_bytes,
+                    "status": record.status.value,
+                }
+            ],
+        )
+
+
+@pytest.mark.asyncio
+async def test_download_uses_quarantine_without_filesystem_checkpoint(
+    tmp_path: Path,
+    pending_store: PendingStore,
+) -> None:
+    quarantine_store = FilesystemQuarantineStore(
+        tmp_path / "quarantine", max_download_bytes=4096
+    )
+    registry = ToolRegistry()
+    handler = StubQuarantineHandler(quarantine_store)
+    registry.register(get_spec("download_url"), handler)
+    executor = RegistryToolExecutor(
+        registry, pending_store, quarantine_store=quarantine_store
+    )
+    request = make_request(
+        "download_url",
+        arguments={"url": "https://example.com/file"},
+        request_id="request-download-executor",
+    )
+
+    result = await executor.execute(request)
+
+    assert result.status is ExecutionStatus.PENDING_COMMIT
+    assert result.checkpoint_id is None
+    assert (await quarantine_store.get(request.request_id)).status is (
+        QuarantineStatus.QUARANTINED
+    )
+    assert not (pending_store.pending_root / request.request_id).exists()
+
+
+@pytest.mark.asyncio
+async def test_download_requires_quarantine_store_before_handler_runs(
+    tmp_path: Path,
+    pending_store: PendingStore,
+) -> None:
+    handler_store = FilesystemQuarantineStore(
+        tmp_path / "handler-quarantine", max_download_bytes=4096
+    )
+    registry = ToolRegistry()
+    handler = StubQuarantineHandler(handler_store)
+    registry.register(get_spec("download_url"), handler)
+    executor = RegistryToolExecutor(registry, pending_store)
+    request = make_request(
+        "download_url",
+        arguments={"url": "https://example.com/file"},
+        request_id="request-download-no-store",
+    )
+
+    with pytest.raises(PendingResourceUnavailableError):
+        await executor.execute(request)
+
+    assert handler.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_invalid_download_artifact_rolls_back_quarantine(
+    tmp_path: Path,
+    pending_store: PendingStore,
+) -> None:
+    quarantine_store = FilesystemQuarantineStore(
+        tmp_path / "quarantine", max_download_bytes=4096
+    )
+    registry = ToolRegistry()
+    registry.register(
+        get_spec("download_url"),
+        StubQuarantineHandler(quarantine_store, tamper=True),
+    )
+    executor = RegistryToolExecutor(
+        registry, pending_store, quarantine_store=quarantine_store
+    )
+    request = make_request(
+        "download_url",
+        arguments={"url": "https://example.com/file"},
+        request_id="request-download-invalid-artifact",
+    )
+
+    with pytest.raises(ToolResultContractError, match="quarantined_download artifact"):
+        await executor.execute(request)
+
+    record = await quarantine_store.get(request.request_id)
+    assert record.status is QuarantineStatus.ROLLED_BACK
+
+
+@pytest.mark.asyncio
+async def test_restricted_shell_result_is_validated_by_executor(
+    pending_store: PendingStore,
+) -> None:
+    registry = ToolRegistry()
+    registry.register(get_spec("run_shell"), ShellArtifactStubHandler())
+    executor = RegistryToolExecutor(registry, pending_store)
+    request = make_request(
+        "run_shell",
+        arguments={"command": "ruff check .", "cwd": "."},
+        request_id="request-restricted-shell",
+    )
+
+    result = await executor.execute(request)
+
+    assert result.status is ExecutionStatus.SUCCESS
+    assert [artifact["artifact_type"] for artifact in result.artifacts] == [
+        "tool_output",
+        "shell_execution",
+    ]

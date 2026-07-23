@@ -109,6 +109,17 @@ async def test_list_dir_lists_safe_workspace_entries(
         "docs",
     }
 
+    assert len(result.artifacts) == 1
+    artifact = result.artifacts[0]
+    assert artifact["artifact_type"] == "tool_output"
+    assert artifact["task_id"] == result.task_id
+    assert artifact["step_id"] == result.step_id
+    assert artifact["request_id"] == result.request_id
+    assert artifact["tool_name"] == "list_dir"
+    assert artifact["status"] == "SUCCESS"
+    assert len(artifact["sha256"]) == 64
+    assert artifact["size_bytes"] > 0
+
 
 @pytest.mark.asyncio
 async def test_list_dir_lists_nested_directory(
@@ -222,6 +233,15 @@ async def test_read_file_returns_content_and_hash(
         "sha256": sha256(payload).hexdigest(),
         "encoding": "utf-8",
     }
+
+    assert len(result.artifacts) == 1
+    artifact = result.artifacts[0]
+    assert artifact["artifact_type"] == "tool_output"
+    assert artifact["request_id"] == result.request_id
+    assert artifact["tool_name"] == "read_file"
+    assert artifact["status"] == "SUCCESS"
+    assert len(artifact["sha256"]) == 64
+    assert artifact["size_bytes"] > 0
 
 
 @pytest.mark.asyncio

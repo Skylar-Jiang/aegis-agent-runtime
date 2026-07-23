@@ -1,3 +1,5 @@
-class MemoryGuard:
-    async def stage(self, _value: object) -> None:
-        raise NotImplementedError("Trusted/pending memory is outside Phase 1")
+from .manager import MemoryLifecycleManager
+
+
+class MemoryGuard(MemoryLifecycleManager):
+    """Backward-compatible name for the Phase 3 memory lifecycle coordinator."""

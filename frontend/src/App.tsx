@@ -5,6 +5,7 @@ import { Layout } from './components/Layout'
 import { TasksPage } from './pages/TasksPage'
 import { ApprovalsPage } from './pages/ApprovalsPage'
 import { AuditPage } from './pages/AuditPage'
+import { ExperimentsPage } from './pages/ExperimentsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 5000 } },
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/" element={<TasksPage />} />
             <Route path="/approvals" element={<ApprovalsPage />} />
             <Route path="/audit" element={<AuditPage />} />
+            <Route path="/experiments" element={<ExperimentsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
