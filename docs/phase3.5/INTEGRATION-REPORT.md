@@ -14,7 +14,7 @@ The minimal `TaskGraphRunner` supports dependency ordering, bounded parallel ind
 
 ## Real E2E and experiments
 
-`tests/e2e/test_live_runtime.py` exercises an Agent or complete Live container: safe file commit with empty pending directory, mocked-network download quarantine, dangerous shell block before process execution, Memory-poisoning rejection without trusted/pending residue, idempotent retry, approved-delete recovery, and `PENDING_EGRESS` dry run. Unit/integration coverage additionally proves fault rollback behavior.
+`tests/e2e/test_live_runtime.py` exercises an Agent or complete Live container: safe file commit with empty pending directory, mocked-network download quarantine, dangerous shell block before process execution, Memory-poisoning rejection without trusted/pending residue, idempotent retry, approved-delete recovery, Checker/Commit fault rollback, and `PENDING_EGRESS` dry run. Integration coverage additionally verifies the rollback-manager fault path fails closed.
 
 `experiments/runners/run_experiment.py --mode all` creates a disposable runtime directory for every case and records status, tool execution, check count, temporary-artifact count, rollback count, approval count and elapsed time. It does not call an LLM or public network, so token data is explicitly `N/A`.
 
@@ -28,7 +28,7 @@ Executed from the isolated worktree on 2026-07-23:
 backend/.venv/Scripts/python.exe scripts/check.py
 ```
 
-Result: Ruff passed; Pyright reported `0 errors, 0 warnings`; pytest reported `734 passed, 7 skipped, 1 warning`; frontend ESLint, TypeScript, 2 Vitest tests and the Vite production build passed.
+Result: Ruff passed; Pyright reported `0 errors, 0 warnings`; pytest reported `736 passed, 7 skipped, 1 warning`; frontend ESLint, TypeScript, 2 Vitest tests and the Vite production build passed.
 
 ## Known limits
 
