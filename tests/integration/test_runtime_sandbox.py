@@ -12,6 +12,8 @@ from ra_agent.contracts import (
     CommitResult,
     DeepCheckResult,
     ExecutionStatus,
+    PostCheckResult,
+    PreCheckResult,
     RollbackResult,
     SourceType,
     ToolCallRequest,
@@ -100,6 +102,42 @@ class SpyDeepChecker:
             request_id=self.request_id or request.request_id,
             passed=self.passed,
             reason="spy deep check",
+        )
+
+
+class SpyPreChecker:
+    def __init__(self, *, passed: bool = True, error: Exception | None = None) -> None:
+        self.passed = passed
+        self.error = error
+        self.calls = 0
+
+    async def check(self, request: ToolCallRequest, verdict) -> PreCheckResult:
+        self.calls += 1
+        if self.error is not None:
+            raise self.error
+        return PreCheckResult(
+            request_id=request.request_id,
+            passed=self.passed,
+            reason="spy pre check",
+        )
+
+
+class SpyPostChecker:
+    def __init__(self, *, passed: bool = True, error: Exception | None = None) -> None:
+        self.passed = passed
+        self.error = error
+        self.calls = 0
+
+    async def check(
+        self, request: ToolCallRequest, result: ToolExecutionResult
+    ) -> PostCheckResult:
+        self.calls += 1
+        if self.error is not None:
+            raise self.error
+        return PostCheckResult(
+            request_id=request.request_id,
+            passed=self.passed,
+            reason="spy post check",
         )
 
 
@@ -194,6 +232,8 @@ def make_scheduler(
     checkpoint: object | None = None,
     executor: object | None = None,
     deep: object | None = None,
+    pre: object | None = None,
+    post: object | None = None,
     commit: object | None = None,
     rollback: object | None = None,
     recorder: object | None = None,
@@ -204,11 +244,46 @@ def make_scheduler(
         checkpoint_manager=checkpoint or SpyCheckpointManager(),
         tool_executor=executor or SpyExecutor(),
         deep_safety_checker=deep or SpyDeepChecker(),
+        pre_execution_checker=pre or SpyPreChecker(),
+        post_execution_checker=post or SpyPostChecker(),
         commit_gate=commit or SpyCommitGate(),
         rollback_manager=rollback or SpyRollbackManager(),
         audit_recorder=recorder or container.audit_recorder,
     )
     return build_runtime_scheduler(container), container
+
+
+@pytest.mark.asyncio
+async def test_pre_check_rejection_prevents_checkpoint_and_execution() -> None:
+    checkpoint = SpyCheckpointManager()
+    executor = SpyExecutor()
+    scheduler, _ = make_scheduler(
+        pre=SpyPreChecker(passed=False), checkpoint=checkpoint, executor=executor
+    )
+
+    result = await scheduler.schedule(make_request())
+
+    assert result.status is ExecutionStatus.BLOCKED
+    assert checkpoint.calls == 0
+    assert executor.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_post_check_failure_rolls_back_and_never_commits() -> None:
+    commit = SpyCommitGate()
+    rollback = SpyRollbackManager()
+    scheduler, _ = make_scheduler(
+        post=SpyPostChecker(error=RuntimeError("post checker unavailable")),
+        commit=commit,
+        rollback=rollback,
+    )
+
+    result = await scheduler.schedule(make_request())
+
+    assert result.status is ExecutionStatus.ROLLED_BACK
+    assert result.error_code == "POST_CHECK_FAILED"
+    assert commit.calls == 0
+    assert rollback.calls == 1
 
 
 @pytest.mark.asyncio
@@ -231,9 +306,13 @@ async def test_sandbox_deep_check_passes_and_commits_once_in_audited_order() -> 
         AuditEventType.TOOL_REQUESTED,
         AuditEventType.RISK_CLASSIFIED,
         AuditEventType.PERMISSION_CHECKED,
+        AuditEventType.PRE_CHECK_STARTED,
+        AuditEventType.PRE_CHECK_FINISHED,
         AuditEventType.CHECKPOINT_CREATED,
         AuditEventType.EXECUTION_STARTED,
         AuditEventType.EXECUTION_FINISHED,
+        AuditEventType.POST_CHECK_STARTED,
+        AuditEventType.POST_CHECK_FINISHED,
         AuditEventType.DEEP_CHECK_STARTED,
         AuditEventType.DEEP_CHECK_FINISHED,
         AuditEventType.COMMIT_STARTED,

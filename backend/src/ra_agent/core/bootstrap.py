@@ -25,11 +25,17 @@ from ra_agent.security import (
     MockDeepSafetyChecker,
     MockPermissionGate,
     MockPolicyEngine,
+    MockPostExecutionChecker,
+    MockPreExecutionChecker,
     MockRiskClassifier,
 )
 from ra_agent.security.deep_checker import RuleBasedDeepSafetyChecker
 from ra_agent.security.permission_gate import RuleBasedPermissionGate
 from ra_agent.security.policy_engine import RuleBasedPolicyEngine
+from ra_agent.security.pre_post_check import (
+    RuleBasedPostExecutionChecker,
+    RuleBasedPreExecutionChecker,
+)
 from ra_agent.security.risk_classifier import RuleBasedRiskClassifier
 from ra_agent.security.rule_engine import RuleEngine
 from ra_agent.tools import DEFAULT_TOOL_SPECS, MockToolHandler, ToolRegistry
@@ -54,6 +60,8 @@ def build_mock_container() -> ServiceContainer:
         permission_gate=MockPermissionGate(),
         tool_executor=MockToolExecutor(),
         deep_safety_checker=MockDeepSafetyChecker(),
+        pre_execution_checker=MockPreExecutionChecker(),
+        post_execution_checker=MockPostExecutionChecker(),
         checkpoint_manager=MockCheckpointManager(),
         commit_gate=MockCommitGate(),
         rollback_manager=MockRollbackManager(),
@@ -85,6 +93,13 @@ def build_runtime_container(settings: Settings) -> ServiceContainer:
             rules,
             settings.workspace_root,
             settings.pending_root,
+        ),
+        pre_execution_checker=RuleBasedPreExecutionChecker(rules, _tool_specs()),
+        post_execution_checker=RuleBasedPostExecutionChecker(
+            rules,
+            settings.workspace_root,
+            settings.pending_root,
+            settings.quarantine_root,
         ),
     )
     if settings.runtime_mode is RuntimeMode.RULES_ONLY:
@@ -167,12 +182,16 @@ def _build_live_registry(
 def build_runtime_scheduler(container: ServiceContainer) -> RuntimeScheduler:
     fast_flow = FastExecutionFlow(
         executor=container.tool_executor,
+        pre_checker=container.pre_execution_checker,
+        post_checker=container.post_execution_checker,
         audit_recorder=container.audit_recorder,
     )
     sandbox_flow = SandboxFlow(
         checkpoint_manager=container.checkpoint_manager,
         executor=container.tool_executor,
         deep_checker=container.deep_safety_checker,
+        pre_checker=container.pre_execution_checker,
+        post_checker=container.post_execution_checker,
         commit_gate=container.commit_gate,
         rollback_manager=container.rollback_manager,
         audit_recorder=container.audit_recorder,

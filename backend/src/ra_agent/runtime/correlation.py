@@ -4,6 +4,8 @@ from ra_agent.contracts import (
     CheckpointResult,
     CommitResult,
     DeepCheckResult,
+    PostCheckResult,
+    PreCheckResult,
     RiskVerdict,
     RollbackResult,
     ToolCallRequest,
@@ -54,6 +56,14 @@ def validate_execution(
 
 def validate_deep_check(request: ToolCallRequest, result: DeepCheckResult) -> None:
     _require("DeepCheckResult.request_id", result.request_id, request.request_id)
+
+
+def validate_pre_check(request: ToolCallRequest, result: PreCheckResult) -> None:
+    _require("PreCheckResult.request_id", result.request_id, request.request_id)
+
+
+def validate_post_check(request: ToolCallRequest, result: PostCheckResult) -> None:
+    _require("PostCheckResult.request_id", result.request_id, request.request_id)
 
 
 def validate_commit(request: ToolCallRequest, checkpoint_id: str, result: CommitResult) -> None:

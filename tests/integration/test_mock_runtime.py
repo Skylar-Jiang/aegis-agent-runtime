@@ -64,13 +64,7 @@ async def test_mock_tool_call_flows_through_shared_scheduler_and_audit() -> None
     assert result.status is ExecutionStatus.COMMITTED
     assert [
         event.sequence_number for event in container.audit_recorder.events_for("task-1")
-    ] == [
-        1,
-        2,
-        3,
-        4,
-        5,
-    ]
+    ] == list(range(1, 10))
 
 
 @pytest.mark.asyncio

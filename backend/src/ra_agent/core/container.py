@@ -8,6 +8,8 @@ from ra_agent.security import (
     DeepSafetyChecker,
     PermissionGate,
     PolicyEngine,
+    PostExecutionChecker,
+    PreExecutionChecker,
     RiskClassifier,
 )
 from ra_agent.tools import ToolRegistry
@@ -20,6 +22,8 @@ class ServiceContainer:
     permission_gate: PermissionGate
     tool_executor: ToolExecutor
     deep_safety_checker: DeepSafetyChecker
+    pre_execution_checker: PreExecutionChecker
+    post_execution_checker: PostExecutionChecker
     checkpoint_manager: CheckpointManager
     commit_gate: CommitGate
     rollback_manager: RollbackManager

@@ -254,7 +254,11 @@ async def test_low_request_executes_once_commits_and_audits_full_path() -> None:
         AuditEventType.TOOL_REQUESTED,
         AuditEventType.RISK_CLASSIFIED,
         AuditEventType.PERMISSION_CHECKED,
+        AuditEventType.PRE_CHECK_STARTED,
+        AuditEventType.PRE_CHECK_FINISHED,
         AuditEventType.EXECUTION_STARTED,
+        AuditEventType.POST_CHECK_STARTED,
+        AuditEventType.POST_CHECK_FINISHED,
         AuditEventType.EXECUTION_FINISHED,
     ]
 
@@ -299,8 +303,8 @@ async def test_audit_sequences_continue_across_requests_and_restart_per_task() -
     task_two_sequences = [
         event.sequence_number for event in recorder.events_for("task-2")
     ]
-    assert task_one_sequences == list(range(1, 11))
-    assert task_two_sequences == list(range(1, 6))
+    assert task_one_sequences == list(range(1, 19))
+    assert task_two_sequences == list(range(1, 10))
 
 
 @pytest.mark.asyncio

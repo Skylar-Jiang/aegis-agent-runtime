@@ -26,7 +26,13 @@ _TRANSITIONS: dict[StepStatus, frozenset[StepStatus]] = {
         {StepStatus.READY, StepStatus.BLOCKED, StepStatus.CANCELLED}
     ),
     StepStatus.READY: frozenset(
-        {StepStatus.EXECUTING_FAST, StepStatus.CHECKPOINT_CREATING, StepStatus.CANCELLED}
+        {
+            StepStatus.EXECUTING_FAST,
+            StepStatus.CHECKPOINT_CREATING,
+            StepStatus.BLOCKED,
+            StepStatus.FAILED,
+            StepStatus.CANCELLED,
+        }
     ),
     StepStatus.CHECKPOINT_CREATING: frozenset(
         {
@@ -37,7 +43,7 @@ _TRANSITIONS: dict[StepStatus, frozenset[StepStatus]] = {
         }
     ),
     StepStatus.EXECUTING_FAST: frozenset(
-        {StepStatus.COMMITTED, StepStatus.FAILED, StepStatus.CANCELLED}
+        {StepStatus.SAFETY_CHECKING, StepStatus.COMMITTED, StepStatus.FAILED, StepStatus.CANCELLED}
     ),
     StepStatus.EXECUTING_SANDBOX: frozenset(
         {
@@ -48,7 +54,7 @@ _TRANSITIONS: dict[StepStatus, frozenset[StepStatus]] = {
         }
     ),
     StepStatus.SAFETY_CHECKING: frozenset(
-        {StepStatus.COMMITTING, StepStatus.ROLLING_BACK, StepStatus.FAILED}
+        {StepStatus.COMMITTING, StepStatus.COMMITTED, StepStatus.ROLLING_BACK, StepStatus.FAILED}
     ),
     StepStatus.COMMITTING: frozenset(
         {StepStatus.COMMITTED, StepStatus.ROLLING_BACK, StepStatus.FAILED}

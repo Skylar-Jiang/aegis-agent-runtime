@@ -8,13 +8,15 @@ from ra_agent.contracts import (
     AuditEventType,
     ExecutionStatus,
     PolicyDecision,
+    PostCheckResult,
+    PreCheckResult,
     RiskVerdict,
     StepStatus,
     ToolCallRequest,
     ToolExecutionResult,
 )
 from ra_agent.execution import CheckpointManager, CommitGate, RollbackManager, ToolExecutor
-from ra_agent.security import DeepSafetyChecker
+from ra_agent.security import DeepSafetyChecker, PostExecutionChecker, PreExecutionChecker
 
 from .correlation import (
     CorrelationError,
@@ -22,6 +24,8 @@ from .correlation import (
     validate_commit,
     validate_deep_check,
     validate_execution,
+    validate_post_check,
+    validate_pre_check,
     validate_rollback,
 )
 from .state_machine import transition
@@ -44,6 +48,8 @@ class SandboxFlow:
         checkpoint_manager: CheckpointManager,
         executor: ToolExecutor,
         deep_checker: DeepSafetyChecker,
+        pre_checker: PreExecutionChecker,
+        post_checker: PostExecutionChecker,
         commit_gate: CommitGate,
         rollback_manager: RollbackManager,
         audit_recorder: AuditRecorder,
@@ -51,6 +57,8 @@ class SandboxFlow:
         self.checkpoint_manager = checkpoint_manager
         self.executor = executor
         self.deep_checker = deep_checker
+        self.pre_checker = pre_checker
+        self.post_checker = post_checker
         self.commit_gate = commit_gate
         self.rollback_manager = rollback_manager
         self.audit_recorder = audit_recorder
@@ -63,7 +71,15 @@ class SandboxFlow:
         start_state: StepStatus = StepStatus.RISK_CLASSIFYING,
         approval_decision: ApprovalDecision | None = None,
     ) -> ToolExecutionResult:
-        state = transition(start_state, StepStatus.CHECKPOINT_CREATING)
+        state = (
+            start_state
+            if start_state is StepStatus.READY
+            else transition(start_state, StepStatus.READY)
+        )
+        pre_check = await self._pre_check(request, verdict, state)
+        if isinstance(pre_check, ToolExecutionResult):
+            return pre_check
+        state = transition(state, StepStatus.CHECKPOINT_CREATING)
         try:
             checkpoint = await self.checkpoint_manager.create(request)
             validate_checkpoint(request, checkpoint)
@@ -82,7 +98,7 @@ class SandboxFlow:
                 request,
                 AuditEventType.CHECKPOINT_CREATED,
                 state,
-                "mock checkpoint created",
+                "checkpoint created",
                 verdict,
                 {
                     "checkpoint_id": checkpoint.checkpoint_id,
@@ -107,6 +123,65 @@ class SandboxFlow:
                 )
             raise
 
+    async def _pre_check(
+        self, request: ToolCallRequest, verdict: RiskVerdict, state: StepStatus
+    ) -> PreCheckResult | ToolExecutionResult:
+        await self._record(
+            request, AuditEventType.PRE_CHECK_STARTED, state, "pre check started", verdict
+        )
+        try:
+            checked = await self.pre_checker.check(request, verdict)
+            validate_pre_check(request, checked)
+        except CorrelationError as error:
+            return await self._pre_block(request, verdict, state, str(error), error.error_code)
+        except Exception as error:
+            return await self._pre_block(
+                request,
+                verdict,
+                state,
+                self._reason(error),
+                "PRE_CHECK_FAILED",
+            )
+        await self._record(
+            request,
+            AuditEventType.PRE_CHECK_FINISHED,
+            state,
+            "pre check finished",
+            verdict,
+            {"passed": checked.passed, "reason": checked.reason},
+        )
+        if not checked.passed:
+            return await self._pre_block(
+                request, verdict, state, checked.reason, "PRE_CHECK_REJECTED"
+            )
+        return checked
+
+    async def _pre_block(
+        self,
+        request: ToolCallRequest,
+        verdict: RiskVerdict,
+        state: StepStatus,
+        reason: str,
+        error_code: str,
+    ) -> ToolExecutionResult:
+        state = transition(state, StepStatus.BLOCKED)
+        await self._record(
+            request,
+            AuditEventType.TOOL_BLOCKED,
+            state,
+            "sandbox execution blocked by pre check",
+            verdict,
+            {"reason": reason, "error_code": error_code},
+        )
+        return ToolExecutionResult(
+            task_id=request.task_id,
+            step_id=request.step_id,
+            request_id=request.request_id,
+            status=ExecutionStatus.BLOCKED,
+            error=reason,
+            error_code=error_code,
+        )
+
     async def _run_after_checkpoint(
         self,
         request: ToolCallRequest,
@@ -119,7 +194,7 @@ class SandboxFlow:
             request,
             AuditEventType.EXECUTION_STARTED,
             context.state,
-            "mock sandbox execution started",
+            "sandbox execution started",
             verdict,
             {"checkpoint_id": context.checkpoint_id},
         )
@@ -135,7 +210,7 @@ class SandboxFlow:
                 request,
                 AuditEventType.EXECUTION_FINISHED,
                 context.state,
-                "mock sandbox execution failed",
+                "sandbox execution failed",
                 verdict,
                 {"reason": reason},
             )
@@ -145,7 +220,7 @@ class SandboxFlow:
             request,
             AuditEventType.EXECUTION_FINISHED,
             context.state,
-            "mock sandbox execution finished",
+            "sandbox execution finished",
             verdict,
             {"status": execution.status.value},
         )
@@ -163,11 +238,22 @@ class SandboxFlow:
             )
 
         context.state = transition(context.state, StepStatus.SAFETY_CHECKING)
+        post_check, reason, error_code = await self._post_check(
+            request, verdict, context, execution
+        )
+        if post_check is None:
+            return await self._rollback(
+                request,
+                verdict,
+                context,
+                reason,
+                error_code,
+            )
         await self._record(
             request,
             AuditEventType.DEEP_CHECK_STARTED,
             context.state,
-            "mock deep check started",
+            "deep check started",
             verdict,
         )
         try:
@@ -178,7 +264,7 @@ class SandboxFlow:
                 request,
                 AuditEventType.DEEP_CHECK_FINISHED,
                 context.state,
-                "mock deep check failed",
+                "deep check failed",
                 verdict,
                 str(error),
             )
@@ -189,7 +275,7 @@ class SandboxFlow:
                 request,
                 AuditEventType.DEEP_CHECK_FINISHED,
                 context.state,
-                "mock deep check failed",
+                "deep check failed",
                 verdict,
                 reason,
             )
@@ -198,7 +284,7 @@ class SandboxFlow:
             request,
             AuditEventType.DEEP_CHECK_FINISHED,
             context.state,
-            "mock deep check finished",
+            "deep check finished",
             verdict,
             {"passed": deep_check.passed, "reason": deep_check.reason},
         )
@@ -216,7 +302,7 @@ class SandboxFlow:
             request,
             AuditEventType.COMMIT_STARTED,
             context.state,
-            "mock commit started",
+            "commit started",
             verdict,
             {"checkpoint_id": context.checkpoint_id},
         )
@@ -228,7 +314,7 @@ class SandboxFlow:
                 request,
                 AuditEventType.COMMIT_FINISHED,
                 context.state,
-                "mock commit failed",
+                "commit failed",
                 verdict,
                 str(error),
             )
@@ -239,7 +325,7 @@ class SandboxFlow:
                 request,
                 AuditEventType.COMMIT_FINISHED,
                 context.state,
-                "mock commit failed",
+                "commit failed",
                 verdict,
                 reason,
             )
@@ -248,7 +334,7 @@ class SandboxFlow:
             request,
             AuditEventType.COMMIT_FINISHED,
             context.state,
-            "mock commit finished",
+            "commit finished",
             verdict,
             {"status": commit.status.value},
         )
@@ -265,6 +351,56 @@ class SandboxFlow:
                 "finished_at": execution.finished_at or datetime.now(UTC),
             }
         )
+
+    async def _post_check(
+        self,
+        request: ToolCallRequest,
+        verdict: RiskVerdict,
+        context: _SandboxContext,
+        execution: ToolExecutionResult,
+    ) -> tuple[PostCheckResult | None, str, str]:
+        await self._record(
+            request,
+            AuditEventType.POST_CHECK_STARTED,
+            context.state,
+            "post check started",
+            verdict,
+        )
+        try:
+            checked = await self.post_checker.check(request, execution)
+            validate_post_check(request, checked)
+        except CorrelationError as error:
+            await self._record_stage_failure(
+                request,
+                AuditEventType.POST_CHECK_FINISHED,
+                context.state,
+                "post check failed",
+                verdict,
+                str(error),
+            )
+            return None, str(error), error.error_code
+        except Exception as error:
+            reason = self._reason(error)
+            await self._record_stage_failure(
+                request,
+                AuditEventType.POST_CHECK_FINISHED,
+                context.state,
+                "post check failed",
+                verdict,
+                reason,
+            )
+            return None, reason, "POST_CHECK_FAILED"
+        await self._record(
+            request,
+            AuditEventType.POST_CHECK_FINISHED,
+            context.state,
+            "post check finished",
+            verdict,
+            {"passed": checked.passed, "reason": checked.reason},
+        )
+        if not checked.passed:
+            return None, checked.reason, "POST_CHECK_REJECTED"
+        return checked, "", ""
 
     async def _rollback(
         self,

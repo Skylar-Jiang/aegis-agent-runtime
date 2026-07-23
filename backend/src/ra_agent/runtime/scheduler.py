@@ -12,7 +12,15 @@ from ra_agent.contracts import (
     ToolSpec,
 )
 from ra_agent.execution import ToolExecutor
-from ra_agent.security import PermissionGate, PolicyEngine, RiskClassifier
+from ra_agent.security import (
+    MockPostExecutionChecker,
+    MockPreExecutionChecker,
+    PermissionGate,
+    PolicyEngine,
+    PostExecutionChecker,
+    PreExecutionChecker,
+    RiskClassifier,
+)
 from ra_agent.tools import ToolRegistry
 
 from .approval_flow import ApprovalFlow
@@ -40,6 +48,8 @@ class RuntimeScheduler:
         sandbox_flow: SandboxFlow | None = None,
         approval_flow: ApprovalFlow | None = None,
         fast_flow: FastExecutionFlow | None = None,
+        pre_checker: PreExecutionChecker | None = None,
+        post_checker: PostExecutionChecker | None = None,
     ) -> None:
         self.classifier = classifier
         self.policy = policy
@@ -50,7 +60,10 @@ class RuntimeScheduler:
         self.sandbox_flow = sandbox_flow
         self.approval_flow = approval_flow
         self.fast_flow = fast_flow or FastExecutionFlow(
-            executor=executor, audit_recorder=audit_recorder
+            executor=executor,
+            pre_checker=pre_checker or MockPreExecutionChecker(),
+            post_checker=post_checker or MockPostExecutionChecker(),
+            audit_recorder=audit_recorder,
         )
 
     async def schedule(self, request: ToolCallRequest) -> ToolExecutionResult:
@@ -152,7 +165,7 @@ class RuntimeScheduler:
                 await self._record_failure(request, state, reason)
                 return self._result(request, ExecutionStatus.FAILED, reason)
             return await self.sandbox_flow.run(request, verdict)
-        return await self.fast_flow.run(request, verdict.risk_level, decision)
+        return await self.fast_flow.run(request, verdict, decision)
 
     async def _authorize(
         self,

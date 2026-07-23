@@ -231,7 +231,7 @@ class ApprovalFlow:
             )
         return await self.fast_flow.run(
             request,
-            verdict.risk_level,
+            verdict,
             routed_decision,
             start_state=StepStatus.WAITING_APPROVAL,
             approval_decision=decision,
