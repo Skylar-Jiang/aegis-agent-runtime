@@ -39,4 +39,5 @@ def build_persistent_container(
         audit_recorder=PersistentAuditRecorder(repository=audit_repo),
         approval_service=PersistentApprovalService(repository=approval_repo),
         request_registry=PersistentRequestExecutionRegistry(repository=execution_repo),
+        database_engine=engine,
     )

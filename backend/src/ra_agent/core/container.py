@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from sqlalchemy.ext.asyncio import AsyncEngine
+
 from ra_agent.audit import AuditRecorder
 from ra_agent.execution import CheckpointManager, CommitGate, RollbackManager, ToolExecutor
 from ra_agent.execution.cleanup import RequestCleanupCoordinator
@@ -33,3 +35,4 @@ class ServiceContainer:
     tool_registry: ToolRegistry
     request_registry: RequestExecutionRegistry
     cleanup_coordinator: RequestCleanupCoordinator | None = None
+    database_engine: AsyncEngine | None = None
