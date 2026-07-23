@@ -28,7 +28,12 @@ def _settings(tmp_path: Path) -> Settings:
 
 
 def _request(
-    task_id: str, tool_name: str, arguments: dict[str, object], objective: str
+    task_id: str,
+    tool_name: str,
+    arguments: dict[str, object],
+    objective: str,
+    *,
+    allow_egress: bool = False,
 ) -> ToolCallRequest:
     return ToolCallRequest(
         task_id=task_id,
@@ -44,6 +49,7 @@ def _request(
             allowed_actions=[tool_name],
             allowed_resources=["*"],
             max_affected_objects=1,
+            allow_egress=allow_egress,
         ),
     )
 
@@ -98,3 +104,37 @@ def test_agent_blocks_dangerous_shell_before_any_process_runs(tmp_path: Path) ->
 
     assert state.status is AgentRunStatus.BLOCKED
     assert readme.read_text(encoding="utf-8") == "safe fixture"
+
+
+def test_agent_records_pending_egress_without_network_send(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    upgrade_database(settings.database_url)
+    task_id = "task-e2e-egress"
+    runner = AgentRuntime(
+        planner=MockPlanner(
+            [
+                _request(
+                    task_id,
+                    "send_email_dry_run",
+                    {
+                        "recipient": "finance@example.com",
+                        "artifact": {
+                            "artifact_id": "report-1",
+                            "owner": "finance",
+                            "sensitivity": "SECRET",
+                            "source": "workspace/report.csv",
+                            "allowed_recipients": ["finance@example.com"],
+                        },
+                    },
+                    "Prepare a finance review email without sending it.",
+                    allow_egress=True,
+                )
+            ]
+        ),
+        scheduler=build_runtime_scheduler(build_runtime_container(settings)),
+    )
+
+    state = asyncio.run(runner.run(task_id, "Prepare a finance review email."))
+
+    assert state.status is AgentRunStatus.COMPLETED
+    assert state.results[0].output["status"] == "PENDING_EGRESS"

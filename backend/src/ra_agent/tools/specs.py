@@ -97,6 +97,18 @@ DEFAULT_TOOL_SPECS = (
         network_required=False,
         supports_dry_run=True,
     ),
+    ToolSpec(
+        name="send_email_dry_run",
+        description="Create a pending egress record without sending email",
+        required_permissions=[PermissionType.NETWORK_UPLOAD],
+        base_risk=RiskLevel.LOW,
+        side_effect_type="EGRESS_DRY_RUN",
+        reversibility=RecoverabilityType.ATOMIC,
+        sandbox_mode="PENDING_EGRESS",
+        timeout_seconds=5,
+        network_required=False,
+        supports_dry_run=True,
+    ),
 )
 
 TOOL_NAMES = tuple(spec.name for spec in DEFAULT_TOOL_SPECS)

@@ -1,6 +1,6 @@
 from .approvals import ApprovalDecision, ApprovalRequest
 from .audit import AuditEvent
-from .boundary import IntentBoundaryResult, TaskContract
+from .boundary import DataLineage, IntentBoundaryResult, PendingEgress, TaskContract
 from .common import APIError, APIResponse
 from .enums import (
     ApprovalStatus,
@@ -43,6 +43,7 @@ __all__ = [
     "CommitResult",
     "CONTRACT_VERSION",
     "DeepCheckResult",
+    "DataLineage",
     "ExperimentMode",
     "ExecutionStatus",
     "IntentBoundaryResult",
@@ -52,6 +53,7 @@ __all__ = [
     "PermissionDecision",
     "PermissionCheckResult",
     "PermissionStatus",
+    "PendingEgress",
     "PermissionType",
     "PolicyDecision",
     "RecoverabilityType",

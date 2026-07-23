@@ -49,6 +49,7 @@ from ra_agent.tools import DEFAULT_TOOL_SPECS, MockToolHandler, ToolRegistry
 from ra_agent.tools.download_guard import DownloadNetworkGuard
 from ra_agent.tools.implementations.delete_file import DeleteFileHandler
 from ra_agent.tools.implementations.download_url import DownloadUrlHandler
+from ra_agent.tools.implementations.egress import SendEmailDryRunHandler
 from ra_agent.tools.implementations.list_dir import ListDirHandler
 from ra_agent.tools.implementations.memory_tools import MemoryReadHandler, MemoryWriteHandler
 from ra_agent.tools.implementations.read_file import ReadFileHandler
@@ -226,6 +227,7 @@ def _build_live_registry(
         "download_url": DownloadUrlHandler(quarantine_store, DownloadNetworkGuard()),
         "memory_read": MemoryReadHandler(memory_store),
         "memory_write": MemoryWriteHandler(memory_store),
+        "send_email_dry_run": SendEmailDryRunHandler(),
         "run_shell": RestrictedShellHandler(
             shell_policy,
             RestrictedProcessRunner.from_yaml(tool_policies_path),

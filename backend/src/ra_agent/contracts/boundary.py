@@ -18,3 +18,17 @@ class IntentBoundaryResult(ContractModel):
     allowed: bool
     reason: str
     signals: list[str] = Field(default_factory=list)
+
+
+class DataLineage(ContractModel):
+    artifact_id: str = Field(min_length=1)
+    owner: str = Field(min_length=1)
+    sensitivity: str = Field(pattern="^(PUBLIC|INTERNAL|CONFIDENTIAL|SECRET)$")
+    source: str = Field(min_length=1)
+    allowed_recipients: list[str] = Field(default_factory=list)
+
+
+class PendingEgress(ContractModel):
+    status: str = "PENDING_EGRESS"
+    artifact: DataLineage
+    recipient: str = Field(min_length=1)

@@ -22,6 +22,7 @@ from ra_agent.contracts import (
     ToolSpec,
 )
 
+from .data_egress import DataEgressGuard
 from .deep_checker import RuleBasedDeepSafetyChecker
 from .permission_gate import RuleBasedPermissionGate
 from .risk_classifier import RuleBasedRiskClassifier
@@ -97,6 +98,7 @@ class RuleBasedPreExecutionChecker:
         self.tool_specs = dict(tool_specs)
         self._classifier = RuleBasedRiskClassifier(rules, self.tool_specs)
         self._permission_gate = RuleBasedPermissionGate(rules)
+        self._egress_guard = DataEgressGuard()
 
     async def check(self, request: ToolCallRequest, verdict: RiskVerdict) -> PreCheckResult:
         if not self.rules.valid:
@@ -120,6 +122,9 @@ class RuleBasedPreExecutionChecker:
         self._check_paths(request, signals)
         self._check_objective_consistency(request, spec, signals)
         self._check_url_shape(request, signals)
+        allowed_egress, egress_reason = self._egress_guard.check(request)
+        if not allowed_egress:
+            signals.append(f"egress_guard:{egress_reason}")
 
         expected = await self._classifier.classify(request)
         if (
@@ -192,6 +197,10 @@ class RuleBasedPreExecutionChecker:
                     signals.append("argument_memory_value_missing")
                 elif memory_value is None:
                     signals.append("argument_memory_value_invalid")
+        elif request.tool_name == "send_email_dry_run":
+            _require_text(arguments, "recipient", "argument_recipient_invalid", signals)
+            if not isinstance(arguments.get("artifact"), dict):
+                signals.append("argument_artifact_invalid")
 
     @staticmethod
     def _check_paths(request: ToolCallRequest, signals: list[str]) -> None:

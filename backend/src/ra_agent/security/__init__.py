@@ -1,4 +1,5 @@
 from .approval_service import ApprovalService, MockApprovalService
+from .data_egress import DataEgressGuard
 from .deep_checker import DeepSafetyChecker, MockDeepSafetyChecker
 from .intent_boundary import IntentBoundaryGuard, RuleBasedIntentBoundaryGuard
 from .permission_gate import MockPermissionGate, PermissionGate
@@ -16,6 +17,7 @@ from .risk_classifier import MockRiskClassifier, RiskClassifier
 __all__ = [
     "ApprovalService",
     "DeepSafetyChecker",
+    "DataEgressGuard",
     "MockDeepSafetyChecker",
     "MockApprovalService",
     "MockPermissionGate",
