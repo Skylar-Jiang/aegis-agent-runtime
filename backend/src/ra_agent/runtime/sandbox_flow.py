@@ -16,6 +16,7 @@ from ra_agent.contracts import (
     ToolExecutionResult,
 )
 from ra_agent.execution import CheckpointManager, CommitGate, RollbackManager, ToolExecutor
+from ra_agent.execution.cleanup import CleanupContext, RequestCleanupCoordinator
 from ra_agent.security import DeepSafetyChecker, PostExecutionChecker, PreExecutionChecker
 
 from .correlation import (
@@ -34,13 +35,17 @@ from .state_machine import transition
 @dataclass(slots=True)
 class _SandboxContext:
     state: StepStatus
-    checkpoint_id: str
+    checkpoint_id: str | None
     approval_decision: ApprovalDecision | None = None
     rollback_attempted: bool = False
+    post_check: PostCheckResult | None = None
 
 
 class SandboxFlow:
     """Coordinates Mock pending execution; it performs no sandbox work itself."""
+
+    _FILESYSTEM_TOOLS = frozenset({"write_file", "delete_file"})
+    _MANAGED_PENDING_TOOLS = frozenset({"download_url", "memory_write"})
 
     def __init__(
         self,
@@ -53,6 +58,7 @@ class SandboxFlow:
         commit_gate: CommitGate,
         rollback_manager: RollbackManager,
         audit_recorder: AuditRecorder,
+        cleanup_coordinator: RequestCleanupCoordinator | None = None,
     ) -> None:
         self.checkpoint_manager = checkpoint_manager
         self.executor = executor
@@ -62,6 +68,7 @@ class SandboxFlow:
         self.commit_gate = commit_gate
         self.rollback_manager = rollback_manager
         self.audit_recorder = audit_recorder
+        self.cleanup_coordinator = cleanup_coordinator
 
     async def run(
         self,
@@ -79,6 +86,13 @@ class SandboxFlow:
         pre_check = await self._pre_check(request, verdict, state)
         if isinstance(pre_check, ToolExecutionResult):
             return pre_check
+        if request.tool_name in self._MANAGED_PENDING_TOOLS:
+            context = _SandboxContext(
+                state=state,
+                checkpoint_id=None,
+                approval_decision=approval_decision,
+            )
+            return await self._run_after_checkpoint(request, verdict, context)
         state = transition(state, StepStatus.CHECKPOINT_CREATING)
         try:
             checkpoint = await self.checkpoint_manager.create(request)
@@ -249,6 +263,11 @@ class SandboxFlow:
                 reason,
                 error_code,
             )
+        context.post_check = post_check
+        if request.tool_name in self._MANAGED_PENDING_TOOLS:
+            return await self._commit_managed_resource(
+                request, verdict, context, execution, started_at
+            )
         await self._record(
             request,
             AuditEventType.DEEP_CHECK_STARTED,
@@ -307,6 +326,14 @@ class SandboxFlow:
             {"checkpoint_id": context.checkpoint_id},
         )
         try:
+            if context.checkpoint_id is None:
+                return await self._rollback(
+                    request,
+                    verdict,
+                    context,
+                    "filesystem commit requires a checkpoint",
+                    "COMMIT_FAILED",
+                )
             commit = await self.commit_gate.commit(execution, deep_check)
             validate_commit(request, context.checkpoint_id, commit)
         except CorrelationError as error:
@@ -402,6 +429,61 @@ class SandboxFlow:
             return None, checked.reason, "POST_CHECK_REJECTED"
         return checked, "", ""
 
+    async def _commit_managed_resource(
+        self,
+        request: ToolCallRequest,
+        verdict: RiskVerdict,
+        context: _SandboxContext,
+        execution: ToolExecutionResult,
+        started_at: datetime,
+    ) -> ToolExecutionResult:
+        post_check = context.post_check
+        if self.cleanup_coordinator is None or post_check is None:
+            return await self._rollback(
+                request,
+                verdict,
+                context,
+                "managed pending resource dependencies are not configured",
+                "MANAGED_COMMIT_UNAVAILABLE",
+            )
+        context.state = transition(context.state, StepStatus.COMMITTING)
+        await self._record(
+            request,
+            AuditEventType.COMMIT_STARTED,
+            context.state,
+            "managed resource commit started",
+            verdict,
+        )
+        try:
+            committed = await self.cleanup_coordinator.commit(request, execution, post_check)
+        except Exception as error:
+            reason = self._reason(error)
+            await self._record_stage_failure(
+                request,
+                AuditEventType.COMMIT_FINISHED,
+                context.state,
+                "managed resource commit failed",
+                verdict,
+                reason,
+            )
+            return await self._rollback(request, verdict, context, reason, "COMMIT_FAILED")
+        await self._record(
+            request,
+            AuditEventType.COMMIT_FINISHED,
+            context.state,
+            "managed resource commit finished",
+            verdict,
+            {"resource": committed},
+        )
+        context.state = transition(context.state, StepStatus.COMMITTED)
+        return execution.model_copy(
+            update={
+                "status": ExecutionStatus.COMMITTED,
+                "started_at": execution.started_at or started_at,
+                "finished_at": execution.finished_at or datetime.now(UTC),
+            }
+        )
+
     async def _rollback(
         self,
         request: ToolCallRequest,
@@ -433,21 +515,38 @@ class SandboxFlow:
             request,
             AuditEventType.ROLLBACK_STARTED,
             context.state,
-            "mock rollback started",
+            "rollback started",
             verdict,
             {"checkpoint_id": context.checkpoint_id, "reason": reason},
         )
         try:
-            rollback = await self.rollback_manager.rollback(
-                context.checkpoint_id, request.request_id
-            )
-            validate_rollback(request, context.checkpoint_id, rollback)
+            if request.tool_name in self._MANAGED_PENDING_TOOLS:
+                if self.cleanup_coordinator is None:
+                    raise RuntimeError("managed pending resource cleanup is not configured")
+                await self.cleanup_coordinator.abort(
+                    CleanupContext(
+                        task_id=request.task_id,
+                        step_id=request.step_id,
+                        request_id=request.request_id,
+                        tool_name=request.tool_name,
+                    ),
+                    reason=reason,
+                )
+                rollback_status = ExecutionStatus.ROLLED_BACK
+            else:
+                if context.checkpoint_id is None:
+                    raise RuntimeError("filesystem rollback requires a checkpoint")
+                rollback = await self.rollback_manager.rollback(
+                    context.checkpoint_id, request.request_id
+                )
+                validate_rollback(request, context.checkpoint_id, rollback)
+                rollback_status = rollback.status
         except CorrelationError as error:
             await self._record_stage_failure(
                 request,
                 AuditEventType.ROLLBACK_FINISHED,
                 context.state,
-                "mock rollback failed",
+                "rollback failed",
                 verdict,
                 str(error),
             )
@@ -459,7 +558,7 @@ class SandboxFlow:
                 request,
                 AuditEventType.ROLLBACK_FINISHED,
                 context.state,
-                "mock rollback failed",
+                "rollback failed",
                 verdict,
                 failure,
             )
@@ -469,11 +568,11 @@ class SandboxFlow:
             request,
             AuditEventType.ROLLBACK_FINISHED,
             context.state,
-            "mock rollback finished",
+            "rollback finished",
             verdict,
-            {"status": rollback.status.value},
+            {"status": rollback_status.value},
         )
-        if rollback.status is not ExecutionStatus.ROLLED_BACK:
+        if rollback_status is not ExecutionStatus.ROLLED_BACK:
             context.state = transition(context.state, StepStatus.FAILED)
             return await self._fail(
                 request, context.state, "Rollback did not succeed", "ROLLBACK_FAILED"

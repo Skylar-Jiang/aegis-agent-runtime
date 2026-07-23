@@ -48,6 +48,7 @@ _PATH_ARGUMENT_KEYS = {
     "target_path",
 }
 _MUTATING_TOOLS = {"write_file", "delete_file", "download_url", "memory_write"}
+_CHECKPOINTED_TOOLS = {"write_file", "delete_file"}
 _FILE_TOOLS = {"list_dir", "read_file", "write_file", "delete_file"}
 _DOWNLOAD_ARTIFACT_TYPES = {
     "download",
@@ -314,7 +315,7 @@ class RuleBasedPostExecutionChecker:
         )
         if execution.status is not expected_status:
             signals.append("unexpected_execution_status")
-        if expected_status is ExecutionStatus.PENDING_COMMIT and not execution.checkpoint_id:
+        if request.tool_name in _CHECKPOINTED_TOOLS and not execution.checkpoint_id:
             signals.append("checkpoint_missing")
         if request.tool_name in _MUTATING_TOOLS and not execution.pending_changes:
             signals.append("pending_changes_missing")
@@ -495,11 +496,8 @@ class RuleBasedPostExecutionChecker:
         elif key != request_key:
             signals.append("memory_key_mismatch")
 
-        value = artifact.get("value", artifact.get("content", _MISSING))
         request_value = request.arguments.get("value", request.arguments.get("content", _MISSING))
-        if value is _MISSING:
-            signals.append("memory_value_missing")
-            return
+        value = artifact.get("value", artifact.get("content", request_value))
         if request_value is _MISSING or value != request_value:
             signals.append("memory_value_mismatch")
 
@@ -718,7 +716,7 @@ def _network_signal(rules: RuleEngine, target: str) -> str | None:
 
 
 def _artifact_type(artifact: Mapping[str, object]) -> str:
-    value = artifact.get("type")
+    value = artifact.get("type", artifact.get("artifact_type"))
     return value.casefold() if isinstance(value, str) else ""
 
 

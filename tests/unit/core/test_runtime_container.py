@@ -21,6 +21,13 @@ from ra_agent.execution.checkpoint import FilesystemCheckpointManager
 from ra_agent.execution.commit_gate import FilesystemCommitGate
 from ra_agent.execution.executor import RegistryToolExecutor
 from ra_agent.execution.rollback import FilesystemRollbackManager
+from ra_agent.memory import FilesystemMemoryStore
+from ra_agent.tools.implementations.download_url import DownloadUrlHandler
+from ra_agent.tools.implementations.memory_tools import (
+    MemoryReadHandler,
+    MemoryWriteHandler,
+)
+from ra_agent.tools.implementations.run_shell import RestrictedShellHandler
 from ra_agent.main import create_app
 from ra_agent.runtime import InMemoryRequestExecutionRegistry
 from ra_agent.security.deep_checker import RuleBasedDeepSafetyChecker
@@ -56,7 +63,9 @@ def test_offline_mode_keeps_the_fixture_container(tmp_path: Path) -> None:
     assert not (tmp_path / ".runtime").exists()
 
 
-def test_rules_only_mode_uses_rules_and_persistent_state_without_real_tools(tmp_path: Path) -> None:
+def test_rules_only_mode_uses_rules_and_persistent_state_without_real_tools(
+    tmp_path: Path,
+) -> None:
     container = build_runtime_container(_settings(tmp_path, RuntimeMode.RULES_ONLY))
 
     assert isinstance(container.risk_classifier, RuleBasedRiskClassifier)
@@ -86,11 +95,31 @@ def test_live_agent_mode_uses_real_controlled_file_components(tmp_path: Path) ->
     assert isinstance(container.checkpoint_manager, FilesystemCheckpointManager)
     assert isinstance(container.commit_gate, FilesystemCommitGate)
     assert isinstance(container.rollback_manager, FilesystemRollbackManager)
-    assert type(container.tool_registry.get_handler("read_file")).__name__ == "ReadFileHandler"
-    assert type(container.tool_registry.get_handler("write_file")).__name__ == "WriteFileHandler"
+    assert (
+        type(container.tool_registry.get_handler("read_file")).__name__
+        == "ReadFileHandler"
+    )
+    assert (
+        type(container.tool_registry.get_handler("write_file")).__name__
+        == "WriteFileHandler"
+    )
+    assert isinstance(
+        container.tool_registry.get_handler("download_url"), DownloadUrlHandler
+    )
+    assert isinstance(
+        container.tool_registry.get_handler("memory_read"), MemoryReadHandler
+    )
+    assert isinstance(
+        container.tool_registry.get_handler("memory_write"), MemoryWriteHandler
+    )
+    assert isinstance(
+        container.tool_registry.get_handler("run_shell"), RestrictedShellHandler
+    )
 
 
-def test_unconfigured_live_agent_runner_fails_before_tool_scheduling(tmp_path: Path) -> None:
+def test_unconfigured_live_agent_runner_fails_before_tool_scheduling(
+    tmp_path: Path,
+) -> None:
     container = build_runtime_container(_settings(tmp_path, RuntimeMode.LIVE_AGENT))
     runner = build_agent_runner(_settings(tmp_path, RuntimeMode.LIVE_AGENT), container)
 
@@ -116,10 +145,38 @@ def test_live_agent_mode_commits_a_staged_workspace_write(tmp_path: Path) -> Non
     result = asyncio.run(scheduler.schedule(request))
 
     assert result.status is ExecutionStatus.COMMITTED
-    assert (
-        (settings.workspace_root / "result.txt").read_text(encoding="utf-8")
-        == "controlled write"
+    assert (settings.workspace_root / "result.txt").read_text(
+        encoding="utf-8"
+    ) == "controlled write"
+
+
+def test_live_agent_mode_promotes_checked_memory_only_after_commit(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path, RuntimeMode.LIVE_AGENT)
+    upgrade_database(settings.database_url)
+    scheduler = build_runtime_scheduler(build_runtime_container(settings))
+    request = ToolCallRequest(
+        task_id="task-live",
+        step_id="step-memory",
+        request_id="request-live-memory",
+        tool_name="memory_write",
+        arguments={"key": "project-note", "value": "safe meeting note"},
+        objective="remember a safe project note",
+        context_summary="container integration test",
+        source_type=SourceType.USER,
+        requested_at=datetime.now(UTC),
     )
+
+    result = asyncio.run(scheduler.schedule(request))
+
+    assert result.status is ExecutionStatus.COMMITTED
+    store = FilesystemMemoryStore(
+        settings.pending_root / "memory", max_value_bytes=4096
+    )
+    trusted = asyncio.run(store.get_trusted_value("project-note"))
+    assert trusted is not None
+    assert trusted[1] == "safe meeting note"
 
 
 def test_non_offline_app_runs_migrations_on_startup(tmp_path: Path) -> None:
@@ -138,4 +195,9 @@ def test_non_offline_app_runs_migrations_on_startup(tmp_path: Path) -> None:
                 "SELECT name FROM sqlite_master WHERE type = 'table'"
             )
         }
-    assert {"alembic_version", "audit_events", "approval_requests", "execution_claims"} <= tables
+    assert {
+        "alembic_version",
+        "audit_events",
+        "approval_requests",
+        "execution_claims",
+    } <= tables

@@ -28,6 +28,7 @@ _TRANSITIONS: dict[StepStatus, frozenset[StepStatus]] = {
     StepStatus.READY: frozenset(
         {
             StepStatus.EXECUTING_FAST,
+            StepStatus.EXECUTING_SANDBOX,
             StepStatus.CHECKPOINT_CREATING,
             StepStatus.BLOCKED,
             StepStatus.FAILED,

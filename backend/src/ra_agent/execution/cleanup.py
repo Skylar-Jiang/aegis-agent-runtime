@@ -141,6 +141,31 @@ class RequestCleanupCoordinator:
                 reason,
             )
 
+    async def commit(
+        self,
+        request: ToolCallRequest,
+        execution: ToolExecutionResult,
+        post_check: PostCheckResult,
+    ) -> str:
+        """Commit a non-filesystem pending resource after its checks have passed."""
+
+        if not post_check.passed:
+            raise ValueError("cleanup commit requires a passing PostCheck result")
+        async with self._lock_for(request.request_id):
+            if request.tool_name == "memory_write":
+                if self._memory_manager is None:
+                    raise CleanupCoordinatorError("MemoryLifecycleManager is not configured")
+                await self._memory_manager.commit(request, execution, post_check)
+                return "memory_trusted"
+            if request.tool_name == "download_url":
+                if self._download_manager is None:
+                    raise CleanupCoordinatorError("DownloadLifecycleManager is not configured")
+                await self._download_manager.commit(request, execution, post_check)
+                return "download_committed"
+            raise CleanupCoordinatorError(
+                f"no managed pending resource for tool: {request.tool_name}"
+            )
+
     async def rollback_failed_commit(
         self,
         context: CleanupContext,

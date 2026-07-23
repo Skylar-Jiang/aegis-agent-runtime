@@ -1,3 +1,4 @@
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -12,10 +13,15 @@ from ra_agent.execution import (
     MockToolExecutor,
 )
 from ra_agent.execution.checkpoint import FilesystemCheckpointManager
+from ra_agent.execution.cleanup import RequestCleanupCoordinator
 from ra_agent.execution.commit_gate import FilesystemCommitGate
+from ra_agent.execution.download_manager import DownloadLifecycleManager
 from ra_agent.execution.executor import RegistryToolExecutor
 from ra_agent.execution.pending_store import PendingStore
+from ra_agent.execution.process_runner import RestrictedProcessRunner
+from ra_agent.execution.quarantine import FilesystemQuarantineStore
 from ra_agent.execution.rollback import FilesystemRollbackManager
+from ra_agent.memory import FilesystemMemoryStore, MemoryLifecycleManager
 from ra_agent.runtime import InMemoryRequestExecutionRegistry, RuntimeScheduler
 from ra_agent.runtime.approval_flow import ApprovalFlow
 from ra_agent.runtime.fast_flow import FastExecutionFlow
@@ -39,11 +45,16 @@ from ra_agent.security.pre_post_check import (
 from ra_agent.security.risk_classifier import RuleBasedRiskClassifier
 from ra_agent.security.rule_engine import RuleEngine
 from ra_agent.tools import DEFAULT_TOOL_SPECS, MockToolHandler, ToolRegistry
+from ra_agent.tools.download_guard import DownloadNetworkGuard
 from ra_agent.tools.implementations.delete_file import DeleteFileHandler
+from ra_agent.tools.implementations.download_url import DownloadUrlHandler
 from ra_agent.tools.implementations.list_dir import ListDirHandler
+from ra_agent.tools.implementations.memory_tools import MemoryReadHandler, MemoryWriteHandler
 from ra_agent.tools.implementations.read_file import ReadFileHandler
+from ra_agent.tools.implementations.run_shell import RestrictedShellHandler
 from ra_agent.tools.implementations.write_file import WriteFileHandler
 from ra_agent.tools.path_resolver import SafePathResolver
+from ra_agent.tools.shell_policy import RestrictedShellPolicy
 
 from .config import RuntimeMode, Settings
 from .container import ServiceContainer
@@ -114,14 +125,43 @@ def build_runtime_container(settings: Settings) -> ServiceContainer:
     )
     pending_store = PendingStore(settings.pending_root)
     checkpoint_manager = FilesystemCheckpointManager(settings.checkpoint_root, resolver)
-    registry = _build_live_registry(resolver, pending_store, settings.max_list_entries)
+    rollback_manager = FilesystemRollbackManager(resolver, pending_store, checkpoint_manager)
+    quarantine_store = FilesystemQuarantineStore(
+        settings.quarantine_root,
+        max_download_bytes=rules.max_download_bytes,
+    )
+    memory_store = FilesystemMemoryStore(
+        settings.pending_root / "memory",
+        max_value_bytes=rules.max_memory_characters,
+    )
+    cleanup_coordinator = RequestCleanupCoordinator(
+        pending_store=pending_store,
+        rollback_manager=rollback_manager,
+        memory_manager=MemoryLifecycleManager(memory_store),
+        download_manager=DownloadLifecycleManager(quarantine_store),
+    )
+    registry = _build_live_registry(
+        resolver,
+        pending_store,
+        settings.max_list_entries,
+        quarantine_store,
+        memory_store,
+        settings.security_config_dir / "tool_policies.yaml",
+    )
     return replace(
         container,
         tool_registry=registry,
-        tool_executor=RegistryToolExecutor(registry, pending_store),
+        tool_executor=RegistryToolExecutor(
+            registry,
+            pending_store,
+            memory_store=memory_store,
+            quarantine_store=quarantine_store,
+            cleanup_coordinator=cleanup_coordinator,
+        ),
         checkpoint_manager=checkpoint_manager,
         commit_gate=FilesystemCommitGate(resolver, pending_store, checkpoint_manager),
-        rollback_manager=FilesystemRollbackManager(resolver, pending_store, checkpoint_manager),
+        rollback_manager=rollback_manager,
+        cleanup_coordinator=cleanup_coordinator,
     )
 
 
@@ -166,12 +206,28 @@ def _build_live_registry(
     resolver: SafePathResolver,
     pending_store: PendingStore,
     max_list_entries: int,
+    quarantine_store: FilesystemQuarantineStore,
+    memory_store: FilesystemMemoryStore,
+    tool_policies_path: Path,
 ) -> ToolRegistry:
+    executable_root = Path(sys.executable).resolve().parent.parent
+    shell_policy = RestrictedShellPolicy.from_yaml(
+        tool_policies_path,
+        resolver,
+        trusted_executable_roots=(executable_root,),
+    )
     handlers = {
         "list_dir": ListDirHandler(resolver, max_entries=max_list_entries),
         "read_file": ReadFileHandler(resolver),
         "write_file": WriteFileHandler(resolver, pending_store),
         "delete_file": DeleteFileHandler(resolver, pending_store),
+        "download_url": DownloadUrlHandler(quarantine_store, DownloadNetworkGuard()),
+        "memory_read": MemoryReadHandler(memory_store),
+        "memory_write": MemoryWriteHandler(memory_store),
+        "run_shell": RestrictedShellHandler(
+            shell_policy,
+            RestrictedProcessRunner.from_yaml(tool_policies_path),
+        ),
     }
     registry = ToolRegistry()
     for spec in DEFAULT_TOOL_SPECS:
@@ -195,6 +251,7 @@ def build_runtime_scheduler(container: ServiceContainer) -> RuntimeScheduler:
         commit_gate=container.commit_gate,
         rollback_manager=container.rollback_manager,
         audit_recorder=container.audit_recorder,
+        cleanup_coordinator=container.cleanup_coordinator,
     )
     approval_flow = ApprovalFlow(
         approval_service=container.approval_service,
