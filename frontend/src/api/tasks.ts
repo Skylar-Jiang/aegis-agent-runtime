@@ -1,8 +1,8 @@
 import { get, post } from './client';
-import type { TaskResponse } from '../types/contracts';
+import type { TaskContract, TaskResponse } from '../types/contracts';
 
-export function createTask(objective: string): Promise<TaskResponse> {
-  return post<TaskResponse>('/tasks', { objective });
+export function createTask(objective: string, contract?: TaskContract): Promise<TaskResponse> {
+  return post<TaskResponse>('/tasks', { objective, contract });
 }
 
 export function getTask(taskId: string): Promise<{ task_id: string; status: string }> {

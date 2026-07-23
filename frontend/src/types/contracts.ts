@@ -64,6 +64,15 @@ export interface TaskResponse {
   steps: TaskStep[];
 }
 
+export interface TaskContract {
+  allowed_actions: string[];
+  allowed_resources: string[];
+  forbidden_actions: string[];
+  max_affected_objects: number;
+  allow_egress: boolean;
+  requires_reconfirmation: boolean;
+}
+
 export interface TaskStep {
   task_id: string;
   step_id: string;
