@@ -1,11 +1,13 @@
 from pydantic import Field
 
+from .boundary import TaskContract
 from .common import ContractModel, UTCDateTime
 from .enums import PermissionType, StepStatus
 
 
 class TaskCreateRequest(ContractModel):
     objective: str = Field(min_length=1, description="User-visible task objective")
+    contract: TaskContract | None = None
 
 
 class TaskStep(ContractModel):

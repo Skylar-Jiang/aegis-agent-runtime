@@ -9,6 +9,7 @@ from ra_agent.runtime.idempotency import RequestExecutionRegistry
 from ra_agent.security import (
     ApprovalService,
     DeepSafetyChecker,
+    IntentBoundaryGuard,
     PermissionGate,
     PolicyEngine,
     PostExecutionChecker,
@@ -36,3 +37,4 @@ class ServiceContainer:
     request_registry: RequestExecutionRegistry
     cleanup_coordinator: RequestCleanupCoordinator | None = None
     database_engine: AsyncEngine | None = None
+    intent_boundary_guard: IntentBoundaryGuard | None = None

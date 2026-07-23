@@ -34,6 +34,7 @@ from ra_agent.security import (
     MockPostExecutionChecker,
     MockPreExecutionChecker,
     MockRiskClassifier,
+    RuleBasedIntentBoundaryGuard,
 )
 from ra_agent.security.deep_checker import RuleBasedDeepSafetyChecker
 from ra_agent.security.permission_gate import RuleBasedPermissionGate
@@ -112,6 +113,7 @@ def build_runtime_container(settings: Settings) -> ServiceContainer:
             settings.pending_root,
             settings.quarantine_root,
         ),
+        intent_boundary_guard=RuleBasedIntentBoundaryGuard(),
     )
     if settings.runtime_mode is RuntimeMode.RULES_ONLY:
         return container
@@ -275,4 +277,5 @@ def build_runtime_scheduler(container: ServiceContainer) -> RuntimeScheduler:
         sandbox_flow=sandbox_flow,
         approval_flow=approval_flow,
         fast_flow=fast_flow,
+        intent_boundary_guard=container.intent_boundary_guard,
     )

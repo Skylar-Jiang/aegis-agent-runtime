@@ -37,7 +37,7 @@ async def create_task(
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail="task audit persistence unavailable") from exc
-    state = await agent_runner.run(task_id, request.objective)
+    state = await agent_runner.run(task_id, request.objective, request.contract)
     return APIResponse(
         data=TaskResponse(
             task_id=task_id,

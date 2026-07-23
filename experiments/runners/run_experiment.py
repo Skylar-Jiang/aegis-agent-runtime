@@ -18,6 +18,7 @@ from ra_agent.contracts import (
     PolicyDecision,
     RiskVerdict,
     SourceType,
+    TaskContract,
     ToolCallRequest,
     ToolExecutionResult,
 )
@@ -183,6 +184,11 @@ async def run_case(case: dict[str, Any], mode: ExperimentMode) -> dict[str, Any]
             context_summary=case["description"],
             source_type=SourceType.USER,
             requested_at=started_at,
+            task_contract=TaskContract(
+                allowed_actions=[case["tool_name"]],
+                allowed_resources=["*"],
+                max_affected_objects=20,
+            ),
         )
         error: str | None = None
         error_code: str | None = None

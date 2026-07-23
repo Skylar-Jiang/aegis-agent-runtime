@@ -1,5 +1,6 @@
 from .approval_service import ApprovalService, MockApprovalService
 from .deep_checker import DeepSafetyChecker, MockDeepSafetyChecker
+from .intent_boundary import IntentBoundaryGuard, RuleBasedIntentBoundaryGuard
 from .permission_gate import MockPermissionGate, PermissionGate
 from .policy_engine import MockPolicyEngine, PolicyEngine
 from .pre_post_check import (
@@ -26,6 +27,8 @@ __all__ = [
     "PostExecutionChecker",
     "PolicyEngine",
     "RiskClassifier",
+    "IntentBoundaryGuard",
+    "RuleBasedIntentBoundaryGuard",
     "PreExecutionChecker",
     "RuleBasedPostExecutionChecker",
     "RuleBasedPreExecutionChecker",

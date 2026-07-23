@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from ra_agent.audit import InMemoryAuditRecorder, PersistentAuditRecorder
-from ra_agent.contracts import ExecutionStatus, SourceType, ToolCallRequest
+from ra_agent.contracts import ExecutionStatus, SourceType, TaskContract, ToolCallRequest
 from ra_agent.core.bootstrap import (
     build_agent_runner,
     build_runtime_container,
@@ -140,6 +140,11 @@ def test_live_agent_mode_commits_a_staged_workspace_write(tmp_path: Path) -> Non
         context_summary="container integration test",
         source_type=SourceType.USER,
         requested_at=datetime.now(UTC),
+        task_contract=TaskContract(
+            allowed_actions=["write_file"],
+            allowed_resources=["result.txt"],
+            max_affected_objects=1,
+        ),
     )
 
     result = asyncio.run(scheduler.schedule(request))
@@ -148,6 +153,29 @@ def test_live_agent_mode_commits_a_staged_workspace_write(tmp_path: Path) -> Non
     assert (settings.workspace_root / "result.txt").read_text(
         encoding="utf-8"
     ) == "controlled write"
+
+
+def test_live_agent_mode_blocks_missing_task_contract(tmp_path: Path) -> None:
+    settings = _settings(tmp_path, RuntimeMode.LIVE_AGENT)
+    upgrade_database(settings.database_url)
+    scheduler = build_runtime_scheduler(build_runtime_container(settings))
+    request = ToolCallRequest(
+        task_id="task-live",
+        step_id="step-missing-contract",
+        request_id="request-missing-contract",
+        tool_name="write_file",
+        arguments={"path": "blocked.txt", "content": "must not write"},
+        objective="write a controlled test file",
+        context_summary="container integration test",
+        source_type=SourceType.USER,
+        requested_at=datetime.now(UTC),
+    )
+
+    result = asyncio.run(scheduler.schedule(request))
+
+    assert result.status is ExecutionStatus.BLOCKED
+    assert "contract_missing" in (result.error or "")
+    assert not (settings.workspace_root / "blocked.txt").exists()
 
 
 def test_live_agent_mode_promotes_checked_memory_only_after_commit(
@@ -166,6 +194,11 @@ def test_live_agent_mode_promotes_checked_memory_only_after_commit(
         context_summary="container integration test",
         source_type=SourceType.USER,
         requested_at=datetime.now(UTC),
+        task_contract=TaskContract(
+            allowed_actions=["memory_write"],
+            allowed_resources=["project-note"],
+            max_affected_objects=1,
+        ),
     )
 
     result = asyncio.run(scheduler.schedule(request))

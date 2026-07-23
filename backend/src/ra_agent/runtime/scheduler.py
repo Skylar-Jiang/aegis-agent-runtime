@@ -13,6 +13,7 @@ from ra_agent.contracts import (
 )
 from ra_agent.execution import ToolExecutor
 from ra_agent.security import (
+    IntentBoundaryGuard,
     MockPostExecutionChecker,
     MockPreExecutionChecker,
     PermissionGate,
@@ -50,6 +51,7 @@ class RuntimeScheduler:
         fast_flow: FastExecutionFlow | None = None,
         pre_checker: PreExecutionChecker | None = None,
         post_checker: PostExecutionChecker | None = None,
+        intent_boundary_guard: IntentBoundaryGuard | None = None,
     ) -> None:
         self.classifier = classifier
         self.policy = policy
@@ -59,6 +61,7 @@ class RuntimeScheduler:
         self.request_registry = request_registry
         self.sandbox_flow = sandbox_flow
         self.approval_flow = approval_flow
+        self.intent_boundary_guard = intent_boundary_guard
         self.fast_flow = fast_flow or FastExecutionFlow(
             executor=executor,
             pre_checker=pre_checker or MockPreExecutionChecker(),
@@ -138,6 +141,16 @@ class RuntimeScheduler:
             decision=decision,
             details={"reason": verdict.reason, "signals": verdict.signals},
         )
+        if self.intent_boundary_guard is not None:
+            boundary = await self.intent_boundary_guard.check(request)
+            if not boundary.allowed:
+                return await self._block(
+                    request,
+                    state,
+                    boundary.reason + ": " + ", ".join(boundary.signals),
+                    verdict.risk_level,
+                    decision,
+                )
         if decision is PolicyDecision.BLOCK:
             return await self._block(request, state, verdict.reason, verdict.risk_level, decision)
         if decision is PolicyDecision.REQUEST_APPROVAL:

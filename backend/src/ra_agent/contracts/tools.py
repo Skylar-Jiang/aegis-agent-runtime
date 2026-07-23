@@ -2,6 +2,7 @@ from typing import Any
 
 from pydantic import Field
 
+from .boundary import TaskContract
 from .common import ContractModel, UTCDateTime
 from .enums import PermissionType, RecoverabilityType, RiskLevel, SourceType
 
@@ -30,3 +31,4 @@ class ToolCallRequest(ContractModel):
     context_summary: str = Field(min_length=1)
     source_type: SourceType
     requested_at: UTCDateTime
+    task_contract: TaskContract | None = None

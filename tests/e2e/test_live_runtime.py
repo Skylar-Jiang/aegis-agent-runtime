@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ra_agent.agent import AgentRuntime, MockPlanner
 from ra_agent.agent.state import AgentRunStatus
-from ra_agent.contracts import SourceType, ToolCallRequest
+from ra_agent.contracts import SourceType, TaskContract, ToolCallRequest
 from ra_agent.core.bootstrap import build_runtime_container, build_runtime_scheduler
 from ra_agent.core.config import RuntimeMode, Settings
 from ra_agent.database.migrate import upgrade_database
@@ -40,6 +40,11 @@ def _request(
         context_summary="pytest live runtime E2E",
         source_type=SourceType.AGENT,
         requested_at=datetime.now(UTC),
+        task_contract=TaskContract(
+            allowed_actions=[tool_name],
+            allowed_resources=["*"],
+            max_affected_objects=1,
+        ),
     )
 
 

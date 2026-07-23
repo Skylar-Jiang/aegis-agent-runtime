@@ -1,5 +1,6 @@
 from .approvals import ApprovalDecision, ApprovalRequest
 from .audit import AuditEvent
+from .boundary import IntentBoundaryResult, TaskContract
 from .common import APIError, APIResponse
 from .enums import (
     ApprovalStatus,
@@ -44,6 +45,7 @@ __all__ = [
     "DeepCheckResult",
     "ExperimentMode",
     "ExecutionStatus",
+    "IntentBoundaryResult",
     "MemoryStatus",
     "PostCheckResult",
     "PreCheckResult",
@@ -59,6 +61,7 @@ __all__ = [
     "SourceType",
     "StepStatus",
     "TaskCreateRequest",
+    "TaskContract",
     "TaskResponse",
     "TaskStep",
     "ToolCallRequest",

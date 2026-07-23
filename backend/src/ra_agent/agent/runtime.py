@@ -1,6 +1,6 @@
 from typing import Protocol, cast
 
-from ra_agent.contracts import ExecutionStatus, ToolCallRequest, ToolExecutionResult
+from ra_agent.contracts import ExecutionStatus, TaskContract, ToolCallRequest, ToolExecutionResult
 from ra_agent.runtime.correlation import (
     CorrelationError,
     validate_agent_request,
@@ -27,12 +27,19 @@ class AgentRuntime:
         self.scheduler = scheduler
         self.max_turns = max_turns
 
-    async def run(self, task_id: str, objective: str) -> AgentState:
+    async def run(
+        self, task_id: str, objective: str, contract: TaskContract | None = None
+    ) -> AgentState:
         state = AgentState(task_id=task_id, objective=objective)
         if isinstance(self.planner, IterativePlanner):
-            return await self._run_iteratively(state)
+            return await self._run_iteratively(state, contract)
         try:
-            state.planned_requests = await self.planner.plan(task_id, objective)
+            state.planned_requests = [
+                request.model_copy(
+                    update={"task_contract": contract or request.task_contract}
+                )
+                for request in await self.planner.plan(task_id, objective)
+            ]
         except Exception:
             state.status = AgentRunStatus.FAILED
             return state
@@ -70,7 +77,9 @@ class AgentRuntime:
             state.status = AgentRunStatus.COMPLETED
         return state
 
-    async def _run_iteratively(self, state: AgentState) -> AgentState:
+    async def _run_iteratively(
+        self, state: AgentState, contract: TaskContract | None
+    ) -> AgentState:
         planner = cast(IterativePlanner, self.planner)
         state.status = AgentRunStatus.RUNNING
         for _ in range(self.max_turns):
@@ -84,6 +93,9 @@ class AgentRuntime:
             if request is None:
                 state.status = AgentRunStatus.COMPLETED
                 return state
+            request = request.model_copy(
+                update={"task_contract": contract or request.task_contract}
+            )
             state.planned_requests.append(request)
             if not await self._schedule_request(state, request):
                 return state
