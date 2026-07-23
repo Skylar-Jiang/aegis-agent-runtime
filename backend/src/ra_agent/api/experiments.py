@@ -13,7 +13,7 @@ from .deps import get_services
 
 router = APIRouter(prefix="/api/experiments", tags=["experiments"])
 
-EXPERIMENTS_DIR = Path(__file__).parent.parent.parent.parent / "experiments"
+EXPERIMENTS_DIR = Path(__file__).parent.parent.parent.parent.parent / "experiments"
 
 
 def _results_dir() -> Path:
