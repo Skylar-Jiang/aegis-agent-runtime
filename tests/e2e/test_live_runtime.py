@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ra_agent.agent import AgentRuntime, MockPlanner
 from ra_agent.agent.state import AgentRunStatus
-from ra_agent.contracts import SourceType, TaskContract, ToolCallRequest, ToolExecutionResult
+from ra_agent.contracts import ExecutionStatus, SourceType, TaskContract, ToolCallRequest, ToolExecutionResult
 from ra_agent.core.bootstrap import build_runtime_container, build_runtime_scheduler
 from ra_agent.core.config import RuntimeMode, Settings
 from ra_agent.database.migrate import upgrade_database
@@ -185,4 +185,30 @@ def test_live_runtime_idempotent_retry_does_not_repeat_controlled_write(tmp_path
 
     assert first.status is repeated.status
     assert (settings.workspace_root / "retry.txt").read_text(encoding="utf-8") == "exactly once"
+    assert not list(settings.pending_root.rglob("*.json"))
+
+
+def test_live_runtime_resumes_approved_delete_through_controlled_commit(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    upgrade_database(settings.database_url)
+    settings.workspace_root.mkdir(parents=True)
+    target = settings.workspace_root / "approved-delete.txt"
+    target.write_text("remove after approval", encoding="utf-8")
+    container = build_runtime_container(settings)
+    scheduler = build_runtime_scheduler(container)
+    request = _request(
+        "task-e2e-approval",
+        "delete_file",
+        {"path": "approved-delete.txt"},
+        "Delete the reviewed file.",
+    )
+
+    waiting = asyncio.run(scheduler.schedule(request))
+    assert waiting.status is ExecutionStatus.WAITING_APPROVAL
+    approval_id = waiting.output["approval_id"]
+    asyncio.run(container.approval_service.grant(approval_id, "reviewer", "approved"))
+    result = asyncio.run(scheduler.resume_after_approval(request, approval_id))
+
+    assert result.status is ExecutionStatus.COMMITTED
+    assert not target.exists()
     assert not list(settings.pending_root.rglob("*.json"))
