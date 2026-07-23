@@ -4,7 +4,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from ra_agent.api import approvals_router, reports_router, streams_router, tasks_router
+from ra_agent.api import (
+    approvals_router,
+    experiments_router,
+    reports_router,
+    streams_router,
+    tasks_router,
+)
 from ra_agent.contracts import APIResponse
 from ra_agent.core.bootstrap import build_agent_runner, build_runtime_container
 from ra_agent.core.config import RuntimeMode, Settings
@@ -32,6 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(approvals_router)
     app.include_router(reports_router)
     app.include_router(streams_router)
+    app.include_router(experiments_router)
 
     @app.get("/health")
     async def health() -> APIResponse[dict[str, str]]:
