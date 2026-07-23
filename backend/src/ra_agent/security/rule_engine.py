@@ -46,6 +46,9 @@ class RuleEngine:
         max_pending_changes: int,
         max_output_characters: int,
         secret_patterns: tuple[str, ...],
+        max_download_bytes: int,
+        max_memory_characters: int,
+        allowed_download_content_types: tuple[str, ...],
         tool_permissions: dict[str, tuple[PermissionType, ...]],
         permission_statuses: dict[str, dict[PermissionType, PermissionStatus]],
         default_permission_status: PermissionStatus,
@@ -68,6 +71,9 @@ class RuleEngine:
         self.max_output_characters = max_output_characters
         self.secret_patterns = secret_patterns
         self._compiled_secret_patterns = tuple(re.compile(pattern) for pattern in secret_patterns)
+        self.max_download_bytes = max_download_bytes
+        self.max_memory_characters = max_memory_characters
+        self.allowed_download_content_types = allowed_download_content_types
         self._tool_permissions = tool_permissions
         self._permission_statuses = permission_statuses
         self.default_permission_status = default_permission_status
@@ -122,6 +128,9 @@ class RuleEngine:
             max_pending_changes=0,
             max_output_characters=0,
             secret_patterns=(),
+            max_download_bytes=0,
+            max_memory_characters=0,
+            allowed_download_content_types=(),
             tool_permissions={},
             permission_statuses={},
             default_permission_status=PermissionStatus.DENIED,
@@ -149,6 +158,7 @@ class RuleEngine:
                 "network",
                 "protected_paths",
                 "deep_check",
+                "post_check",
             },
             "risk_rules.yaml",
         )
@@ -271,6 +281,34 @@ class RuleEngine:
         for pattern in secret_patterns:
             re.compile(pattern)
 
+        post_check = cls._mapping(risk_rules.get("post_check"), "post_check")
+        cls._require_keys(
+            post_check,
+            {
+                "max_download_bytes",
+                "max_memory_characters",
+                "allowed_download_content_types",
+            },
+            "post_check",
+        )
+        max_download_bytes = cls._positive_int(
+            post_check.get("max_download_bytes"), "post_check.max_download_bytes"
+        )
+        max_memory_characters = cls._positive_int(
+            post_check.get("max_memory_characters"), "post_check.max_memory_characters"
+        )
+        allowed_download_content_types = tuple(
+            item.casefold()
+            for item in cls._string_list(
+                post_check.get("allowed_download_content_types"),
+                "post_check.allowed_download_content_types",
+            )
+        )
+        if not allowed_download_content_types:
+            raise SecurityConfigurationError(
+                "post_check.allowed_download_content_types must not be empty"
+            )
+
         tool_permission_data = cls._mapping(permissions.get("tool_permissions"), "tool_permissions")
         tool_permissions = {
             str(tool): tuple(
@@ -344,6 +382,9 @@ class RuleEngine:
             max_pending_changes=max_pending_changes,
             max_output_characters=max_output_characters,
             secret_patterns=secret_patterns,
+            max_download_bytes=max_download_bytes,
+            max_memory_characters=max_memory_characters,
+            allowed_download_content_types=allowed_download_content_types,
             tool_permissions=tool_permissions,
             permission_statuses=permission_statuses,
             default_permission_status=default_permission_status,
