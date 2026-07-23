@@ -89,7 +89,7 @@ async def run_case(case: dict, mode: ExperimentMode) -> dict:
 
 async def run_all_cases(mode: ExperimentMode) -> list[dict]:
     cases_path = CASES_DIR / "task_cases.json"
-    cases = json.loads(cases_path.read_text())
+    cases = json.loads(cases_path.read_text(encoding="utf-8"))
     results: list[dict] = []
     for case in cases:
         result = await run_case(case, mode)
@@ -102,7 +102,7 @@ async def run_all_cases(mode: ExperimentMode) -> list[dict]:
 def save_json(results: list[dict], stem: str) -> Path:
     path = RESULTS_DIR / f"{stem}.json"
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(results, indent=2, ensure_ascii=False))
+    path.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
     return path
 
 
@@ -110,7 +110,7 @@ def save_csv(results: list[dict], stem: str) -> Path:
     path = RESULTS_DIR / f"{stem}.csv"
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     if not results:
-        path.write_text("")
+        path.write_text("", encoding="utf-8")
         return path
     keys = [
         "case_id", "mode", "status", "expected_decision", "elapsed_ms",
@@ -120,7 +120,7 @@ def save_csv(results: list[dict], stem: str) -> Path:
         writer = csv.DictWriter(buf, fieldnames=keys, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(results)
-        path.write_text(buf.getvalue())
+        path.write_text(buf.getvalue(), encoding="utf-8")
     return path
 
 
@@ -128,7 +128,7 @@ def save_markdown(results: list[dict], stem: str) -> Path:
     path = RESULTS_DIR / f"{stem}.md"
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     if not results:
-        path.write_text("# Experiment Results\n\n*No results.*\n")
+        path.write_text("# Experiment Results\n\n*No results.*\n", encoding="utf-8")
         return path
 
     lines = [
@@ -159,7 +159,7 @@ def save_markdown(results: list[dict], stem: str) -> Path:
         f"- **Success rate:** {(total - errors) / total * 100:.1f}%" if total > 0 else "- **Success rate:** N/A",
     ])
 
-    path.write_text("\n".join(lines) + "\n")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 
 

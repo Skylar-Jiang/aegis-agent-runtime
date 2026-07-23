@@ -9,7 +9,7 @@ from typing import Any
 
 
 def load_results(path: Path) -> list[dict]:
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def load_latest_results(prefix: str = "", results_dir: Path | None = None) -> list[dict]:

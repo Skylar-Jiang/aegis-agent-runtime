@@ -47,7 +47,7 @@ async def get_result(
     path = _results_dir() / filename
     if not path.exists() or not path.suffix == ".json":
         return APIResponse(data={"error": "not_found", "filename": filename})
-    data = json.loads(path.read_text())
+    data = json.loads(path.read_text(encoding="utf-8"))
     return APIResponse(data={"filename": filename, "results": data})
 
 
@@ -58,5 +58,5 @@ async def list_cases(
     cases_path = EXPERIMENTS_DIR / "cases" / "task_cases.json"
     if not cases_path.exists():
         return APIResponse(data=[])
-    cases = json.loads(cases_path.read_text())
+    cases = json.loads(cases_path.read_text(encoding="utf-8"))
     return APIResponse(data=cases)
