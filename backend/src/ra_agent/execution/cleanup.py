@@ -166,6 +166,37 @@ class RequestCleanupCoordinator:
                 f"no managed pending resource for tool: {request.tool_name}"
             )
 
+    async def complete_filesystem_commit(
+        self,
+        context: CleanupContext,
+    ) -> CleanupReport:
+        """Remove the temporary pending record after a filesystem commit succeeds."""
+
+        if context.tool_name not in self._FILESYSTEM_TOOLS:
+            raise CleanupCoordinatorError(
+                f"no filesystem pending resource for tool: {context.tool_name}"
+            )
+        pending_store = self._pending_store
+        if pending_store is None:
+            raise CleanupCoordinatorError("PendingStore is not configured")
+
+        async with self._lock_for(context.request_id):
+            completed: list[str] = []
+            failures: list[str] = []
+            await self._attempt(
+                "pending_cleanup",
+                lambda: pending_store.cleanup(context.request_id),
+                completed,
+                failures,
+            )
+            return self._finish_report(
+                context.request_id,
+                "filesystem commit completed",
+                completed,
+                [],
+                failures,
+            )
+
     async def rollback_failed_commit(
         self,
         context: CleanupContext,

@@ -336,6 +336,16 @@ class SandboxFlow:
                 )
             commit = await self.commit_gate.commit(execution, deep_check)
             validate_commit(request, context.checkpoint_id, commit)
+            if self.cleanup_coordinator is not None:
+                await self.cleanup_coordinator.complete_filesystem_commit(
+                    CleanupContext(
+                        task_id=request.task_id,
+                        step_id=request.step_id,
+                        request_id=request.request_id,
+                        tool_name=request.tool_name,
+                        checkpoint_id=context.checkpoint_id,
+                    )
+                )
         except CorrelationError as error:
             await self._record_stage_failure(
                 request,
