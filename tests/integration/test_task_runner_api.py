@@ -11,7 +11,7 @@ class RecordingRunner:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
 
-    async def run(self, task_id: str, objective: str) -> AgentState:
+    async def run(self, task_id: str, objective: str, contract: object = None) -> AgentState:
         self.calls.append((task_id, objective))
         return AgentState(task_id=task_id, objective=objective, status=AgentRunStatus.COMPLETED)
 

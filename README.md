@@ -2,17 +2,17 @@
 
 面向工具增强型智能体的风险自适应运行时安全架构。系统把工具调用改造为“风险分级—权限调度—受控执行—检查—提交/回滚—审计”的统一运行时链路。
 
-> Phase 0（架构/Contract/目录）和 Phase 1（Mock 编排）已冻结；Phase 2（真实文件执行、持久化审计/审批、Agent 与前端）已完成。当前进入 Phase 3：补全原始策划范围与实验验证；工作边界见 [Phase 3 基线](docs/phase3/README.md)。
+> Phase 3.5 已冻结：Live Runtime 具备 Pre/Post、受控提交/回滚、真实文件/Memory/下载/Shell 注册、TaskContract、数据外发干运行和最小任务图。验证记录见 [Phase 3.5 集成报告](docs/phase3.5/INTEGRATION-REPORT.md)。
 
 ## 冻结架构
 
 ```text
-Agent Planner → ToolCallRequest → Runtime Scheduler
-→ Risk Classifier → Policy Engine → Permission Gate
+Agent Planner → ToolCallRequest + TaskContract → Runtime Scheduler
+→ IntentBoundaryGuard → Risk Classifier → Policy Engine → Permission Gate
 → PreCheck + Controlled Execution → PostCheck → Commit/Rollback → Audit
 ```
 
-这是 Phase 3 的目标链路；当前仓库只冻结了 Contract、Protocol/Mock 与并行协作边界，真实 PreCheck、PostCheck、并行执行和 artifacts 集成仍待 Phase 3 成员实现。
+`live-agent` 中缺失或越界的 TaskContract 会在执行器前 Fail Closed。`send_email_dry_run` 只产生 `PENDING_EGRESS`，不会创建网络连接或发送邮件；DataEgressGuard 会按 artifact lineage 再次校验接收方。
 
 后端使用 Python 3.11、uv、FastAPI、Pydantic v2、LangGraph 和 SQLite；前端骨架使用 Node.js 24.14.0、pnpm 10.12.4、React、TypeScript 和 Vite；任务 API 使用 REST，实时审计使用 SSE。
 
@@ -99,7 +99,7 @@ python scripts/check.py
 
 Contract 与枚举只有 `backend/src/ra_agent/contracts` 一套来源。Planner 不得直接调用工具，所有真实副作用必须经 Scheduler。同一 `request_id` 是幂等键；相同语义重试复用首个结果，不同语义冲突被拒绝。提交采用 Conventional Commits；CI 不访问真实 LLM。详细规范见 [开发指南](docs/11-development-guide.md)；历史背景见 [Phase 0 摘要](docs/history/phase-0-summary.md)。
 
-FAST_EXECUTE 的 LOW 结果成功后直接进入 COMMITTED。SANDBOX_CHECK Mock 严格经过 Checkpoint、PENDING_COMMIT、DeepCheck 和 Commit/Rollback；它只证明编排和关联约束，不代表真实隔离、提交或恢复能力。REQUEST_APPROVAL 使用 `schedule` 创建等待结果、`resume_after_approval` 独立恢复，不长期占用 HTTP 请求。
+LOW 工具在 Pre/Post 后走 FAST_EXECUTE；受控写入、删除、下载和 Memory 写入依照风险进入隔离、检查、提交或回滚。REQUEST_APPROVAL 使用 `schedule` 创建等待结果、`resume_after_approval` 独立恢复，不长期占用 HTTP 请求。最小 TaskGraph 支持依赖、条件、受限并行和“失败/等待只阻断后代”。
 
 ## 下一步分工
 

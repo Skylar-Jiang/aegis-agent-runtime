@@ -29,18 +29,12 @@ a five-second bound so a future regression fails rather than hanging the gate.
 - Rule-based risk, policy, permission, deep-safety and persistent audit services
   are assembled outside offline mode.
 
-## Implemented but not wired
+## Baseline gaps closed in Phase 3.5
 
-- `RuleBasedPreExecutionChecker` and `RuleBasedPostExecutionChecker` exist in
-  `security/pre_post_check.py`, but `ServiceContainer`, bootstrap and both flows
-  do not receive or invoke them.
-- `download_url`, `memory_read`, `memory_write` and `run_shell` specs and real
-  handlers exist, but `_build_live_registry()` only registers file handlers.
-- The fast flow goes from permission to execution and directly to `COMMITTED`;
-  it has no pre/post/deep guard or rollback path.
-- Several sandbox audit messages still call real checkpoints and execution
-  "mock", which is inaccurate in live mode.
-- `runtime/dependency_manager.py` is a placeholder; no task graph exists.
+The Pre/Post checkers, live download/Memory/Shell handlers and controlled cleanup
+are now wired. Fast flow applies Pre/Post checks; sandbox handles DeepCheck and
+Commit/Rollback. `TaskGraphRunner` replaces the prior no-task-graph baseline for
+the required minimal dependency and bounded-parallel execution scope.
 
 ## Mock versus real boundary
 
@@ -48,11 +42,10 @@ a five-second bound so a future regression fails rather than hanging the gate.
   checker and approval services.
 - `RULES_ONLY` composes persistent/rule services but does not register real live
   tool handlers.
-- `LIVE_AGENT` switches file operations to filesystem implementations but still
-  omits the download, memory and shell handlers described above.
-- `experiments/runners/run_experiment.py` explicitly returns the same mock
-  container for baseline, full-guard and adaptive modes; its measurements cannot
-  substantiate a three-mode comparison.
+- `LIVE_AGENT` uses filesystem, download quarantine, Memory lifecycle, restricted
+  Shell and dry-run egress handlers.
+- The experiment runner now creates isolated real containers; only Baseline
+  intentionally bypasses runtime checkers for comparison.
 
 ## Documentation and test gaps
 

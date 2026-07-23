@@ -28,6 +28,7 @@ def test_mock_container_provides_all_runtime_dependencies() -> None:
         "download_url",
         "memory_read",
         "memory_write",
+        "send_email_dry_run",
     }
     assert container.audit_recorder.events_for("missing") == ()
     assert container.request_registry is not None
