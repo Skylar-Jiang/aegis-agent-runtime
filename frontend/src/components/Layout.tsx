@@ -7,6 +7,7 @@ export function Layout() {
         <Link to="/" className="text-blue-400 hover:text-blue-300">Tasks</Link>
         <Link to="/approvals" className="text-blue-400 hover:text-blue-300">Approvals</Link>
         <Link to="/audit" className="text-blue-400 hover:text-blue-300">Audit</Link>
+        <Link to="/experiments" className="text-blue-400 hover:text-blue-300">Experiments</Link>
       </nav>
       <main className="px-6 py-4">
         <Outlet />

@@ -40,9 +40,20 @@ test.describe('Task lifecycle', () => {
   test('audit page shows live connection status', async ({ page }) => {
     await page.goto('/audit');
     await expect(page.locator('text=Offline')).toBeVisible();
-    // Enter a task ID and verify SSE connection indicator
     await page.fill('[placeholder="Task ID..."]', 'task-test');
-    // May show connected or stay offline depending on backend state
     await expect(page.locator('h1')).toContainText('Audit Log');
+  });
+
+  test('experiments page loads and shows test cases', async ({ page }) => {
+    await page.goto('/experiments');
+    await expect(page.locator('h1')).toContainText('Experiments');
+    await expect(page.locator('text=Test Cases')).toBeVisible();
+    await expect(page.locator('text=Experiment Results')).toBeVisible();
+  });
+
+  test('experiments page shows run instructions when empty', async ({ page }) => {
+    await page.goto('/experiments');
+    await expect(page.locator('text=No results yet')).toBeVisible();
+    await expect(page.locator('text=run_experiment.py')).toBeVisible();
   });
 });

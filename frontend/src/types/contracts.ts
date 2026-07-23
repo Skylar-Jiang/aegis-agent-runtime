@@ -1,4 +1,4 @@
-// Mirror of backend contracts/ — frozen at v0.2
+// Mirror of backend contracts/ — v0.3
 
 export type AuditEventType =
   | 'TASK_CREATED' | 'PLAN_CREATED' | 'TOOL_REQUESTED'
@@ -14,6 +14,7 @@ export type AuditEventType =
 export type ApprovalStatus = 'PENDING' | 'GRANTED' | 'DENIED' | 'EXPIRED';
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'FORBIDDEN';
 export type PolicyDecision = 'FAST_EXECUTE' | 'SANDBOX_CHECK' | 'REQUEST_APPROVAL' | 'BLOCK';
+export type ExperimentMode = 'BASELINE' | 'FULL_GUARD' | 'ADAPTIVE_RUNTIME';
 
 export interface AuditEvent {
   event_id: string;
