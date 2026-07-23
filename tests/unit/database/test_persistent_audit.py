@@ -1,6 +1,7 @@
 """Tests for PersistentAuditRecorder backed by in-memory SQLite."""
 
 import asyncio
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -22,8 +23,8 @@ def _setup_tables() -> None:
     ...
 
 
-async def _init_db() -> async_sessionmaker:
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+async def _init_db(database_url: str = "sqlite+aiosqlite:///:memory:") -> async_sessionmaker:
+    engine = create_async_engine(database_url)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     return async_sessionmaker(engine, expire_on_commit=False)
@@ -135,24 +136,27 @@ def test_persistent_recorder_concurrent_writes_give_unique_sequences() -> None:
     asyncio.run(exercise())
 
 
-def test_persistent_recorders_share_atomic_task_sequence_allocation() -> None:
+def test_persistent_recorders_share_atomic_task_sequence_allocation(tmp_path: Path) -> None:
     async def exercise() -> None:
-        sf = await _init_db()
+        sf = await _init_db(f"sqlite+aiosqlite:///{(tmp_path / 'audit.db').as_posix()}")
         first = _make_recorder_with_db(sf)
         second = _make_recorder_with_db(sf)
 
-        recorded = await asyncio.gather(
-            *(
-                recorder.record(
-                    task_id="task-1",
-                    event_type=AuditEventType.TOOL_REQUESTED,
-                    actor="runtime",
-                    status="recorded",
-                    summary=f"event {index}",
+        recorded = await asyncio.wait_for(
+            asyncio.gather(
+                *(
+                    recorder.record(
+                        task_id="task-1",
+                        event_type=AuditEventType.TOOL_REQUESTED,
+                        actor="runtime",
+                        status="recorded",
+                        summary=f"event {index}",
+                    )
+                    for index in range(50)
+                    for recorder in (first, second)
                 )
-                for index in range(50)
-                for recorder in (first, second)
-            )
+            ),
+            timeout=5,
         )
 
         sequence_numbers = [event.sequence_number for event in recorded]
