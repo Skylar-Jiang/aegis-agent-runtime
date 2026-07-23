@@ -557,7 +557,7 @@ class RuleBasedPostExecutionChecker:
             }:
                 signals.append("download_operation_invalid")
             status = change.get("status")
-            if status is not None and status != "PENDING":
+            if status is not None and status not in {"PENDING", "QUARANTINED"}:
                 signals.append("download_pending_status_invalid")
             change_path = _first_text(change, ("quarantine_path", "path"))
             if change_path is not None and change_path != pending_path:
