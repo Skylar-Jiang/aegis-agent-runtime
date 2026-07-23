@@ -8,7 +8,16 @@ from pathlib import Path
 import httpx
 from ra_agent.agent import AgentRuntime, MockPlanner
 from ra_agent.agent.state import AgentRunStatus
-from ra_agent.contracts import ExecutionStatus, SourceType, TaskContract, ToolCallRequest, ToolExecutionResult
+from ra_agent.contracts import (
+    CommitResult,
+    DeepCheckResult,
+    ExecutionStatus,
+    PostCheckResult,
+    SourceType,
+    TaskContract,
+    ToolCallRequest,
+    ToolExecutionResult,
+)
 from ra_agent.core.bootstrap import build_runtime_container, build_runtime_scheduler
 from ra_agent.core.config import RuntimeMode, Settings
 from ra_agent.database.migrate import upgrade_database
@@ -24,6 +33,20 @@ from ra_agent.tools.implementations.download_url import DownloadUrlHandler
 class _PublicResolver:
     async def resolve(self, hostname: str, port: int) -> tuple[str, ...]:
         return ("93.184.216.34",)
+
+
+class _FailingPostChecker:
+    async def check(
+        self, request: ToolCallRequest, execution: ToolExecutionResult
+    ) -> PostCheckResult:
+        raise RuntimeError("checker unavailable")
+
+
+class _FailingCommitGate:
+    async def commit(
+        self, execution: ToolExecutionResult, deep_check: DeepCheckResult
+    ) -> CommitResult:
+        raise RuntimeError("commit unavailable")
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -280,4 +303,42 @@ def test_live_runtime_quarantines_download_with_mocked_network(tmp_path: Path) -
 
     assert result.status is ExecutionStatus.COMMITTED, result.error
     assert asyncio.run(quarantine_store.get(request.request_id)).status is QuarantineStatus.COMMITTED
+    assert not list(settings.pending_root.rglob("*.json"))
+
+
+def test_live_runtime_rolls_back_when_post_checker_fails(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    upgrade_database(settings.database_url)
+    container = build_runtime_container(settings)
+    scheduler = build_runtime_scheduler(replace(container, post_execution_checker=_FailingPostChecker()))
+    request = _request(
+        "task-e2e-checker-failure",
+        "write_file",
+        {"path": "checker-failure.txt", "content": "must rollback"},
+        "Write only if all checks pass.",
+    )
+
+    result = asyncio.run(scheduler.schedule(request))
+
+    assert result.status is ExecutionStatus.ROLLED_BACK
+    assert not (settings.workspace_root / "checker-failure.txt").exists()
+    assert not list(settings.pending_root.rglob("*.json"))
+
+
+def test_live_runtime_rolls_back_when_commit_fails(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    upgrade_database(settings.database_url)
+    container = build_runtime_container(settings)
+    scheduler = build_runtime_scheduler(replace(container, commit_gate=_FailingCommitGate()))
+    request = _request(
+        "task-e2e-commit-failure",
+        "write_file",
+        {"path": "commit-failure.txt", "content": "must rollback"},
+        "Write only if commit succeeds.",
+    )
+
+    result = asyncio.run(scheduler.schedule(request))
+
+    assert result.status is ExecutionStatus.ROLLED_BACK
+    assert not (settings.workspace_root / "commit-failure.txt").exists()
     assert not list(settings.pending_root.rglob("*.json"))
