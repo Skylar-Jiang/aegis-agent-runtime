@@ -132,3 +132,21 @@ async def test_iterative_planner_receives_bounded_redacted_result_data() -> None
     assert "useful result" in completed[0]["result"]
     assert "hidden-value" not in completed[0]["result"]
     assert "***REDACTED***" in completed[0]["result"]
+
+
+@pytest.mark.asyncio
+async def test_planner_tells_the_model_which_tools_are_allowed() -> None:
+    class CapturingClient:
+        messages: list[dict[str, str]]
+
+        async def complete(self, messages: list[dict[str, str]]) -> str:
+            self.messages = messages
+            return '{"tool_calls": []}'
+
+    client = CapturingClient()
+    planner = DeepSeekPlanner(client, allowed_tools={"list_dir", "read_file"})
+
+    await planner.plan("task-1", "inspect the workspace")
+
+    assert '"list_dir"' in client.messages[0]["content"]
+    assert '"read_file"' in client.messages[0]["content"]

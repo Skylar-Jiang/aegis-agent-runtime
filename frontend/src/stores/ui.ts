@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import type { AuditEventType } from '../types/contracts';
+import type { AuditEventType, TaskContract } from '../types/contracts';
 
 interface TaskEntry {
   taskId: string;
   objective: string;
   createdAt: string;
   status: string;
+  contract?: TaskContract;
 }
 
 interface UIState {
@@ -16,6 +17,7 @@ interface UIState {
   setSelectedTask: (id: string | null) => void;
   setAuditFilterType: (t: AuditEventType | 'ALL') => void;
   addTask: (task: TaskEntry) => void;
+  updateTaskStatus: (taskId: string, status: string) => void;
   markCancelled: (taskId: string) => void;
 }
 
@@ -29,6 +31,12 @@ export const useUIStore = create<UIState>((set) => ({
   addTask: (task) =>
     set((state) => ({
       taskHistory: [task, ...state.taskHistory].slice(0, 50),
+    })),
+  updateTaskStatus: (taskId, status) =>
+    set((state) => ({
+      taskHistory: state.taskHistory.map((task) =>
+        task.taskId === taskId ? { ...task, status } : task,
+      ),
     })),
   markCancelled: (taskId) =>
     set((state) => ({
