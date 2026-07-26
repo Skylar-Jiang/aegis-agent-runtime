@@ -56,6 +56,16 @@ class PlannerFailedRunner:
         )
 
 
+class FinalAnswerRunner:
+    async def run(self, task_id: str, objective: str, contract: object = None) -> AgentState:
+        return AgentState(
+            task_id=task_id,
+            objective=objective,
+            status=AgentRunStatus.COMPLETED,
+            final_answer="README.md describes the safety runtime.",
+        )
+
+
 def test_create_task_returns_running_before_background_agent_completes() -> None:
     app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
     runner = BlockingRunner()
@@ -148,3 +158,42 @@ def test_planner_failure_is_audited_with_a_safe_reason() -> None:
         "error_code": "PLANNER_FAILED",
         "reason": "model response must contain JSON tool_calls",
     }
+
+
+def test_completed_task_exposes_a_final_answer_without_persisting_it_in_audit() -> None:
+    app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
+    app.state.agent_runner = FinalAnswerRunner()
+
+    with TestClient(app) as client:
+        task_id = client.post("/api/tasks", json={"objective": "read README.md"}).json()["data"][
+            "task_id"
+        ]
+        task = {}
+        for _ in range(20):
+            task = client.get(f"/api/tasks/{task_id}").json()["data"]
+            if task["status"] == "COMPLETED":
+                break
+            time.sleep(0.01)
+        events = client.get(f"/api/tasks/{task_id}/events").json()["data"]["events"]
+
+    assert task["final_answer"] == "README.md describes the safety runtime."
+    assert next(event for event in events if event["event_type"] == "TASK_FINISHED")["details"] == {}
+
+
+def test_cancelled_task_clears_any_final_answer() -> None:
+    app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
+    app.state.agent_runner = FinalAnswerRunner()
+
+    with TestClient(app) as client:
+        task_id = client.post("/api/tasks", json={"objective": "read README.md"}).json()["data"][
+            "task_id"
+        ]
+        for _ in range(20):
+            task = client.get(f"/api/tasks/{task_id}").json()["data"]
+            if task["status"] == "COMPLETED":
+                break
+            time.sleep(0.01)
+        client.post(f"/api/tasks/{task_id}/cancel")
+        cancelled = client.get(f"/api/tasks/{task_id}").json()["data"]
+
+    assert cancelled == {"task_id": task_id, "status": "CANCELLED", "final_answer": None}

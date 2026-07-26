@@ -5,7 +5,11 @@ export function createTask(objective: string, contract?: TaskContract): Promise<
   return post<TaskResponse>('/tasks', { objective, contract });
 }
 
-export function getTask(taskId: string): Promise<{ task_id: string; status: string }> {
+export function getTask(taskId: string): Promise<{
+  task_id: string;
+  status: string;
+  final_answer: string | null;
+}> {
   return get(`/tasks/${taskId}`);
 }
 
@@ -37,6 +41,7 @@ export function subscribeToTaskEvents(
   taskId: string,
   onEvent: (event: AuditEvent) => void,
   onError: () => void,
+  onAssistantResponse?: (finalAnswer: string) => void,
 ): (() => void) | null {
   if (typeof EventSource === 'undefined') return null;
   let source: EventSource | null = null;
@@ -52,6 +57,14 @@ export function subscribeToTaskEvents(
         onEvent(event);
       } catch {
         // Malformed events are not audit facts and must not enter the timeline.
+      }
+    });
+    source.addEventListener('assistant', (message) => {
+      try {
+        const payload = JSON.parse((message as MessageEvent<string>).data) as { final_answer?: unknown };
+        if (typeof payload.final_answer === 'string') onAssistantResponse?.(payload.final_answer);
+      } catch {
+        // Malformed assistant responses are not user-visible output.
       }
     });
     source.onerror = () => {

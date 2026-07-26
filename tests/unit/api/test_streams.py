@@ -61,3 +61,28 @@ async def test_stream_replays_and_deduplicates_events_arriving_during_replay() -
     third = await anext(generator)
     assert third.startswith("id: 3\n")
     await generator.aclose()
+
+
+@pytest.mark.asyncio
+async def test_stream_emits_final_answer_separately_after_task_finished() -> None:
+    recorder = ReplayRecorder()
+    recorder.events = [_event(1) | {"event_type": "TASK_FINISHED", "status": "COMPLETED"}]
+    services = cast(ServiceContainer, SimpleNamespace(audit_recorder=recorder))
+    generator = cast(
+        AsyncGenerator[str, None],
+        _event_generator(
+            "task-1",
+            services,
+            final_answer=lambda: "The requested README content is ready.",
+        ),
+    )
+
+    audit = await anext(generator)
+    assistant = await anext(generator)
+
+    assert "event: audit" in audit
+    assert assistant == (
+        "event: assistant\n"
+        'data: {"task_id": "task-1", "final_answer": "The requested README content is ready."}\n\n'
+    )
+    await generator.aclose()

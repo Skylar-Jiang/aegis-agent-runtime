@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import pytest
 
 from ra_agent.agent import AgentRunStatus, AgentRuntime, MockPlanner, build_graph
+from ra_agent.agent.planner import PlannerDecision
 from ra_agent.contracts import (
     ExecutionStatus,
     SourceType,
@@ -59,10 +60,29 @@ class TwoTurnPlanner:
     async def plan(self, task_id: str, objective: str) -> list[ToolCallRequest]:
         return []
 
-    async def next_request(
+    async def next_action(
         self, task_id: str, objective: str, results: list[ToolExecutionResult]
-    ) -> ToolCallRequest | None:
-        return self.requests[len(results)] if len(results) < len(self.requests) else None
+    ) -> PlannerDecision:
+        if len(results) < len(self.requests):
+            return PlannerDecision(tool_call=self.requests[len(results)])
+        return PlannerDecision(final_answer="done")
+
+
+class FinalAnswerPlanner:
+    def __init__(self, request: ToolCallRequest | None = None) -> None:
+        self.request = request
+        self.calls = 0
+
+    async def plan(self, task_id: str, objective: str) -> list[ToolCallRequest]:
+        return []
+
+    async def next_action(
+        self, task_id: str, objective: str, results: list[ToolExecutionResult]
+    ) -> PlannerDecision:
+        self.calls += 1
+        if self.request is not None and not results:
+            return PlannerDecision(tool_call=self.request)
+        return PlannerDecision(final_answer="The requested result is ready.")
 
 
 @pytest.mark.asyncio
@@ -178,3 +198,47 @@ async def test_agent_iteratively_replans_through_scheduler_until_model_stops() -
 
     assert state.status is AgentRunStatus.COMPLETED
     assert scheduler.requests == planner.requests
+
+
+@pytest.mark.asyncio
+async def test_agent_returns_final_answer_only_after_a_committed_tool_result() -> None:
+    planner = FinalAnswerPlanner(make_request(1))
+    runtime = AgentRuntime(
+        planner=planner,
+        scheduler=TrackingScheduler([ExecutionStatus.COMMITTED]),
+    )
+
+    state = await runtime.run("task-agent", "inspect workspace")
+
+    assert state.status is AgentRunStatus.COMPLETED
+    assert state.final_answer == "The requested result is ready."
+    assert planner.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_agent_returns_a_final_answer_without_tools_for_a_direct_question() -> None:
+    scheduler = TrackingScheduler([])
+    state = await AgentRuntime(planner=FinalAnswerPlanner(), scheduler=scheduler).run(
+        "task-agent", "what is the runtime?"
+    )
+
+    assert state.status is AgentRunStatus.COMPLETED
+    assert state.final_answer == "The requested result is ready."
+    assert scheduler.requests == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "execution_status",
+    [ExecutionStatus.WAITING_APPROVAL, ExecutionStatus.BLOCKED, ExecutionStatus.FAILED],
+)
+async def test_agent_never_generates_a_final_answer_after_a_non_committed_result(
+    execution_status: ExecutionStatus,
+) -> None:
+    planner = FinalAnswerPlanner(make_request(1))
+    runtime = AgentRuntime(planner=planner, scheduler=TrackingScheduler([execution_status]))
+
+    state = await runtime.run("task-agent", "inspect workspace")
+
+    assert state.final_answer is None
+    assert planner.calls == 1

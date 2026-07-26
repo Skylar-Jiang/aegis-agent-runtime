@@ -8,24 +8,35 @@ class LLMClient(Protocol):
 
 
 TOOL_PLAN_JSON_SCHEMA: dict[str, object] = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["tool_calls"],
-    "properties": {
-        "tool_calls": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["tool_name", "arguments", "context_summary"],
-                "properties": {
-                    "tool_name": {"type": "string"},
-                    "arguments": {"type": "object"},
-                    "context_summary": {"type": "string"},
+    "oneOf": [
+        {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["type", "tool_call"],
+            "properties": {
+                "type": {"const": "tool"},
+                "tool_call": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["tool_name", "arguments", "context_summary"],
+                    "properties": {
+                        "tool_name": {"type": "string"},
+                        "arguments": {"type": "object"},
+                        "context_summary": {"type": "string"},
+                    },
                 },
             },
-        }
-    },
+        },
+        {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["type", "final_answer"],
+            "properties": {
+                "type": {"const": "final"},
+                "final_answer": {"type": "string"},
+            },
+        },
+    ]
 }
 
 

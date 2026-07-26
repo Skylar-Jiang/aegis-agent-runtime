@@ -89,14 +89,19 @@ class AgentRuntime:
         state.status = AgentRunStatus.RUNNING
         for _ in range(self.max_turns):
             try:
-                request = await planner.next_request(
+                decision = await planner.next_action(
                     state.task_id, state.objective, state.results
                 )
             except Exception as error:
                 self._planner_failed(state, error)
                 return state
-            if request is None:
+            if decision.final_answer is not None:
+                state.final_answer = decision.final_answer
                 state.status = AgentRunStatus.COMPLETED
+                return state
+            request = decision.tool_call
+            if request is None:
+                state.status = AgentRunStatus.FAILED
                 return state
             request = request.model_copy(
                 update={"task_contract": contract or request.task_contract}

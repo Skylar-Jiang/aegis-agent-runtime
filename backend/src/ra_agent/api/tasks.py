@@ -27,6 +27,7 @@ class TaskRun:
     objective: str
     created_at: datetime
     status: str = "RUNNING"
+    final_answer: str | None = None
     background: asyncio.Task[None] | None = None
 
 
@@ -47,6 +48,7 @@ async def _run_task(
     try:
         state = await agent_runner.run(run.task_id, run.objective, contract)
         run.status = state.status.value
+        run.final_answer = state.final_answer if run.status == "COMPLETED" else None
         if state.failure_code == "PLANNER_FAILED":
             await services.audit_recorder.record(
                 task_id=run.task_id,
@@ -118,11 +120,17 @@ async def create_task(
 async def get_task(
     task_id: str,
     request: Request,
-) -> APIResponse[dict[str, str]]:
+) -> APIResponse[dict[str, str | None]]:
     run = _runs(request).get(task_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Unknown task")
-    return APIResponse(data={"task_id": task_id, "status": run.status})
+    return APIResponse(
+        data={
+            "task_id": task_id,
+            "status": run.status,
+            "final_answer": run.final_answer,
+        }
+    )
 
 
 @router.get("")
@@ -227,6 +235,7 @@ async def cancel_task(
     if run.background is not None and not run.background.done():
         run.background.cancel()
     run.status = "CANCELLED"
+    run.final_answer = None
     try:
         await services.audit_recorder.record(
             task_id=task_id,
