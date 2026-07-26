@@ -1,9 +1,9 @@
 import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import StreamingResponse
 
 from ra_agent.core.container import ServiceContainer
@@ -43,6 +43,18 @@ def _sse(event: dict[str, object]) -> str:
     return f"id: {sequence}\nevent: audit\ndata: {json.dumps(event, default=str)}\n\n"
 
 
+def _assistant_sse(task_id: str, final_answer: str) -> str:
+    return "event: assistant\ndata: " + json.dumps(
+        {"task_id": task_id, "final_answer": final_answer}
+    ) + "\n\n"
+
+
+def _final_answer(request: Request, task_id: str) -> str | None:
+    runs = getattr(request.app.state, "task_runs", {})
+    answer = getattr(runs.get(task_id), "final_answer", None)
+    return answer if isinstance(answer, str) else None
+
+
 async def _events_for(
     recorder: object, task_id: str, *, after_sequence: int
 ) -> list[dict[str, object]]:
@@ -62,7 +74,11 @@ async def _events_for(
 
 
 async def _event_generator(
-    task_id: str, services: ServiceContainer, *, last_sequence: int = 0
+    task_id: str,
+    services: ServiceContainer,
+    *,
+    last_sequence: int = 0,
+    final_answer: Callable[[], str | None] = lambda: None,
 ) -> AsyncIterator[str]:
     recorder = services.audit_recorder
     subscribe = getattr(recorder, "subscribe", None)
@@ -73,6 +89,10 @@ async def _event_generator(
             for event in await _events_for(recorder, task_id, after_sequence=sent_sequence):
                 sent_sequence = _sequence(event)
                 yield _sse(event)
+                if event.get("event_type") == "TASK_FINISHED":
+                    answer = final_answer()
+                    if answer is not None:
+                        yield _assistant_sse(task_id, answer)
             await asyncio.sleep(2)
 
     queue = await subscribe(task_id)
@@ -82,6 +102,10 @@ async def _event_generator(
         for event in await _events_for(recorder, task_id, after_sequence=sent_sequence):
             sent_sequence = _sequence(event)
             yield _sse(event)
+            if event.get("event_type") == "TASK_FINISHED":
+                answer = final_answer()
+                if answer is not None:
+                    yield _assistant_sse(task_id, answer)
         while True:
             try:
                 queued = await asyncio.wait_for(queue.get(), timeout=30)
@@ -93,6 +117,10 @@ async def _event_generator(
                 continue
             sent_sequence = _sequence(event)
             yield _sse(event)
+            if event.get("event_type") == "TASK_FINISHED":
+                answer = final_answer()
+                if answer is not None:
+                    yield _assistant_sse(task_id, answer)
     except asyncio.CancelledError:
         if unsubscribe is not None:
             await unsubscribe(task_id, queue)
@@ -101,10 +129,17 @@ async def _event_generator(
 @router.get("/{task_id}/stream")
 async def stream(
     task_id: str,
+    request: Request,
     services: Annotated[ServiceContainer, Depends(get_services)],
     last_event_id: int | None = Header(default=None),
+    after_sequence: int = Query(default=0, ge=0),
 ) -> StreamingResponse:
     return StreamingResponse(
-        _event_generator(task_id, services, last_sequence=last_event_id or 0),
+        _event_generator(
+            task_id,
+            services,
+            last_sequence=max(last_event_id or 0, after_sequence),
+            final_answer=lambda: _final_answer(request, task_id),
+        ),
         media_type="text/event-stream",
     )

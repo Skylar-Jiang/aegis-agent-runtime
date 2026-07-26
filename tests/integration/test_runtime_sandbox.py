@@ -198,6 +198,44 @@ class CancellingExecutor(SpyExecutor):
         raise asyncio.CancelledError
 
 
+class BlockingExecutor(SpyExecutor):
+    def __init__(self) -> None:
+        super().__init__()
+        self.started = asyncio.Event()
+        self.cancelled = asyncio.Event()
+
+    async def execute(
+        self,
+        request: ToolCallRequest,
+        *,
+        checkpoint_id: str | None = None,
+        approval_decision: ApprovalDecision | None = None,
+    ) -> ToolExecutionResult:
+        self.calls += 1
+        self.started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            self.cancelled.set()
+            raise
+        raise AssertionError("monitor rejection must interrupt execution")
+
+
+class RejectingExecutionMonitor:
+    def __init__(self, executor: BlockingExecutor) -> None:
+        self.executor = executor
+        self.calls = 0
+
+    async def check(self, request: ToolCallRequest, verdict) -> PreCheckResult:
+        self.calls += 1
+        await self.executor.started.wait()
+        return PreCheckResult(
+            request_id=request.request_id,
+            passed=False,
+            reason="independent safety monitor rejected the pending action",
+        )
+
+
 class CancellingDeepChecker(SpyDeepChecker):
     async def check(
         self, request: ToolCallRequest, result: ToolExecutionResult
@@ -237,6 +275,7 @@ def make_scheduler(
     commit: object | None = None,
     rollback: object | None = None,
     recorder: object | None = None,
+    execution_monitor: object | None = None,
 ):
     container = build_mock_container()
     container = replace(
@@ -249,6 +288,7 @@ def make_scheduler(
         commit_gate=commit or SpyCommitGate(),
         rollback_manager=rollback or SpyRollbackManager(),
         audit_recorder=recorder or container.audit_recorder,
+        execution_monitor=execution_monitor,
     )
     return build_runtime_scheduler(container), container
 
@@ -284,6 +324,33 @@ async def test_post_check_failure_rolls_back_and_never_commits() -> None:
     assert result.error_code == "POST_CHECK_FAILED"
     assert commit.calls == 0
     assert rollback.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_independent_monitor_rejection_interrupts_medium_pending_execution() -> None:
+    executor = BlockingExecutor()
+    monitor = RejectingExecutionMonitor(executor)
+    rollback = SpyRollbackManager()
+    commit = SpyCommitGate()
+    scheduler, container = make_scheduler(
+        executor=executor,
+        execution_monitor=monitor,
+        rollback=rollback,
+        commit=commit,
+    )
+
+    result = await scheduler.schedule(make_request())
+
+    assert result.status is ExecutionStatus.ROLLED_BACK
+    assert result.error_code == "EXECUTION_MONITOR_REJECTED"
+    assert monitor.calls == 1
+    assert executor.cancelled.is_set()
+    assert rollback.calls == 1
+    assert commit.calls == 0
+    assert isinstance(container.audit_recorder, InMemoryAuditRecorder)
+    assert AuditEventType.EXECUTION_INTERRUPTED in [
+        event.event_type for event in container.audit_recorder.events_for("task-sandbox")
+    ]
 
 
 @pytest.mark.asyncio

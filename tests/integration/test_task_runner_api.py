@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import asyncio
+import threading
+import time
+from datetime import UTC, datetime, timedelta
+
 from fastapi.testclient import TestClient
 
 from ra_agent.agent.state import AgentRunStatus, AgentState
+from ra_agent.contracts import ApprovalRequest
 from ra_agent.core.config import Settings
 from ra_agent.main import create_app
 
@@ -16,14 +22,178 @@ class RecordingRunner:
         return AgentState(task_id=task_id, objective=objective, status=AgentRunStatus.COMPLETED)
 
 
-def test_create_task_runs_agent_and_returns_its_status() -> None:
+class BlockingRunner:
+    def __init__(self) -> None:
+        self.started = threading.Event()
+        self.release = threading.Event()
+
+    async def run(self, task_id: str, objective: str, contract: object = None) -> AgentState:
+        self.started.set()
+        await asyncio.to_thread(self.release.wait)
+        return AgentState(task_id=task_id, objective=objective, status=AgentRunStatus.COMPLETED)
+
+
+class CancellableRunner:
+    def __init__(self) -> None:
+        self.cancelled_task_ids: list[str] = []
+
+    async def run(self, task_id: str, objective: str, contract: object = None) -> AgentState:
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
+
+    async def cancel_task(self, task_id: str) -> None:
+        self.cancelled_task_ids.append(task_id)
+
+
+class PlannerFailedRunner:
+    async def run(self, task_id: str, objective: str, contract: object = None) -> AgentState:
+        return AgentState(
+            task_id=task_id,
+            objective=objective,
+            status=AgentRunStatus.FAILED,
+            failure_code="PLANNER_FAILED",
+            failure_reason="model response must contain JSON tool_calls",
+        )
+
+
+class FinalAnswerRunner:
+    async def run(self, task_id: str, objective: str, contract: object = None) -> AgentState:
+        return AgentState(
+            task_id=task_id,
+            objective=objective,
+            status=AgentRunStatus.COMPLETED,
+            final_answer="README.md describes the safety runtime.",
+        )
+
+
+def test_create_task_returns_running_before_background_agent_completes() -> None:
     app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
-    runner = RecordingRunner()
+    runner = BlockingRunner()
     app.state.agent_runner = runner
 
-    response = TestClient(app).post("/api/tasks", json={"objective": "inspect the workspace"})
+    with TestClient(app) as client:
+        response = client.post("/api/tasks", json={"objective": "inspect the workspace"})
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["status"] == "RUNNING"
+        assert runner.started.wait(timeout=1)
+        assert client.get(f"/api/tasks/{data['task_id']}").json()["data"]["status"] == "RUNNING"
 
-    assert response.status_code == 200
-    data = response.json()["data"]
-    assert data["status"] == "COMPLETED"
-    assert runner.calls == [(data["task_id"], "inspect the workspace")]
+        runner.release.set()
+        for _ in range(20):
+            if client.get(f"/api/tasks/{data['task_id']}").json()["data"]["status"] == "COMPLETED":
+                break
+            time.sleep(0.01)
+        assert client.get(f"/api/tasks/{data['task_id']}").json()["data"]["status"] == "COMPLETED"
+
+
+def test_cancel_is_idempotent_and_unknown_task_is_not_found() -> None:
+    app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
+    runner = CancellableRunner()
+    app.state.agent_runner = runner
+
+    with TestClient(app) as client:
+        assert client.post("/api/tasks/missing/cancel").status_code == 404
+        task_id = client.post("/api/tasks", json={"objective": "wait"}).json()["data"]["task_id"]
+        first = client.post(f"/api/tasks/{task_id}/cancel")
+        second = client.post(f"/api/tasks/{task_id}/cancel")
+        assert first.json()["data"]["status"] == "CANCELLED"
+        assert second.json()["data"]["status"] == "CANCELLED"
+        assert runner.cancelled_task_ids == [task_id, task_id]
+
+
+def test_task_approvals_are_queryable_by_task() -> None:
+    app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
+    app.state.agent_runner = CancellableRunner()
+    now = datetime.now(UTC)
+
+    with TestClient(app) as client:
+        task_id = client.post("/api/tasks", json={"objective": "wait"}).json()["data"]["task_id"]
+        approval = ApprovalRequest(
+            approval_id="approval-for-task",
+            task_id=task_id,
+            step_id="step-1",
+            request_id="request-1",
+            tool_name="delete_file",
+            request_fingerprint="fingerprint",
+            reason="destructive action",
+            requested_at=now,
+            expires_at=now + timedelta(minutes=5),
+        )
+        asyncio.run(app.state.services.approval_service.create(approval))
+
+        response = client.get(f"/api/tasks/{task_id}/approvals")
+
+        assert response.status_code == 200
+        assert response.json()["data"] == [
+            {
+                "approval_id": "approval-for-task",
+                "status": "PENDING",
+                "tool_name": "delete_file",
+                "reason": "destructive action",
+                "step_id": "step-1",
+                "request_id": "request-1",
+            }
+        ]
+
+
+def test_planner_failure_is_audited_with_a_safe_reason() -> None:
+    app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
+    app.state.agent_runner = PlannerFailedRunner()
+
+    with TestClient(app) as client:
+        task_id = client.post("/api/tasks", json={"objective": "read README.md"}).json()["data"][
+            "task_id"
+        ]
+        events = []
+        for _ in range(20):
+            events = client.get(f"/api/tasks/{task_id}/events").json()["data"]["events"]
+            if any(event["event_type"] == "PLANNER_FAILED" for event in events):
+                break
+            time.sleep(0.01)
+
+    planner_event = next(event for event in events if event["event_type"] == "PLANNER_FAILED")
+    assert planner_event["status"] == "FAILED"
+    assert planner_event["details"] == {
+        "error_code": "PLANNER_FAILED",
+        "reason": "model response must contain JSON tool_calls",
+    }
+
+
+def test_completed_task_exposes_a_final_answer_without_persisting_it_in_audit() -> None:
+    app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
+    app.state.agent_runner = FinalAnswerRunner()
+
+    with TestClient(app) as client:
+        task_id = client.post("/api/tasks", json={"objective": "read README.md"}).json()["data"][
+            "task_id"
+        ]
+        task = {}
+        for _ in range(20):
+            task = client.get(f"/api/tasks/{task_id}").json()["data"]
+            if task["status"] == "COMPLETED":
+                break
+            time.sleep(0.01)
+        events = client.get(f"/api/tasks/{task_id}/events").json()["data"]["events"]
+
+    assert task["final_answer"] == "README.md describes the safety runtime."
+    assert next(event for event in events if event["event_type"] == "TASK_FINISHED")["details"] == {}
+
+
+def test_cancelled_task_clears_any_final_answer() -> None:
+    app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
+    app.state.agent_runner = FinalAnswerRunner()
+
+    with TestClient(app) as client:
+        task_id = client.post("/api/tasks", json={"objective": "read README.md"}).json()["data"][
+            "task_id"
+        ]
+        for _ in range(20):
+            task = client.get(f"/api/tasks/{task_id}").json()["data"]
+            if task["status"] == "COMPLETED":
+                break
+            time.sleep(0.01)
+        client.post(f"/api/tasks/{task_id}/cancel")
+        cancelled = client.get(f"/api/tasks/{task_id}").json()["data"]
+
+    assert cancelled == {"task_id": task_id, "status": "CANCELLED", "final_answer": None}

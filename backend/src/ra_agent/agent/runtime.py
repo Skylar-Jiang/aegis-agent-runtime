@@ -7,7 +7,7 @@ from ra_agent.runtime.correlation import (
     validate_agent_result,
 )
 
-from .planner import IterativePlanner, Planner
+from .planner import IterativePlanner, Planner, PlanningError
 from .state import AgentRunStatus, AgentState
 
 
@@ -40,8 +40,8 @@ class AgentRuntime:
                 )
                 for request in await self.planner.plan(task_id, objective)
             ]
-        except Exception:
-            state.status = AgentRunStatus.FAILED
+        except Exception as error:
+            self._planner_failed(state, error)
             return state
         state.status = AgentRunStatus.RUNNING
 
@@ -77,6 +77,11 @@ class AgentRuntime:
             state.status = AgentRunStatus.COMPLETED
         return state
 
+    async def cancel_task(self, task_id: str) -> None:
+        cancel = getattr(self.scheduler, "cancel_task", None)
+        if cancel is not None:
+            await cancel(task_id)
+
     async def _run_iteratively(
         self, state: AgentState, contract: TaskContract | None
     ) -> AgentState:
@@ -84,14 +89,19 @@ class AgentRuntime:
         state.status = AgentRunStatus.RUNNING
         for _ in range(self.max_turns):
             try:
-                request = await planner.next_request(
+                decision = await planner.next_action(
                     state.task_id, state.objective, state.results
                 )
-            except Exception:
-                state.status = AgentRunStatus.FAILED
+            except Exception as error:
+                self._planner_failed(state, error)
                 return state
-            if request is None:
+            if decision.final_answer is not None:
+                state.final_answer = decision.final_answer
                 state.status = AgentRunStatus.COMPLETED
+                return state
+            request = decision.tool_call
+            if request is None:
+                state.status = AgentRunStatus.FAILED
                 return state
             request = request.model_copy(
                 update={"task_contract": contract or request.task_contract}
@@ -101,6 +111,14 @@ class AgentRuntime:
                 return state
         state.status = AgentRunStatus.FAILED
         return state
+
+    @staticmethod
+    def _planner_failed(state: AgentState, error: Exception) -> None:
+        state.status = AgentRunStatus.FAILED
+        state.failure_code = "PLANNER_FAILED"
+        state.failure_reason = (
+            str(error)[:500] if isinstance(error, PlanningError) else type(error).__name__
+        )
 
     async def _schedule_request(self, state: AgentState, request: ToolCallRequest) -> bool:
         try:

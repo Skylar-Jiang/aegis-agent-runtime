@@ -4,9 +4,10 @@ import { describe, expect, it } from 'vitest'
 import App from './App'
 
 describe('App shell', () => {
-  it('renders the Tasks page as home', () => {
+  it('renders the agent workbench with task navigation and a composer', () => {
     render(<App />)
-    expect(screen.getByRole('heading', { name: 'Tasks' })).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Enter task objective...')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'New Task' })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Describe a task for the runtime…')).toBeInTheDocument()
+    expect(screen.getByText('Safety inspector')).toBeInTheDocument()
   })
 })

@@ -256,6 +256,7 @@ def build_runtime_scheduler(container: ServiceContainer) -> RuntimeScheduler:
         rollback_manager=container.rollback_manager,
         audit_recorder=container.audit_recorder,
         cleanup_coordinator=container.cleanup_coordinator,
+        execution_monitor=container.execution_monitor,
     )
     approval_flow = ApprovalFlow(
         approval_service=container.approval_service,
