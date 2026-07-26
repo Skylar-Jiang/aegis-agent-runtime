@@ -45,6 +45,17 @@ class CancellableRunner:
         self.cancelled_task_ids.append(task_id)
 
 
+class PlannerFailedRunner:
+    async def run(self, task_id: str, objective: str, contract: object = None) -> AgentState:
+        return AgentState(
+            task_id=task_id,
+            objective=objective,
+            status=AgentRunStatus.FAILED,
+            failure_code="PLANNER_FAILED",
+            failure_reason="model response must contain JSON tool_calls",
+        )
+
+
 def test_create_task_returns_running_before_background_agent_completes() -> None:
     app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
     runner = BlockingRunner()
@@ -114,3 +125,26 @@ def test_task_approvals_are_queryable_by_task() -> None:
                 "request_id": "request-1",
             }
         ]
+
+
+def test_planner_failure_is_audited_with_a_safe_reason() -> None:
+    app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
+    app.state.agent_runner = PlannerFailedRunner()
+
+    with TestClient(app) as client:
+        task_id = client.post("/api/tasks", json={"objective": "read README.md"}).json()["data"][
+            "task_id"
+        ]
+        events = []
+        for _ in range(20):
+            events = client.get(f"/api/tasks/{task_id}/events").json()["data"]["events"]
+            if any(event["event_type"] == "PLANNER_FAILED" for event in events):
+                break
+            time.sleep(0.01)
+
+    planner_event = next(event for event in events if event["event_type"] == "PLANNER_FAILED")
+    assert planner_event["status"] == "FAILED"
+    assert planner_event["details"] == {
+        "error_code": "PLANNER_FAILED",
+        "reason": "model response must contain JSON tool_calls",
+    }

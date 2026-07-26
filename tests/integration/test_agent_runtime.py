@@ -163,6 +163,8 @@ async def test_agent_planner_failure_never_schedules_a_tool() -> None:
     assert state.status is AgentRunStatus.FAILED
     assert state.results == []
     assert scheduler.requests == []
+    assert state.failure_code == "PLANNER_FAILED"
+    assert state.failure_reason == "RuntimeError"
 
 
 @pytest.mark.asyncio

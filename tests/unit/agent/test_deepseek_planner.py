@@ -73,7 +73,21 @@ async def test_deepseek_client_prefers_json_schema_response_format() -> None:
                     "type": "object",
                     "additionalProperties": False,
                     "required": ["tool_calls"],
-                    "properties": {"tool_calls": {"type": "array"}},
+                    "properties": {
+                        "tool_calls": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["tool_name", "arguments", "context_summary"],
+                                "properties": {
+                                    "tool_name": {"type": "string"},
+                                    "arguments": {"type": "object"},
+                                    "context_summary": {"type": "string"},
+                                },
+                            },
+                        }
+                    },
                 },
             },
         },
@@ -184,6 +198,30 @@ async def test_planner_tells_the_model_which_tools_are_allowed() -> None:
 
     assert '"list_dir"' in client.messages[0]["content"]
     assert '"read_file"' in client.messages[0]["content"]
+    assert "Never return a bare tool call." in client.messages[0]["content"]
+    assert 'For read_file, arguments must be exactly {"path": string}.' in client.messages[0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_planner_rejects_read_file_arguments_outside_the_runtime_contract() -> None:
+    class StubClient:
+        async def complete(self, messages: list[dict[str, str]]) -> str:
+            return json.dumps(
+                {
+                    "tool_calls": [
+                        {
+                            "tool_name": "read_file",
+                            "arguments": {"file_path": "README.md"},
+                            "context_summary": "read README",
+                        }
+                    ]
+                }
+            )
+
+    planner = DeepSeekPlanner(StubClient(), allowed_tools={"read_file"})
+
+    with pytest.raises(PlanningError, match="read_file arguments must be exactly"):
+        await planner.plan("task-1", "read README")
 
 
 @pytest.mark.asyncio
@@ -205,7 +243,10 @@ async def test_planner_retries_once_only_to_repair_invalid_json_format() -> None
     assert len(client.calls) == 2
     assert client.calls[1][-1] == {
         "role": "user",
-        "content": "Repair only the JSON format. Return the required JSON object and nothing else.",
+        "content": (
+            "Repair only the JSON format. Return exactly one object with a top-level "
+            "tool_calls array, never a bare tool call, and nothing else."
+        ),
     }
 
 

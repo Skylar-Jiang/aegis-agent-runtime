@@ -47,6 +47,18 @@ async def _run_task(
     try:
         state = await agent_runner.run(run.task_id, run.objective, contract)
         run.status = state.status.value
+        if state.failure_code == "PLANNER_FAILED":
+            await services.audit_recorder.record(
+                task_id=run.task_id,
+                event_type=AuditEventType.PLANNER_FAILED,
+                actor="agent-runtime",
+                status="FAILED",
+                summary="Planner failed before tool scheduling",
+                details={
+                    "error_code": state.failure_code,
+                    "reason": state.failure_reason or "PlannerError",
+                },
+            )
         await services.audit_recorder.record(
             task_id=run.task_id,
             event_type=AuditEventType.TASK_FINISHED,

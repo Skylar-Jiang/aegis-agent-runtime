@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AuditEvent } from '../types/contracts'
-import { describeAuditEvent, mergeAuditEvents } from './taskEvents'
+import { describeAuditEvent, mergeAuditEvents, taskStatus } from './taskEvents'
 
 const event = (overrides: Partial<AuditEvent>): AuditEvent => ({
   event_id: 'event-1',
@@ -58,5 +58,17 @@ describe('describeAuditEvent', () => {
 
     expect(description.stage).toBe('Execution interrupted')
     expect(description.tone).toBe('danger')
+  })
+
+  it('exposes a planner failure as a failed task stage', () => {
+    const plannerFailure = event({
+      event_type: 'PLANNER_FAILED',
+      status: 'FAILED',
+      summary: 'Planner failed before tool scheduling',
+      details: { error_code: 'PLANNER_FAILED', reason: 'model response must contain JSON tool_calls' },
+    })
+
+    expect(describeAuditEvent(plannerFailure)).toMatchObject({ stage: 'Planner failed', tone: 'danger' })
+    expect(taskStatus([plannerFailure])).toBe('FAILED')
   })
 })

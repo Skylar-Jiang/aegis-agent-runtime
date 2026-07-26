@@ -26,6 +26,7 @@ const stageByEvent: Partial<Record<AuditEvent['event_type'], string>> = {
   ROLLBACK_STARTED: 'Rollback',
   ROLLBACK_FINISHED: 'Rollback',
   TOOL_BLOCKED: 'Safety block',
+  PLANNER_FAILED: 'Planner failed',
   STEP_FAILED: 'Execution failed',
   TASK_FINISHED: 'Task complete',
   TASK_CANCELLED: 'Task cancelled',
@@ -67,6 +68,7 @@ export function taskStatus(events: AuditEvent[], fallback = 'CREATED'): string {
   if (latest.event_type === 'EXECUTION_INTERRUPTED') return 'INTERRUPTED'
   if (latest.event_type === 'ROLLBACK_FINISHED') return 'ROLLED_BACK'
   if (latest.event_type === 'TOOL_BLOCKED') return 'BLOCKED'
+  if (latest.event_type === 'PLANNER_FAILED') return 'FAILED'
   if (latest.event_type === 'STEP_FAILED') return 'FAILED'
   if (latest.event_type === 'COMMIT_FINISHED') return 'COMMITTED'
   if (latest.event_type === 'APPROVAL_REQUESTED') return 'WAITING_APPROVAL'
