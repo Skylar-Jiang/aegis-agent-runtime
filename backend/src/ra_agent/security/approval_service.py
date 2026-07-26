@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 class ApprovalService(Protocol):
     async def create(self, approval: ApprovalRequest) -> ApprovalRequest: ...
 
+    async def list_for_task(self, task_id: str) -> list[ApprovalRequest]: ...
+
     async def get_request(self, approval_id: str) -> ApprovalRequest: ...
 
     async def get_decision(self, approval_id: str) -> ApprovalDecision | None: ...
@@ -48,6 +50,10 @@ class MockApprovalService:
                 raise ValueError(f"Approval already exists: {approval.approval_id}")
             self._requests[approval.approval_id] = approval
             return approval
+
+    async def list_for_task(self, task_id: str) -> list[ApprovalRequest]:
+        async with self._lock:
+            return [approval for approval in self._requests.values() if approval.task_id == task_id]
 
     async def get_request(self, approval_id: str) -> ApprovalRequest:
         async with self._lock:
@@ -194,6 +200,25 @@ class PersistentApprovalService:
             )
             await self._repo.create_request(row)
             return approval
+
+    async def list_for_task(self, task_id: str) -> list[ApprovalRequest]:
+        async with self._lock:
+            rows = await self._repo.list_requests_for_task(task_id)
+            return [
+                ApprovalRequest(
+                    approval_id=row.approval_id,
+                    task_id=row.task_id,
+                    step_id=row.step_id,
+                    request_id=row.request_id,
+                    tool_name=row.tool_name,
+                    request_fingerprint=row.request_fingerprint,
+                    reason=row.reason,
+                    requested_at=datetime.fromisoformat(row.requested_at),
+                    expires_at=datetime.fromisoformat(row.expires_at),
+                    status=ApprovalStatus(row.status),
+                )
+                for row in rows
+            ]
 
     async def get_request(self, approval_id: str) -> ApprovalRequest:
         async with self._lock:

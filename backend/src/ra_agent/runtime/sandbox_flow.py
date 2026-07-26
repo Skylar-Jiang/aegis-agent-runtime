@@ -10,6 +10,7 @@ from ra_agent.contracts import (
     PolicyDecision,
     PostCheckResult,
     PreCheckResult,
+    RiskLevel,
     RiskVerdict,
     StepStatus,
     ToolCallRequest,
@@ -59,6 +60,7 @@ class SandboxFlow:
         rollback_manager: RollbackManager,
         audit_recorder: AuditRecorder,
         cleanup_coordinator: RequestCleanupCoordinator | None = None,
+        execution_monitor: PreExecutionChecker | None = None,
     ) -> None:
         self.checkpoint_manager = checkpoint_manager
         self.executor = executor
@@ -69,6 +71,7 @@ class SandboxFlow:
         self.rollback_manager = rollback_manager
         self.audit_recorder = audit_recorder
         self.cleanup_coordinator = cleanup_coordinator
+        self.execution_monitor = execution_monitor
 
     async def run(
         self,
@@ -213,11 +216,7 @@ class SandboxFlow:
             {"checkpoint_id": context.checkpoint_id},
         )
         try:
-            execution = await self.executor.execute(
-                request,
-                checkpoint_id=context.checkpoint_id,
-                approval_decision=context.approval_decision,
-            )
+            execution = await self._execute_pending(request, verdict, context)
         except Exception as error:
             reason = self._reason(error)
             await self._record(
@@ -229,6 +228,9 @@ class SandboxFlow:
                 {"reason": reason},
             )
             return await self._rollback(request, verdict, context, reason, "EXECUTION_FAILED")
+
+        if execution.status is ExecutionStatus.ROLLED_BACK:
+            return execution
 
         await self._record(
             request,
@@ -388,6 +390,129 @@ class SandboxFlow:
                 "finished_at": execution.finished_at or datetime.now(UTC),
             }
         )
+
+    async def _execute_pending(
+        self,
+        request: ToolCallRequest,
+        verdict: RiskVerdict,
+        context: _SandboxContext,
+    ) -> ToolExecutionResult:
+        if (
+            self.execution_monitor is None
+            or verdict.risk_level is not RiskLevel.MEDIUM
+            or context.checkpoint_id is None
+        ):
+            return await self.executor.execute(
+                request,
+                checkpoint_id=context.checkpoint_id,
+                approval_decision=context.approval_decision,
+            )
+
+        await self._record(
+            request,
+            AuditEventType.PRE_CHECK_STARTED,
+            context.state,
+            "independent execution monitor started",
+            verdict,
+        )
+        execution_task = asyncio.create_task(
+            self.executor.execute(
+                request,
+                checkpoint_id=context.checkpoint_id,
+                approval_decision=context.approval_decision,
+            )
+        )
+        monitor_task = asyncio.create_task(self.execution_monitor.check(request, verdict))
+        done, _ = await asyncio.wait(
+            {execution_task, monitor_task}, return_when=asyncio.FIRST_COMPLETED
+        )
+        if monitor_task in done:
+            try:
+                monitored = monitor_task.result()
+                validate_pre_check(request, monitored)
+            except Exception as error:
+                return await self._interrupt_for_monitor_failure(
+                    request,
+                    verdict,
+                    context,
+                    execution_task,
+                    self._reason(error),
+                    "EXECUTION_MONITOR_FAILED",
+                )
+            await self._record(
+                request,
+                AuditEventType.PRE_CHECK_FINISHED,
+                context.state,
+                "independent execution monitor finished",
+                verdict,
+                {"passed": monitored.passed, "reason": monitored.reason},
+            )
+            if not monitored.passed:
+                return await self._interrupt_for_monitor_failure(
+                    request,
+                    verdict,
+                    context,
+                    execution_task,
+                    monitored.reason,
+                    "EXECUTION_MONITOR_REJECTED",
+                )
+        try:
+            execution = await execution_task
+            if not monitor_task.done():
+                monitored = await monitor_task
+                validate_pre_check(request, monitored)
+                await self._record(
+                    request,
+                    AuditEventType.PRE_CHECK_FINISHED,
+                    context.state,
+                    "independent execution monitor finished",
+                    verdict,
+                    {"passed": monitored.passed, "reason": monitored.reason},
+                )
+                if not monitored.passed:
+                    return await self._interrupt_for_monitor_failure(
+                        request,
+                        verdict,
+                        context,
+                        execution_task,
+                        monitored.reason,
+                        "EXECUTION_MONITOR_REJECTED",
+                    )
+            return execution
+        finally:
+            if not monitor_task.done():
+                monitor_task.cancel()
+                try:
+                    await monitor_task
+                except asyncio.CancelledError:
+                    pass
+
+    async def _interrupt_for_monitor_failure(
+        self,
+        request: ToolCallRequest,
+        verdict: RiskVerdict,
+        context: _SandboxContext,
+        execution_task: asyncio.Task[ToolExecutionResult],
+        reason: str,
+        error_code: str,
+    ) -> ToolExecutionResult:
+        if not execution_task.done():
+            execution_task.cancel()
+            try:
+                await execution_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+        await self._record(
+            request,
+            AuditEventType.EXECUTION_INTERRUPTED,
+            StepStatus.CANCELLED,
+            "independent safety monitor interrupted execution",
+            verdict,
+            {"reason": reason, "error_code": error_code},
+        )
+        return await self._rollback(request, verdict, context, reason, error_code)
 
     async def _post_check(
         self,

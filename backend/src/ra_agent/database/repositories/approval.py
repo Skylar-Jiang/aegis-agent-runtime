@@ -2,7 +2,7 @@
 
 from typing import Any, cast
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -29,6 +29,15 @@ class SqliteApprovalRepository:
     async def get_request(self, approval_id: str) -> ApprovalRequestRow | None:
         async with self._session_factory() as session:
             return await session.get(ApprovalRequestRow, approval_id)
+
+    async def list_requests_for_task(self, task_id: str) -> list[ApprovalRequestRow]:
+        async with self._session_factory() as session:
+            result = await session.scalars(
+                select(ApprovalRequestRow)
+                .where(ApprovalRequestRow.task_id == task_id)
+                .order_by(ApprovalRequestRow.requested_at)
+            )
+            return list(result)
 
     # ── decision ─────────────────────────────────────────────
 

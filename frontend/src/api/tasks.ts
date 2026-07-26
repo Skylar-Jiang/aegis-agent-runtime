@@ -29,8 +29,8 @@ export function getTaskReport(taskId: string): Promise<{
   return get(`/tasks/${taskId}/report`);
 }
 
-export function createTaskStreamUrl(taskId: string): string {
-  return `/api/tasks/${taskId}/stream`;
+export function createTaskStreamUrl(taskId: string, afterSequence = 0): string {
+  return `/api/tasks/${taskId}/stream?after_sequence=${afterSequence}`;
 }
 
 export function subscribeToTaskEvents(
@@ -39,17 +39,31 @@ export function subscribeToTaskEvents(
   onError: () => void,
 ): (() => void) | null {
   if (typeof EventSource === 'undefined') return null;
-  const source = new EventSource(createTaskStreamUrl(taskId));
-  source.addEventListener('audit', (message) => {
-    try {
-      onEvent(JSON.parse((message as MessageEvent<string>).data) as AuditEvent);
-    } catch {
-      // Malformed events are not audit facts and must not enter the timeline.
-    }
-  });
-  source.onerror = () => {
-    source.close();
-    onError();
+  let source: EventSource | null = null;
+  let stopped = false;
+  let sequence = 0;
+  let reconnectTimer: number | undefined;
+  const connect = () => {
+    source = new EventSource(createTaskStreamUrl(taskId, sequence));
+    source.addEventListener('audit', (message) => {
+      try {
+        const event = JSON.parse((message as MessageEvent<string>).data) as AuditEvent;
+        sequence = Math.max(sequence, event.sequence_number);
+        onEvent(event);
+      } catch {
+        // Malformed events are not audit facts and must not enter the timeline.
+      }
+    });
+    source.onerror = () => {
+      source?.close();
+      onError();
+      if (!stopped) reconnectTimer = window.setTimeout(connect, 500);
+    };
   };
-  return () => source.close();
+  connect();
+  return () => {
+    stopped = true;
+    source?.close();
+    if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+  };
 }

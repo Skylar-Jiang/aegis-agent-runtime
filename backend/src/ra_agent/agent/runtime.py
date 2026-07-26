@@ -77,6 +77,11 @@ class AgentRuntime:
             state.status = AgentRunStatus.COMPLETED
         return state
 
+    async def cancel_task(self, task_id: str) -> None:
+        cancel = getattr(self.scheduler, "cancel_task", None)
+        if cancel is not None:
+            await cancel(task_id)
+
     async def _run_iteratively(
         self, state: AgentState, contract: TaskContract | None
     ) -> AgentState:

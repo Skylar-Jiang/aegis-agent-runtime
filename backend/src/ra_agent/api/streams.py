@@ -3,7 +3,7 @@ import json
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Query
 from fastapi.responses import StreamingResponse
 
 from ra_agent.core.container import ServiceContainer
@@ -103,8 +103,9 @@ async def stream(
     task_id: str,
     services: Annotated[ServiceContainer, Depends(get_services)],
     last_event_id: int | None = Header(default=None),
+    after_sequence: int = Query(default=0, ge=0),
 ) -> StreamingResponse:
     return StreamingResponse(
-        _event_generator(task_id, services, last_sequence=last_event_id or 0),
+        _event_generator(task_id, services, last_sequence=max(last_event_id or 0, after_sequence)),
         media_type="text/event-stream",
     )

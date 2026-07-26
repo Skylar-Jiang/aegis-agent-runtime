@@ -38,3 +38,4 @@ class ServiceContainer:
     cleanup_coordinator: RequestCleanupCoordinator | None = None
     database_engine: AsyncEngine | None = None
     intent_boundary_guard: IntentBoundaryGuard | None = None
+    execution_monitor: PreExecutionChecker | None = None

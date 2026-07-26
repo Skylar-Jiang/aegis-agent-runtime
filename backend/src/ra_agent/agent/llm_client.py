@@ -7,6 +7,14 @@ class LLMClient(Protocol):
     async def complete(self, messages: list[dict[str, str]]) -> str: ...
 
 
+TOOL_PLAN_JSON_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["tool_calls"],
+    "properties": {"tool_calls": {"type": "array"}},
+}
+
+
 class MockLLMClient:
     """Offline Phase 1 mock; it never calls an external model."""
 
@@ -34,10 +42,34 @@ class DeepSeekClient:
         self._owns_client = client is None
 
     async def complete(self, messages: list[dict[str, str]]) -> str:
+        return await self._complete(messages)
+
+    async def complete_json(self, messages: list[dict[str, str]]) -> str:
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "aegis_tool_plan",
+                "strict": True,
+                "schema": TOOL_PLAN_JSON_SCHEMA,
+            },
+        }
+        try:
+            return await self._complete(messages, response_format=response_format)
+        except httpx.HTTPStatusError as error:
+            if error.response.status_code not in {400, 404, 422}:
+                raise
+            return await self._complete(messages)
+
+    async def _complete(
+        self, messages: list[dict[str, str]], *, response_format: dict[str, object] | None = None
+    ) -> str:
+        payload: dict[str, object] = {"model": self._model, "messages": messages}
+        if response_format is not None:
+            payload["response_format"] = response_format
         response = await self._client.post(
             f"{self._base_url}/chat/completions",
             headers={"Authorization": f"Bearer {self._api_key}"},
-            json={"model": self._model, "messages": messages},
+            json=payload,
         )
         response.raise_for_status()
         try:

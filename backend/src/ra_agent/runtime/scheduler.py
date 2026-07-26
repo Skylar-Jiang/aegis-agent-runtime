@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 
 from ra_agent.audit import AuditRecorder
@@ -68,6 +69,8 @@ class RuntimeScheduler:
             post_checker=post_checker or MockPostExecutionChecker(),
             audit_recorder=audit_recorder,
         )
+        self._active_executions: dict[str, dict[str, asyncio.Task[ToolExecutionResult]]] = {}
+        self._interrupt_reasons: dict[str, str] = {}
 
     async def schedule(self, request: ToolCallRequest) -> ToolExecutionResult:
         claim = await self.request_registry.claim(request)
@@ -84,13 +87,43 @@ class RuntimeScheduler:
                     "in this process",
                     error_code="REQUEST_REPLAY_UNAVAILABLE",
                 )
+        execution = asyncio.create_task(self._schedule_once(request))
+        self._active_executions.setdefault(request.task_id, {})[request.request_id] = execution
         try:
-            result = await self._schedule_once(request)
+            result = await execution
+        except asyncio.CancelledError as error:
+            reason = self._interrupt_reasons.pop(request.request_id, "task execution cancelled")
+            await self._record(
+                request,
+                AuditEventType.EXECUTION_INTERRUPTED,
+                StepStatus.CANCELLED,
+                "controlled execution interrupted",
+                details={"reason": reason},
+            )
+            await self.request_registry.fail(claim, error)
+            raise
         except BaseException as error:
             await self.request_registry.fail(claim, error)
             raise
+        finally:
+            active = self._active_executions.get(request.task_id)
+            if active is not None:
+                active.pop(request.request_id, None)
+                if not active:
+                    self._active_executions.pop(request.task_id, None)
         await self.request_registry.complete(claim, result)
         return result
+
+    async def interrupt_task(self, task_id: str, *, reason: str) -> None:
+        active = tuple(self._active_executions.get(task_id, {}).items())
+        for request_id, execution in active:
+            self._interrupt_reasons[request_id] = reason
+            execution.cancel()
+        if active:
+            await asyncio.gather(*(execution for _, execution in active), return_exceptions=True)
+
+    async def cancel_task(self, task_id: str) -> None:
+        await self.interrupt_task(task_id, reason="task cancelled by user")
 
     async def resume_after_approval(
         self, request: ToolCallRequest, approval_id: str

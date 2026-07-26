@@ -27,7 +27,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
-            close = getattr(app.state.agent_runner.planner, "aclose", None)
+            planner = getattr(app.state.agent_runner, "planner", None)
+            close = getattr(planner, "aclose", None)
             if close is not None:
                 await close()
 

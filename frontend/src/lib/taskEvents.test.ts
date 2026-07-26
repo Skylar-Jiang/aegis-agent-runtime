@@ -49,4 +49,14 @@ describe('describeAuditEvent', () => {
     expect(description.stage).toBe('Rollback')
     expect(description.tone).toBe('danger')
   })
+
+  it('keeps an interrupted controlled execution distinct from a block or rollback', () => {
+    const description = describeAuditEvent(event({
+      event_type: 'EXECUTION_INTERRUPTED',
+      status: 'INTERRUPTED',
+    }))
+
+    expect(description.stage).toBe('Execution interrupted')
+    expect(description.tone).toBe('danger')
+  })
 })

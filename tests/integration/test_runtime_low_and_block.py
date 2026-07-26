@@ -173,6 +173,29 @@ class SlowTrackingExecutor(TrackingExecutor):
         return await super().execute(request, approval_decision=approval_decision)
 
 
+class InterruptibleExecutor(TrackingExecutor):
+    def __init__(self) -> None:
+        super().__init__()
+        self.started = asyncio.Event()
+        self.cancelled = asyncio.Event()
+
+    async def execute(
+        self,
+        request: ToolCallRequest,
+        *,
+        checkpoint_id: str | None = None,
+        approval_decision: ApprovalDecision | None = None,
+    ) -> ToolExecutionResult:
+        self.calls += 1
+        self.started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            self.cancelled.set()
+            raise
+        raise AssertionError("interrupted execution must not finish")
+
+
 def make_request(
     *, task_id: str = "task-1", request_id: str = "request-1"
 ) -> ToolCallRequest:
@@ -338,6 +361,27 @@ async def test_executor_exception_is_structured_and_audited() -> None:
         AuditEventType.EXECUTION_FINISHED,
         AuditEventType.STEP_FAILED,
     ]
+
+
+@pytest.mark.asyncio
+async def test_runtime_interrupt_cancels_active_execution_and_records_reason() -> None:
+    executor = InterruptibleExecutor()
+    scheduler, recorder, _, _ = make_scheduler(
+        PolicyDecision.FAST_EXECUTE, executor=executor
+    )
+    request = make_request()
+    execution = asyncio.create_task(scheduler.schedule(request))
+    await executor.started.wait()
+
+    await scheduler.interrupt_task(request.task_id, reason="operator cancel")
+
+    with pytest.raises(asyncio.CancelledError):
+        await execution
+    assert executor.cancelled.is_set()
+    interrupted = recorder.events_for(request.task_id)[-1]
+    assert interrupted.event_type is AuditEventType.EXECUTION_INTERRUPTED
+    assert interrupted.status == "CANCELLED"
+    assert interrupted.details["reason"] == "operator cancel"
 
 
 @pytest.mark.asyncio

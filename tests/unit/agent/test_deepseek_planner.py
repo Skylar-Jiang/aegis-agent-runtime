@@ -47,6 +47,40 @@ async def test_deepseek_client_posts_openai_compatible_request() -> None:
 
 
 @pytest.mark.asyncio
+async def test_deepseek_client_prefers_json_schema_response_format() -> None:
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"tool_calls": []}'}}]},
+        )
+
+    client = _client(httpx.MockTransport(handler))
+    await client.complete_json([{"role": "user", "content": "plan"}])
+    await client.aclose()
+
+    assert seen["body"] == {
+        "model": "deepseek-chat",
+        "messages": [{"role": "user", "content": "plan"}],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "aegis_tool_plan",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["tool_calls"],
+                    "properties": {"tool_calls": {"type": "array"}},
+                },
+            },
+        },
+    }
+
+
+@pytest.mark.asyncio
 async def test_planner_owns_request_identity_and_rejects_unknown_tool() -> None:
     class StubClient:
         async def complete(self, messages: list[dict[str, str]]) -> str:
@@ -150,3 +184,45 @@ async def test_planner_tells_the_model_which_tools_are_allowed() -> None:
 
     assert '"list_dir"' in client.messages[0]["content"]
     assert '"read_file"' in client.messages[0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_planner_retries_once_only_to_repair_invalid_json_format() -> None:
+    class RepairingClient:
+        def __init__(self) -> None:
+            self.calls: list[list[dict[str, str]]] = []
+
+        async def complete(self, messages: list[dict[str, str]]) -> str:
+            self.calls.append(messages)
+            if len(self.calls) == 1:
+                return "I will read the file next."
+            return '{"tool_calls": []}'
+
+    client = RepairingClient()
+    planner = DeepSeekPlanner(client, allowed_tools={"read_file"})
+
+    assert await planner.plan("task-1", "inspect the workspace") == []
+    assert len(client.calls) == 2
+    assert client.calls[1][-1] == {
+        "role": "user",
+        "content": "Repair only the JSON format. Return the required JSON object and nothing else.",
+    }
+
+
+@pytest.mark.asyncio
+async def test_planner_rejects_two_invalid_json_responses_without_guessing_calls() -> None:
+    class InvalidClient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def complete(self, messages: list[dict[str, str]]) -> str:
+            self.calls += 1
+            return "call read_file with path secret.txt"
+
+    client = InvalidClient()
+    planner = DeepSeekPlanner(client, allowed_tools={"read_file"})
+
+    with pytest.raises(PlanningError, match="model response must contain JSON tool_calls"):
+        await planner.plan("task-1", "inspect the workspace")
+
+    assert client.calls == 2

@@ -101,6 +101,19 @@ Contract 与枚举只有 `backend/src/ra_agent/contracts` 一套来源。Planner
 
 LOW 工具在 Pre/Post 后走 FAST_EXECUTE；受控写入、删除、下载和 Memory 写入依照风险进入隔离、检查、提交或回滚。REQUEST_APPROVAL 使用 `schedule` 创建等待结果、`resume_after_approval` 独立恢复，不长期占用 HTTP 请求。最小 TaskGraph 支持依赖、条件、受限并行和“失败/等待只阻断后代”。
 
+## 本地安全 Demo
+
+运行 `powershell -File scripts/run-demo-e2e.ps1` 会在 pytest 临时目录的 `.runtime/workspace` 中执行六个可重复场景：LOW `read_file`、MEDIUM `write_file` 的 pending/check/commit、HIGH 删除的 deny/approve、危险 `rm -rf` 的执行前阻断、恶意文档引出的后续越界 ToolCall 阻断，以及受控长进程取消并回收。Demo 不会操作仓库工作区或用户目录。
+
+结果语义不可混同：
+
+- 执行前 `BLOCKED`：风险、权限或 TaskContract 在工具启动前拒绝请求；
+- `ROLLED_BACK`：工具已产生 pending 状态，但 Post/Deep/Commit 检查失败，运行时清理并恢复；
+- 多步任务中的 `BLOCKED`：前序动作完成后，新的 ToolCall 仍会重新经过 Runtime 边界与风险检查；
+- `EXECUTION_INTERRUPTED` / `INTERRUPTED`：正在运行的受控执行被取消或独立安全监控终止，受限进程会先 terminate、超时后 kill，已有 pending 状态沿既有 cleanup/rollback 路径处理。
+
+当前中断能力只覆盖 Runtime 持有的受控执行（至少 `run_shell`）；它不是对任意操作系统进程进行实时语义监控。只有调用方显式提供、且确实不依赖执行结果的独立监控器，MEDIUM checkpointed pending 执行才会与该检查并行；否则维持顺序检查。
+
 ## 下一步分工
 
 Phase 3 的真实实现仍由成员完成；当前唯一执行入口如下：

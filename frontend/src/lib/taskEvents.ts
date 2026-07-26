@@ -14,8 +14,13 @@ const stageByEvent: Partial<Record<AuditEvent['event_type'], string>> = {
   DEEP_CHECK_STARTED: 'Deep check',
   DEEP_CHECK_FINISHED: 'Deep check',
   CHECKPOINT_CREATED: 'Checkpoint',
+  PRE_CHECK_STARTED: 'Pre-check',
+  PRE_CHECK_FINISHED: 'Pre-check',
   EXECUTION_STARTED: 'Execution',
   EXECUTION_FINISHED: 'Execution',
+  EXECUTION_INTERRUPTED: 'Execution interrupted',
+  POST_CHECK_STARTED: 'Post-check',
+  POST_CHECK_FINISHED: 'Post-check',
   COMMIT_STARTED: 'Commit',
   COMMIT_FINISHED: 'Commit',
   ROLLBACK_STARTED: 'Rollback',
@@ -37,7 +42,7 @@ export function mergeAuditEvents(existing: AuditEvent[], incoming: AuditEvent[])
 export function describeAuditEvent(event: AuditEvent): { stage: string; detail: string; tone: EventTone } {
   const toolName = typeof event.details.tool_name === 'string' ? event.details.tool_name : undefined
   const isDryRunEmail = toolName === 'send_email_dry_run'
-  const terminalFailure = ['BLOCKED', 'FAILED', 'ROLLED_BACK', 'DENIED'].includes(event.status)
+  const terminalFailure = ['BLOCKED', 'FAILED', 'ROLLED_BACK', 'DENIED', 'INTERRUPTED'].includes(event.status)
   const tone: EventTone = terminalFailure
     ? 'danger'
     : event.status === 'WAITING_APPROVAL' || event.event_type === 'APPROVAL_REQUESTED'
@@ -59,6 +64,7 @@ export function taskStatus(events: AuditEvent[], fallback = 'CREATED'): string {
   const latest = events.at(-1)
   if (!latest) return fallback
   if (latest.event_type === 'TASK_CANCELLED') return 'CANCELLED'
+  if (latest.event_type === 'EXECUTION_INTERRUPTED') return 'INTERRUPTED'
   if (latest.event_type === 'ROLLBACK_FINISHED') return 'ROLLED_BACK'
   if (latest.event_type === 'TOOL_BLOCKED') return 'BLOCKED'
   if (latest.event_type === 'STEP_FAILED') return 'FAILED'
