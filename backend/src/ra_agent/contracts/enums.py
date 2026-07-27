@@ -97,6 +97,14 @@ class MemoryStatus(StrEnum):
     ROLLED_BACK = "ROLLED_BACK"
 
 
+class EffectStatus(StrEnum):
+    PENDING = "PENDING"
+    COMMITTED = "COMMITTED"
+    ROLLED_BACK = "ROLLED_BACK"
+    REJECTED = "REJECTED"
+    CLEANED = "CLEANED"
+
+
 class ExperimentMode(StrEnum):
     BASELINE = "BASELINE"
     FULL_GUARD = "FULL_GUARD"
