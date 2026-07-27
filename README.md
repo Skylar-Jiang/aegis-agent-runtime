@@ -4,6 +4,8 @@
 
 > Phase 3.5 已冻结：Live Runtime 具备 Pre/Post、受控提交/回滚、真实文件/Memory/下载/Shell 注册、TaskContract、数据外发干运行和最小任务图。验证记录见 [Phase 3.5 集成报告](docs/phase3.5/INTEGRATION-REPORT.md)。
 
+> 比赛最终阶段的 V2 架构、共享 Contract、四人职责、实验字段和报告骨架见 [docs/v2-final](docs/v2-final/00-freeze.md)。该规范优先于历史 Phase 3 分工文档。
+
 ## 冻结架构
 
 ```text

@@ -1,5 +1,7 @@
 # 架构冻结
 
+> V2 比赛最终阶段以 [V2 最终架构与接口冻结](v2-final/00-freeze.md) 为准；本文保留主干现有单步 Runtime 架构说明。
+
 ## 执行链
 
 `User → Agent Planner → ToolCallRequest → Runtime Scheduler → Risk Classifier → Policy Engine → Permission Gate → Controlled Execution → Deep Safety Check → Commit/Rollback → Audit → Agent`

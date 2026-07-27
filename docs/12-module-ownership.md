@@ -1,5 +1,7 @@
 # 模块所有权与公共变更流程
 
+> 比赛最终阶段的四人边界、分支和合并顺序以 [docs/v2-final/01-team-and-integration.md](v2-final/01-team-and-integration.md) 为准；本文保留 Phase 3 历史边界。
+
 ## 模块所有权
 
 成员 A（组长）负责：
