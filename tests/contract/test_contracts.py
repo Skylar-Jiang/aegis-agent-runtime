@@ -33,8 +33,8 @@ from ra_agent.contracts import (
 )
 
 
-def test_contract_version_is_v03() -> None:
-    assert CONTRACT_VERSION == "0.3"
+def test_contract_version_is_v04() -> None:
+    assert CONTRACT_VERSION == "0.4"
 
 
 def test_phase3_contracts_capture_checks_memory_experiments_and_dependencies() -> None:
