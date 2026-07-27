@@ -93,9 +93,8 @@ def test_task_graph_contract_rejects_unknown_dependencies_and_extra_fields() -> 
             max_parallelism=1,
         )
     with pytest.raises(ValidationError):
-        TaskNode(
-            **_node("read").model_dump(),
-            unsupported=True,
+        TaskNode.model_validate(
+            _node("read").model_dump() | {"unsupported": True},
         )
 
 
@@ -132,7 +131,7 @@ def test_effect_and_graph_results_normalize_utc_and_retain_request_scope() -> No
     assert effect.created_at == datetime(2026, 7, 12, 0, 30, tzinfo=UTC)
     assert result.started_at == datetime(2026, 7, 12, 0, 30, tzinfo=UTC)
     with pytest.raises(ValidationError):
-        EffectRecord(**effect.model_dump(), unexpected="value")
+        EffectRecord.model_validate(effect.model_dump() | {"unexpected": "value"})
 
 
 def test_rollback_plans_require_an_explicit_unique_related_scope() -> None:
@@ -247,6 +246,6 @@ def test_experiment_result_schema_is_strict_and_normalizes_utc() -> None:
 
     assert experiment.started_at == datetime(2026, 7, 12, 0, 30, tzinfo=UTC)
     with pytest.raises(ValidationError):
-        ExperimentResult(**(experiment.model_dump() | {"elapsed_ms": -1}))
+        ExperimentResult.model_validate(experiment.model_dump() | {"elapsed_ms": -1})
     with pytest.raises(ValidationError):
-        ExperimentResult(**(experiment.model_dump() | {"extra_field": "not allowed"}))
+        ExperimentResult.model_validate(experiment.model_dump() | {"extra_field": "not allowed"})

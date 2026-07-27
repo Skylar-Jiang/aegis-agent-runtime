@@ -1,4 +1,10 @@
-from ra_agent.contracts import RollbackPlan, RollbackPlanResult, TaskGraph, TaskGraphResult
+from ra_agent.contracts import (
+    ExecutionStatus,
+    RollbackPlan,
+    RollbackPlanResult,
+    TaskGraph,
+    TaskGraphResult,
+)
 from ra_agent.runtime import RollbackPlanExecutor, TaskGraphScheduler
 
 
@@ -14,7 +20,7 @@ class StubRollbackExecutor:
             task_id=plan.task_id,
             rolled_back_request_ids=plan.request_ids,
             failed_request_ids=[],
-            status="ROLLED_BACK",
+            status=ExecutionStatus.ROLLED_BACK,
             reason="stub",
         )
 
