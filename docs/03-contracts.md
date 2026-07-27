@@ -1,5 +1,7 @@
 # 公共 Contract v0.2
 
+> V2 的加法 Contract v0.4（TaskGraph、EffectRecord、RollbackPlan、ExperimentResult）冻结于 [docs/v2-final/00-freeze.md](v2-final/00-freeze.md)，由组长先行落地；本文保留 v0.2/v0.3 兼容基线。
+
 所有 ID 都是字符串。公共时间字段统一使用共享 `UTCDateTime`：拒绝 naive datetime，并把任意 aware datetime 归一化为 UTC；序列化使用 Pydantic `model_dump(mode="json")`。统一标识名为 `task_id`、`step_id`、`request_id`、`checkpoint_id`、`event_id`。列表和字典使用 Pydantic `default_factory`，不得共享可变默认值。
 
 | Contract | 用途 |
