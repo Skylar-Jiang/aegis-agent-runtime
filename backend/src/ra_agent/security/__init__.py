@@ -1,3 +1,4 @@
+from .adaptive_approval import AdaptiveApprovalEvaluator
 from .approval_service import ApprovalService, MockApprovalService
 from .data_egress import DataEgressGuard
 from .deep_checker import DeepSafetyChecker, MockDeepSafetyChecker
@@ -15,6 +16,7 @@ from .pre_post_check import (
 from .risk_classifier import MockRiskClassifier, RiskClassifier
 
 __all__ = [
+    "AdaptiveApprovalEvaluator",
     "ApprovalService",
     "DeepSafetyChecker",
     "DataEgressGuard",
