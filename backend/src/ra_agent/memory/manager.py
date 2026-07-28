@@ -15,6 +15,7 @@ from ra_agent.execution.artifacts import (
     ArtifactContractError,
     validate_execution_artifacts,
 )
+from ra_agent.execution.effect_manager import EffectManager
 
 from .models import MemoryRecord
 from .store import FilesystemMemoryStore, MemoryIntegrityError
@@ -39,8 +40,13 @@ class MemoryLifecycleIntegrityError(MemoryLifecycleError):
 class MemoryLifecycleManager:
     """Apply PostCheck decisions to durable pending memory without implementing checks."""
 
-    def __init__(self, store: FilesystemMemoryStore) -> None:
+    def __init__(
+        self,
+        store: FilesystemMemoryStore,
+        effect_manager: EffectManager | None = None,
+    ) -> None:
         self._store = store
+        self._effect_manager = effect_manager
 
     @property
     def store(self) -> FilesystemMemoryStore:
@@ -62,11 +68,23 @@ class MemoryLifecycleManager:
         record = await self._validate_pending_action(request, execution, post_check)
         if record.status is not MemoryStatus.PENDING:
             if record.status is MemoryStatus.TRUSTED:
+                if self._effect_manager is not None:
+                    await self._effect_manager.mark_committed(request.request_id)
                 return record
             raise MemoryLifecyclePreconditionError(
                 f"memory commit requires PENDING state, got {record.status.value}"
             )
-        return await self._store.mark_trusted(request.request_id)
+        trusted = await self._store.mark_trusted(request.request_id)
+        if self._effect_manager is not None:
+            try:
+                await self._effect_manager.mark_committed(request.request_id)
+            except Exception:
+                await self._store.mark_rolled_back(
+                    request.request_id,
+                    reason="effect commit update failed",
+                )
+                raise
+        return trusted
 
     async def reject(
         self,
@@ -84,14 +102,19 @@ class MemoryLifecycleManager:
         record = await self._validate_pending_action(request, execution, post_check)
         if record.status is not MemoryStatus.PENDING:
             if record.status is MemoryStatus.REJECTED:
+                if self._effect_manager is not None:
+                    await self._effect_manager.mark_rejected(request.request_id)
                 return record
             raise MemoryLifecyclePreconditionError(
                 f"memory rejection requires PENDING state, got {record.status.value}"
             )
-        return await self._store.mark_rejected(
+        rejected = await self._store.mark_rejected(
             request.request_id,
             reason=post_check.reason,
         )
+        if self._effect_manager is not None:
+            await self._effect_manager.mark_rejected(request.request_id)
+        return rejected
 
     async def rollback(self, request_id: str, *, reason: str) -> MemoryRecord:
         """Rollback a pending or just-trusted memory version idempotently."""
@@ -100,7 +123,10 @@ class MemoryLifecycleManager:
             raise MemoryLifecycleIntegrityError(
                 "memory record failed integrity verification before rollback"
             )
-        return await self._store.mark_rolled_back(request_id, reason=reason)
+        rolled_back = await self._store.mark_rolled_back(request_id, reason=reason)
+        if self._effect_manager is not None:
+            await self._effect_manager.mark_rolled_back(request_id, missing_ok=True)
+        return rolled_back
 
     async def _validate_pending_action(
         self,
