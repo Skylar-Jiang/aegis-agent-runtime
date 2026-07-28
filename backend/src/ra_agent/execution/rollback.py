@@ -4,6 +4,7 @@ import asyncio
 import os
 import stat
 import tempfile
+from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 from typing import Protocol
@@ -47,11 +48,22 @@ class UnsupportedRollbackOperationError(RollbackManagerError):
     """Raised when checkpoint metadata describes an unsupported operation."""
 
 
+@dataclass(frozen=True, slots=True)
+class CommittedEffectState:
+    """Expected trusted-workspace state for a committed filesystem effect."""
+
+    operation: PendingOperation
+    content_sha256: str | None = None
+    size_bytes: int | None = None
+
+
 class RollbackManager(Protocol):
     async def rollback(
         self,
         checkpoint_id: str,
         request_id: str,
+        *,
+        committed_effect: CommittedEffectState | None = None,
     ) -> RollbackResult: ...
 
 
@@ -73,6 +85,8 @@ class FilesystemRollbackManager:
         self,
         checkpoint_id: str,
         request_id: str,
+        *,
+        committed_effect: CommittedEffectState | None = None,
     ) -> RollbackResult:
         """Restore one checkpoint and clean its pending change idempotently."""
 
@@ -96,6 +110,16 @@ class FilesystemRollbackManager:
                 )
 
             pending = await self._load_pending(request_id)
+            if pending is None and committed_effect is not None:
+                pending = self._pending_from_committed_effect(
+                    checkpoint,
+                    committed_effect,
+                )
+            elif pending is not None and committed_effect is not None:
+                self._validate_pending_against_committed_effect(
+                    pending,
+                    committed_effect,
+                )
             self._validate_records(checkpoint, pending)
 
             backup = checkpoint.backups[0]
@@ -188,6 +212,76 @@ class FilesystemRollbackManager:
 
         if checkpoint.tool_name == "delete_file" and not backup.existed:
             raise RollbackCorrelationError("delete checkpoint must contain an existing-file backup")
+
+    @staticmethod
+    def _pending_from_committed_effect(
+        checkpoint: CheckpointRecord,
+        committed_effect: CommittedEffectState,
+    ) -> PendingRecord:
+        if checkpoint.status is not CheckpointStatus.COMMITTED:
+            raise RollbackCorrelationError("committed effect state requires a COMMITTED checkpoint")
+
+        expected_operation = {
+            "write_file": PendingOperation.WRITE,
+            "delete_file": PendingOperation.DELETE,
+        }.get(checkpoint.tool_name)
+        if expected_operation is None or committed_effect.operation is not expected_operation:
+            raise RollbackCorrelationError(
+                "committed effect operation does not match checkpoint tool"
+            )
+
+        content_sha256 = committed_effect.content_sha256
+        size_bytes = committed_effect.size_bytes
+        if committed_effect.operation is PendingOperation.WRITE:
+            if (
+                not isinstance(content_sha256, str)
+                or len(content_sha256) != 64
+                or any(character not in "0123456789abcdef" for character in content_sha256)
+            ):
+                raise RollbackIntegrityError(
+                    "committed write effect requires a lowercase SHA-256 digest"
+                )
+            if isinstance(size_bytes, bool) or not isinstance(size_bytes, int) or size_bytes < 0:
+                raise RollbackIntegrityError("committed write effect requires a non-negative size")
+        elif content_sha256 is not None or size_bytes is not None:
+            raise RollbackCorrelationError(
+                "committed delete effect must not contain write payload metadata"
+            )
+
+        return PendingRecord(
+            request_id=checkpoint.request_id,
+            checkpoint_id=checkpoint.checkpoint_id,
+            tool_name=checkpoint.tool_name,
+            operation=committed_effect.operation,
+            target_path=checkpoint.target_paths[0],
+            pending_path=None,
+            content_sha256=content_sha256,
+            size_bytes=size_bytes,
+            created_at=checkpoint.created_at,
+            status=PendingStatus.COMMITTED,
+        )
+
+    @staticmethod
+    def _validate_pending_against_committed_effect(
+        pending: PendingRecord,
+        committed_effect: CommittedEffectState,
+    ) -> None:
+        if pending.operation is not committed_effect.operation:
+            raise RollbackCorrelationError("pending operation does not match committed effect")
+        if pending.status is not PendingStatus.COMMITTED:
+            raise RollbackCorrelationError("committed effect requires COMMITTED pending state")
+        if committed_effect.operation is PendingOperation.WRITE:
+            if (
+                pending.content_sha256 != committed_effect.content_sha256
+                or pending.size_bytes != committed_effect.size_bytes
+            ):
+                raise RollbackCorrelationError(
+                    "pending payload metadata does not match committed effect"
+                )
+        elif pending.content_sha256 is not None or pending.size_bytes is not None:
+            raise RollbackCorrelationError(
+                "committed delete pending record contains write metadata"
+            )
 
     @staticmethod
     def _validate_records(
@@ -455,9 +549,7 @@ class FilesystemRollbackManager:
 
         if quarantine_dir.exists():
             if target.exists() or target.is_symlink():
-                raise RollbackConflictError(
-                    "rollback quarantine and workspace target both exist"
-                )
+                raise RollbackConflictError("rollback quarantine and workspace target both exist")
 
             if quarantined.is_file() and not quarantined.is_symlink():
                 return quarantined
@@ -514,9 +606,7 @@ class FilesystemRollbackManager:
             with tempfile.NamedTemporaryFile(
                 mode="wb",
                 dir=target.parent,
-                prefix=(
-                    f".{target.name}.{transaction_temp_token(request_id)}.rollback-backup."
-                ),
+                prefix=(f".{target.name}.{transaction_temp_token(request_id)}.rollback-backup."),
                 suffix=".tmp",
                 delete=False,
             ) as temporary:
@@ -605,6 +695,8 @@ class MockRollbackManager:
         self,
         checkpoint_id: str,
         request_id: str,
+        *,
+        committed_effect: CommittedEffectState | None = None,
     ) -> RollbackResult:
         return RollbackResult(
             request_id=request_id,
