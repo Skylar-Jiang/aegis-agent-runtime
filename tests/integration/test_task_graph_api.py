@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from fastapi.testclient import TestClient
 
 from ra_agent.contracts import (
     ApprovalRequest,
+    EffectRecord,
+    EffectStatus,
     ExecutionStatus,
     SourceType,
     TaskContract,
@@ -181,6 +184,52 @@ def test_graph_task_approvals_and_effects_are_discoverable_by_task() -> None:
     assert pending_approvals.json()["data"][0]["approval_id"] == "graph-approval"
     assert effects.status_code == 200
     assert effects.json()["data"] == []
+
+
+def test_graph_effect_projection_excludes_untrusted_effect_content() -> None:
+    class EffectStore:
+        async def list_by_task_id(self, task_id: str) -> tuple[EffectRecord, ...]:
+            return (
+                EffectRecord(
+                    effect_id="effect-1",
+                    task_id=task_id,
+                    step_id="write-node",
+                    request_id="write-request",
+                    kind="filesystem",
+                    target_ref="file:demo.txt",
+                    status=EffectStatus.PENDING,
+                    checkpoint_id="checkpoint-1",
+                    artifact_refs=["pending/write-request"],
+                    created_at=datetime.now(UTC),
+                ),
+            )
+
+    app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
+    app.state.services = replace(app.state.services, effect_store=EffectStore())
+    scheduler = RecordingGraphScheduler()
+    app.state.task_graph_scheduler = scheduler
+    graph = _graph()
+
+    with TestClient(app) as client:
+        client.post("/api/task-graphs", json=graph.model_dump(mode="json"))
+        for _ in range(20):
+            if scheduler.scheduled.is_set():
+                break
+            time.sleep(0.01)
+        response = client.get("/api/tasks/graph-task/effects")
+
+    assert response.status_code == 200
+    assert response.json()["data"] == [
+        {
+            "effect_id": "effect-1",
+            "kind": "filesystem",
+            "target_ref": "file:demo.txt",
+            "status": "PENDING",
+            "checkpoint_id": "checkpoint-1",
+            "artifact_refs": ["pending/write-request"],
+            "created_at": response.json()["data"][0]["created_at"],
+        }
+    ]
 
 
 def test_graph_submit_exposes_running_snapshot_before_background_execution() -> None:
