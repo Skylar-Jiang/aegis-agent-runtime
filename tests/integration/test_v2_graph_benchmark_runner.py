@@ -69,3 +69,4 @@ def test_formal_graph_benchmark_runner_emits_contract_valid_runtime_measurements
         )
     )
     assert summary["source_row_count"] == len(rows)
+    assert summary["by_fixture_mode"]["parallel-dag:ADAPTIVE_RUNTIME"]["sample_count"] == 1

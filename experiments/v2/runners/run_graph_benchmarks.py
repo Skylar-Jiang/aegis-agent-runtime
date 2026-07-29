@@ -15,6 +15,7 @@ import json
 import platform
 import subprocess
 import sys
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,6 +29,7 @@ from ra_agent.contracts import (
     ExperimentResult,
     SourceType,
     TaskGraph,
+    TaskGraphResult,
     TaskNode,
     ToolCallRequest,
     ToolExecutionResult,
@@ -180,6 +182,45 @@ def _critical_path_ms(graph: TaskGraph, timings: dict[str, NodeTiming]) -> int:
     return max(distances.values(), default=0)
 
 
+def _assert_runtime_facts(
+    *,
+    graph: TaskGraph,
+    result: TaskGraphResult,
+    recorder: InMemoryAuditRecorder,
+    timings: dict[str, NodeTiming],
+    fixture_id: str,
+    mode: ExperimentMode,
+    approval_decision_ns: int | None,
+) -> None:
+    if not all(
+        node_result.status is ExecutionStatus.COMMITTED
+        for node_result in result.node_results.values()
+    ):
+        raise RuntimeError("benchmark graph contains a non-committed node")
+    events = recorder.events_for(graph.task_id)
+    if not events or any(event.details.get("graph_id") != graph.graph_id for event in events):
+        raise RuntimeError("benchmark graph audit facts are incomplete")
+    if fixture_id == "parallel-dag":
+        write_a = timings["write-a"]
+        conflicting_write = timings["write-a-conflict"]
+        if not (
+            write_a.finished_ns <= conflicting_write.started_ns
+            or conflicting_write.finished_ns <= write_a.started_ns
+        ):
+            raise RuntimeError("same effect target did not serialize")
+        if timings["serial-read"].started_ns < timings["read-b"].finished_ns:
+            raise RuntimeError("dependency did not serialize")
+    if fixture_id == "approval-wait" and approval_decision_ns is not None:
+        if mode is ExperimentMode.FULL_GUARD and (
+            timings["B"].started_ns < approval_decision_ns
+        ):
+            raise RuntimeError("global pause allowed an independent node during approval")
+        if mode is ExperimentMode.ADAPTIVE_RUNTIME and not (
+            timings["B"].finished_ns <= approval_decision_ns
+        ):
+            raise RuntimeError("approval-aware scheduler did not progress the independent node")
+
+
 async def _run_one(
     fixture_id: str,
     fixture: dict[str, Any],
@@ -200,14 +241,17 @@ async def _run_one(
     graph_started_ns = perf_counter_ns()
     result = await scheduler.schedule_graph(graph)
     approval_wait_ms = 0
+    approval_decision_ns: int | None = None
     if result.blocked_nodes.get("A") == "WAITING_APPROVAL":
         assert runtime.approval_requested_ns is not None
         delay_ns = int(fixture["approval_delay_ms"]) * 1_000_000
         remaining_ns = max(0, delay_ns - (perf_counter_ns() - runtime.approval_requested_ns))
         if remaining_ns:
             await asyncio.sleep(remaining_ns / 1_000_000_000)
-        decision_ns = perf_counter_ns()
-        approval_wait_ms = max(0, (decision_ns - runtime.approval_requested_ns) // 1_000_000)
+        approval_decision_ns = perf_counter_ns()
+        approval_wait_ms = max(
+            0, (approval_decision_ns - runtime.approval_requested_ns) // 1_000_000
+        )
         result = await scheduler.resume_after_approval(
             graph.graph_id, f"approval-{graph.task_id}-A"
         )
@@ -215,12 +259,21 @@ async def _run_one(
     finished_at = datetime.now(UTC)
     if result.finished_at is None or result.blocked_nodes:
         raise RuntimeError("benchmark graph did not reach a clean terminal state")
+    _assert_runtime_facts(
+        graph=graph,
+        result=result,
+        recorder=recorder,
+        timings=runtime.timings,
+        fixture_id=fixture_id,
+        mode=mode,
+        approval_decision_ns=approval_decision_ns,
+    )
     sum_node_elapsed_ms = sum(
         max(0, (timing.finished_ns - timing.started_ns) // 1_000_000)
         for timing in runtime.timings.values()
     )
     approval_started_ns = runtime.approval_requested_ns
-    approval_finished_ns = approval_started_ns + approval_wait_ms * 1_000_000 if approval_started_ns else None
+    approval_finished_ns = approval_decision_ns if approval_started_ns else None
     completed_during_approval = [
         timing
         for node_id, timing in runtime.timings.items()
@@ -341,6 +394,9 @@ def _write_results(results: list[ExperimentResult], output_directory: Path, outp
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
+    grouped: dict[str, list[ExperimentResult]] = defaultdict(list)
+    for result in results:
+        grouped[f"{result.fixture_id}:{result.mode.value}"].append(result)
     summary_path = output_directory.parent / "derived" / f"{output_stem}-summary.json"
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(
@@ -349,15 +405,27 @@ def _write_results(results: list[ExperimentResult], output_directory: Path, outp
                 "source_row_count": len(results),
                 "source_jsonl": jsonl_path.as_posix(),
                 "by_fixture_mode": {
-                    f"{result.fixture_id}:{result.mode.value}": {
-                        "graph_elapsed_ms": result.graph_elapsed_ms,
-                        "parallel_saved_ms": result.parallel_saved_ms,
-                        "approval_wait_ms": result.approval_wait_ms,
-                        "nodes_completed_during_approval": result.metrics[
-                            "nodes_completed_during_approval"
-                        ],
+                    key: {
+                        "sample_count": len(group),
+                        "mean_graph_elapsed_ms": round(
+                            sum(row.graph_elapsed_ms for row in group) / len(group), 2
+                        ),
+                        "mean_parallel_saved_ms": round(
+                            sum(row.parallel_saved_ms for row in group) / len(group), 2
+                        ),
+                        "mean_approval_wait_ms": round(
+                            sum(row.approval_wait_ms for row in group) / len(group), 2
+                        ),
+                        "mean_nodes_completed_during_approval": round(
+                            sum(
+                                row.metrics["nodes_completed_during_approval"]
+                                for row in group
+                            )
+                            / len(group),
+                            2,
+                        ),
                     }
-                    for result in results
+                    for key, group in sorted(grouped.items())
                 },
             },
             ensure_ascii=False,
