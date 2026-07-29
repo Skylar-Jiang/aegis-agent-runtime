@@ -15,8 +15,8 @@
 
 ## 原始数据
 
-原始 JSON/CSV 位于 `experiments/results/raw/`。
+正式 V2 原始 JSON/CSV 位于 `experiments/v2/results/raw/`。`experiments/results/raw/` 仅为历史开发结果，不用于最终结论。
 
 ## 衍生数据
 
-聚合报告位于 `experiments/results/derived/`。
+正式 V2 聚合报告位于 `experiments/v2/results/derived/`。

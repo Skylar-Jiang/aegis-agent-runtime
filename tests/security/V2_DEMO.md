@@ -45,13 +45,13 @@ python -m pytest tests\security -q
 
 ```powershell
 python tests\security\run_v2_security_experiment.py `
-  --output-directory experiments/results/raw `
+  --output-directory experiments/v2/results/raw `
   --output-stem v2-security-110b341-20260728 `
   --repetitions 5
 
 python tests\security\build_v2_security_materials.py `
-  --raw-jsonl experiments/results/raw/v2-security-110b341-20260728.jsonl `
-  --derived-json experiments/results/derived/v2-security-110b341-20260728-metrics.json `
+  --raw-jsonl experiments/v2/results/raw/v2-security-110b341-20260728.jsonl `
+  --derived-json experiments/v2/results/derived/v2-security-110b341-20260728-metrics.json `
   --comparison-svg docs/report-v2/assets/v2-security-comparison.svg `
   --approval-card-svg docs/report-v2/assets/v2-adaptive-approval-card.svg
 ```

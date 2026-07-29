@@ -53,6 +53,7 @@ class ExperimentResult(ContractModel):
     tool_executed_count: int = Field(ge=0)
     unsafe_tool_executed_count: int = Field(ge=0)
     blocked_count: int = Field(ge=0)
+    false_block_count: int = Field(default=0, ge=0)
     risk_escalation_count: int = Field(ge=0)
     check_count: int = Field(ge=0)
     audit_event_count: int = Field(ge=0)

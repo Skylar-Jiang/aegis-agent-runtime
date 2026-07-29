@@ -122,9 +122,7 @@ def _aggregate(
                 unsafe_admitted_total / repetitions,
                 2,
             ),
-            "false_block_count": sum(
-                row.safety_outcome == "FALSE_BLOCK" for row in mode_rows
-            ),
+            "false_block_count": sum(row.false_block_count for row in mode_rows),
             "approval_requested_count": sum(
                 row.approval_requested_count for row in mode_rows
             ),

@@ -1,6 +1,6 @@
 # V2 Graph、Approval 与 Experiment API 冻结
 
-所有响应继续使用 `APIResponse { data, error }`；Audit/SSE 继续按 `sequence_number` 重放和去重。Graph API 是组长独占实现，成员 4 只消费下列 shape。
+所有响应继续使用 `APIResponse { data, error }`；Audit/SSE 继续按 `sequence_number` 重放和去重。Graph/Effect API、公共 router 和 `GET /api/approvals?status=PENDING&task_id=...` 是组长独占实现，成员 4 只消费下列 shape。
 
 | Method | Path | Request / response | 语义 |
 | --- | --- | --- | --- |

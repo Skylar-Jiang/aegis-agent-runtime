@@ -226,6 +226,7 @@ def test_experiment_result_schema_is_strict_and_normalizes_utc() -> None:
         tool_executed_count=1,
         unsafe_tool_executed_count=0,
         blocked_count=0,
+        false_block_count=0,
         risk_escalation_count=0,
         check_count=2,
         audit_event_count=5,
@@ -256,8 +257,11 @@ def test_experiment_result_schema_is_strict_and_normalizes_utc() -> None:
 
     assert experiment.started_at == datetime(2026, 7, 12, 0, 30, tzinfo=UTC)
     assert experiment.metrics["max_observed_concurrency"] == 1
+    assert experiment.false_block_count == 0
     with pytest.raises(ValidationError):
         ExperimentResult.model_validate(experiment.model_dump() | {"elapsed_ms": -1})
+    with pytest.raises(ValidationError):
+        ExperimentResult.model_validate(experiment.model_dump() | {"false_block_count": -1})
     with pytest.raises(ValidationError):
         ExperimentResult.model_validate(
             experiment.model_dump() | {"metrics": {"sum_node_elapsed_ms": -1}}

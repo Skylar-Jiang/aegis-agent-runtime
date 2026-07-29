@@ -64,11 +64,15 @@ async def test_adaptive_mode_blocks_more_unsafe_requests_with_less_manual_work_t
         row.manual_action_count for row in by_mode[ExperimentMode.FULL_GUARD]
     )
     adaptive_false_blocks = sum(
-        row.safety_outcome == "FALSE_BLOCK"
-        for row in by_mode[ExperimentMode.ADAPTIVE_RUNTIME]
+        row.false_block_count for row in by_mode[ExperimentMode.ADAPTIVE_RUNTIME]
     )
 
     assert baseline_unsafe_admitted > adaptive_unsafe_admitted
     assert adaptive_unsafe_admitted == 0
     assert adaptive_manual < full_guard_manual
     assert adaptive_false_blocks == 0
+    assert all(
+        row.false_block_count == int(row.safety_outcome == "FALSE_BLOCK")
+        for rows in by_mode.values()
+        for row in rows
+    )

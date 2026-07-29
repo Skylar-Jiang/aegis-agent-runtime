@@ -62,11 +62,13 @@
 
 | 成员 | 分支 | 可修改范围 | 必须交付 | 禁止修改 |
 | --- | --- | --- | --- | --- |
-| 组长 | `codex/v2-benchmark-runtime` | `runtime/`、公共 API/router、`core/`、`contracts/`、`tests/integration/`、`experiments/v2/runners/`、`docs/v2-final/` | Graph submit/snapshot/resume/cancel、真实 Graph metric、parallel/global-pause fixture、speculative-check 能力确认、全量集成 | 成员 2/3/4 私有逻辑 |
+| 组长 | `codex/v2-benchmark-runtime` | `runtime/`、公共 API/router、`core/`、`contracts/`、`tests/integration/`、`experiments/v2/runners/`、`docs/v2-final/` | Graph submit/snapshot/resume/cancel、真实 Graph metric、parallel/global-pause fixture、Graph/Effect API 及 `GET /api/approvals?status=PENDING&task_id=...`；若保留 controlled speculative check overlap 主张，必须交付真实实现、测试和正式 benchmark raw data，否则明确不支持 | 成员 2/3/4 私有逻辑 |
 | 成员 2 | `codex/v2-safety-evaluation` | `security/`、安全配置、`tests/security/`、`experiments/v2/{fixtures,runners,results}/` 的安全数据、报告第 3 节 | Safety/approval 三模式、注入/敏感/shell/egress/poison、人工成本 raw/derived | Scheduler、TaskGraph、Effect/rollback、公共 API/Contract |
 | 成员 3 | `codex/v2-rollback-evaluation` | `execution/`、`memory/`、`tools/`、`tests/rollback/`、`experiments/v2/{fixtures,runners,results}/` 的回滚数据、报告第 4 节 | File/Memory/Download selective rollback、residual/preserved/elapsed raw data | Scheduler/TaskGraph、安全策略、公共 API/Contract |
-| 成员 4 | `codex/v2-visualization-final` | `frontend/`、`audit/`、`api/*_provider.py`、`experiments/v2/results/derived/`、`tests/e2e/`、报告第 5 节与素材 | Graph/effect/audit/dashboard、approval cards、V2 experiment type/API 消费、图表与截图 | Contract、Scheduler/TaskGraph、security/execution/memory/tools、`main.py`/bootstrap/router |
+| 成员 4 | `codex/v2-visualization-final` | `frontend/`、`audit/`、`experiments/v2/results/derived/`、`tests/e2e/`、报告第 5 节与素材 | Graph/effect/audit/dashboard、approval cards、冻结 V2 API 消费、图表与截图 | Contract、Scheduler/TaskGraph、security/execution/memory/tools、`main.py`/bootstrap/router、公共 API/provider |
 
 成员提交必须回答：实现了什么、哪一项真实指标、raw/derived 路径、报告章节和截图/图表。截图写明 run ID、commit、日期；数字只能来自 raw/derived。
+
+公共 API ownership 冻结为组长：Graph/Effect API、公共 router，以及 `GET /api/approvals?status=PENDING&task_id=...` 只能由组长实现和接线；成员 4 仅按 `04-api-freeze.md` 消费 API，不修改公共 router 或 provider。
 
 合并顺序固定为：`codex/v2-benchmark-runtime` → `codex/v2-safety-evaluation` → `codex/v2-rollback-evaluation` → `codex/v2-visualization-final` → 组长最少量 provider 注册与修复。每次 merge 后运行该模块测试、Contract tests 和 integration tests；全部完成后才运行全量 Gate、Demo、正式 benchmark 并最终合 main。

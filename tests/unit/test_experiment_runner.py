@@ -42,6 +42,7 @@ def test_experiment_runner_records_real_mode_metrics(tmp_path: Path) -> None:
     assert all("tool_executed_count" in record for record in records)
     assert all("check_count" in record for record in records)
     assert all("pending_effect_count" in record for record in records)
+    assert all("false_block_count" in record for record in records)
     assert all(record["metrics"]["max_observed_concurrency"] == 1 for record in records)
     assert all(
         record["safety_outcome"]

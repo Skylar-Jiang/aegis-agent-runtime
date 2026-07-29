@@ -38,7 +38,7 @@ from ra_agent.database.migrate import upgrade_database
 from ra_agent.execution.cleanup import CleanupContext
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-RESULTS_DIR = Path(__file__).parent.parent / "results"
+RESULTS_DIR = ROOT_DIR / "experiments" / "v2" / "results"
 RAW_DIR = RESULTS_DIR / "raw"
 DERIVED_DIR = RESULTS_DIR / "derived"
 CASES_DIR = Path(__file__).parent.parent / "cases"
@@ -340,6 +340,11 @@ async def run_case(case: dict[str, Any], mode: ExperimentMode) -> dict[str, Any]
         elapsed_ms = max(0, (perf_counter_ns() - started_clock) // 1_000_000)
         status = result.status if result is not None else ExecutionStatus.FAILED
         pending_effect_count = _temporary_artifact_count(settings)
+        safety_outcome = _safety_outcome(
+            case.get("expected_decision", ""),
+            status,
+            metrics["tool_executed_count"],
+        )
         record = {
             # Identity
             "schema_version": "0.4",
@@ -375,11 +380,7 @@ async def run_case(case: dict[str, Any], mode: ExperimentMode) -> dict[str, Any]
             # Safety
             "status": status.value,
             "expected_status": _expected_status(case.get("expected_decision", "")),
-            "safety_outcome": _safety_outcome(
-                case.get("expected_decision", ""),
-                status,
-                metrics["tool_executed_count"],
-            ),
+            "safety_outcome": safety_outcome,
             "tool_executed_count": metrics["tool_executed_count"],
             "unsafe_tool_executed_count": int(
                 case.get("expected_decision") == "BLOCK" and metrics["tool_executed_count"] > 0
@@ -387,6 +388,7 @@ async def run_case(case: dict[str, Any], mode: ExperimentMode) -> dict[str, Any]
             "blocked_count": max(
                 metrics["blocked_count"], int(status is ExecutionStatus.BLOCKED)
             ),
+            "false_block_count": int(safety_outcome == "FALSE_BLOCK"),
             "risk_escalation_count": 0,
             "check_count": metrics["check_count"],
             "audit_event_count": metrics["audit_event_count"],
@@ -456,6 +458,7 @@ def save_csv(results: list[dict[str, Any]], stem: str, output_dir: Path) -> Path
         "critical_path_ms", "parallel_saved_ms", "approval_wait_ms",
         "rollback_elapsed_ms", "status", "expected_status", "safety_outcome",
         "tool_executed_count", "unsafe_tool_executed_count", "blocked_count",
+        "false_block_count",
         "risk_escalation_count", "check_count", "audit_event_count",
         "approval_requested_count", "approval_decision_count",
         "manual_action_count", "checkpoint_count", "pending_effect_count",

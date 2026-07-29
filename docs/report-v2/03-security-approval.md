@@ -83,7 +83,9 @@ Baseline 的绕过范围写在每一行 `notes` 中，LLM 未参与，`token_usa
 0 次不安全放行，同时将人工动作从 40 次降到 20 次，减少 50%。安全决策均小于毫秒计时
 分辨率，因此本组数据不用于宣称端到端时延收益。
 
-原始证据：
+以下为冻结前的历史开发证据，保留以便追溯，**不是**正式第二轮 V2 数据或最终结论的数据源；正式 raw/derived 必须写入 `experiments/v2/results/` 后再更新本节。
+
+历史原始证据：
 
 - [JSONL raw data](../../experiments/results/raw/v2-security-110b341-20260728.jsonl)
 - [CSV raw data](../../experiments/results/raw/v2-security-110b341-20260728.csv)

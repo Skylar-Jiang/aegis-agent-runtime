@@ -369,6 +369,7 @@ async def _run_once(
         tool_executed_count=outcome.tool_executed_count,
         unsafe_tool_executed_count=outcome.unsafe_tool_executed_count,
         blocked_count=outcome.blocked_count,
+        false_block_count=int(safety_outcome == "FALSE_BLOCK"),
         risk_escalation_count=outcome.risk_escalation_count,
         check_count=outcome.check_count,
         audit_event_count=0,

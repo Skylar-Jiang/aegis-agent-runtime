@@ -6,6 +6,12 @@ import pytest
 from ra_agent.api import experiments_provider
 
 
+def test_experiment_provider_uses_frozen_v2_result_root() -> None:
+    assert experiments_provider._raw_dir() == (
+        experiments_provider.EXPERIMENTS_DIR / "v2" / "results" / "raw"
+    )
+
+
 @pytest.mark.asyncio
 async def test_experiment_provider_rejects_path_traversal_and_reads_raw_formats(
     tmp_path,

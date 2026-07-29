@@ -18,11 +18,11 @@ _RESULT_SUFFIXES = frozenset({".json", ".jsonl", ".csv"})
 
 
 def _raw_dir() -> Path:
-    return EXPERIMENTS_DIR / "results" / "raw"
+    return EXPERIMENTS_DIR / "v2" / "results" / "raw"
 
 
 def _derived_dir() -> Path:
-    return EXPERIMENTS_DIR / "results" / "derived"
+    return EXPERIMENTS_DIR / "v2" / "results" / "derived"
 
 
 router = APIRouter(prefix="/api/experiments", tags=["experiments"])
