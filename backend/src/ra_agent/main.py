@@ -7,8 +7,10 @@ from fastapi import FastAPI
 from ra_agent.api import (
     approvals_router,
     experiments_router,
+    graph_router,
     reports_router,
     streams_router,
+    task_graph_router,
     tasks_router,
 )
 from ra_agent.contracts import APIResponse
@@ -44,6 +46,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         runtime_scheduler=app.state.agent_runner.scheduler,
     )
     app.include_router(tasks_router)
+    app.include_router(task_graph_router)
+    app.include_router(graph_router)
     app.include_router(approvals_router)
     app.include_router(reports_router)
     app.include_router(streams_router)

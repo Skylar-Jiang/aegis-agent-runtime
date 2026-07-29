@@ -1,0 +1,22 @@
+{
+  "parallel-dag": {
+    "objective_class": "graph_parallelism",
+    "nodes": [
+      {"node_id": "read-a", "tool_name": "read_file", "duration_ms": 45, "parallel_safe": true},
+      {"node_id": "read-b", "tool_name": "read_file", "duration_ms": 45, "parallel_safe": true},
+      {"node_id": "write-a", "tool_name": "write_file", "path": "alpha.txt", "duration_ms": 30, "dependencies": ["read-a"], "effect_targets": ["file:alpha.txt"], "parallel_safe": true},
+      {"node_id": "write-a-conflict", "tool_name": "write_file", "path": "alpha.txt", "duration_ms": 30, "effect_targets": ["file:alpha.txt"], "parallel_safe": true},
+      {"node_id": "serial-read", "tool_name": "read_file", "duration_ms": 20, "dependencies": ["read-b"], "parallel_safe": false}
+    ]
+  },
+  "approval-wait": {
+    "objective_class": "approval_aware_graph",
+    "approval_delay_ms": 90,
+    "nodes": [
+      {"node_id": "A", "tool_name": "delete_file", "path": "review.txt", "duration_ms": 10, "effect_targets": ["file:review.txt"], "parallel_safe": false, "requires_approval": true},
+      {"node_id": "B", "tool_name": "read_file", "duration_ms": 55, "parallel_safe": true},
+      {"node_id": "C", "tool_name": "read_file", "duration_ms": 15, "dependencies": ["A"], "parallel_safe": true},
+      {"node_id": "D", "tool_name": "write_file", "path": "review.txt", "duration_ms": 20, "effect_targets": ["file:review.txt"], "parallel_safe": true}
+    ]
+  }
+}
