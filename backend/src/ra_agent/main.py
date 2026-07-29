@@ -12,7 +12,11 @@ from ra_agent.api import (
     tasks_router,
 )
 from ra_agent.contracts import APIResponse
-from ra_agent.core.bootstrap import build_agent_runner, build_runtime_container
+from ra_agent.core.bootstrap import (
+    build_agent_runner,
+    build_runtime_container,
+    build_task_graph_scheduler,
+)
 from ra_agent.core.config import RuntimeMode, Settings
 from ra_agent.database.migrate import upgrade_database
 
@@ -35,6 +39,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="RA-Agent Runtime", version="0.2.0", lifespan=lifespan)
     app.state.services = build_runtime_container(runtime_settings)
     app.state.agent_runner = build_agent_runner(runtime_settings, app.state.services)
+    app.state.task_graph_scheduler = build_task_graph_scheduler(
+        app.state.services,
+        runtime_scheduler=app.state.agent_runner.scheduler,
+    )
     app.include_router(tasks_router)
     app.include_router(approvals_router)
     app.include_router(reports_router)

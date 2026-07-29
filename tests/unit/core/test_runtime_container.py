@@ -13,10 +13,14 @@ from ra_agent.core.bootstrap import (
     build_agent_runner,
     build_runtime_container,
     build_runtime_scheduler,
+    build_task_graph_scheduler,
 )
 from ra_agent.core.config import RuntimeMode, Settings
 from ra_agent.database.migrate import upgrade_database
 from ra_agent.execution import MockToolExecutor
+from ra_agent.execution.effect_manager import EffectManager
+from ra_agent.execution.effect_store import FilesystemEffectStore
+from ra_agent.execution.selective_rollback import SelectiveRollbackExecutor
 from ra_agent.execution.checkpoint import FilesystemCheckpointManager
 from ra_agent.execution.commit_gate import FilesystemCommitGate
 from ra_agent.execution.executor import RegistryToolExecutor
@@ -30,6 +34,7 @@ from ra_agent.tools.implementations.memory_tools import (
 from ra_agent.tools.implementations.run_shell import RestrictedShellHandler
 from ra_agent.main import create_app
 from ra_agent.runtime import InMemoryRequestExecutionRegistry
+from ra_agent.runtime.graph_scheduler import RuntimeTaskGraphScheduler
 from ra_agent.security.deep_checker import RuleBasedDeepSafetyChecker
 from ra_agent.security.permission_gate import RuleBasedPermissionGate
 from ra_agent.security.policy_engine import RuleBasedPolicyEngine
@@ -115,6 +120,37 @@ def test_live_agent_mode_uses_real_controlled_file_components(tmp_path: Path) ->
     assert isinstance(
         container.tool_registry.get_handler("run_shell"), RestrictedShellHandler
     )
+
+
+def test_live_agent_mode_wires_one_shared_v2_effect_service_bundle(tmp_path: Path) -> None:
+    container = build_runtime_container(_settings(tmp_path, RuntimeMode.LIVE_AGENT))
+
+    assert isinstance(container.effect_store, FilesystemEffectStore)
+    assert isinstance(container.effect_manager, EffectManager)
+    assert isinstance(container.selective_rollback_executor, SelectiveRollbackExecutor)
+    assert container.cleanup_coordinator is not None
+    assert isinstance(container.commit_gate, FilesystemCommitGate)
+    assert isinstance(container.tool_executor, RegistryToolExecutor)
+    assert container.effect_manager.store is container.effect_store
+    assert container.selective_rollback_executor._effect_manager is container.effect_manager
+    assert container.selective_rollback_executor._effect_store is container.effect_store
+    assert container.cleanup_coordinator._effect_manager is container.effect_manager
+    assert container.commit_gate._effect_manager is container.effect_manager
+    assert container.tool_executor._effect_manager is container.effect_manager
+
+
+def test_task_graph_scheduler_uses_the_live_effect_and_rollback_services(
+    tmp_path: Path,
+) -> None:
+    container = build_runtime_container(_settings(tmp_path, RuntimeMode.LIVE_AGENT))
+    runtime_scheduler = build_runtime_scheduler(container)
+
+    scheduler = build_task_graph_scheduler(container, runtime_scheduler=runtime_scheduler)
+
+    assert isinstance(scheduler, RuntimeTaskGraphScheduler)
+    assert scheduler._runtime_scheduler is runtime_scheduler
+    assert scheduler._effect_store is container.effect_store
+    assert scheduler._rollback_executor is container.selective_rollback_executor
 
 
 def test_unconfigured_live_agent_runner_fails_before_tool_scheduling(

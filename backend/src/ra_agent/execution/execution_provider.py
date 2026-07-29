@@ -21,13 +21,7 @@ EXECUTION_PROVIDER_NAME = "execution.v2-effects-rollback"
 
 @dataclass(frozen=True, slots=True)
 class ExecutionProviderServices:
-    """Member-owned execution services installed through the frozen provider contract.
-
-    The frozen ``ServiceContainer`` does not yet expose slots for effect queries or
-    graph-level rollback. Those services remain available through this concrete bundle
-    so the group lead can wire them in a later owner-only integration change without
-    the provider redefining a public Protocol or Contract.
-    """
+    """Member-owned execution services installed through the frozen provider contract."""
 
     tool_executor: ToolExecutor
     checkpoint_manager: CheckpointManager
@@ -70,4 +64,9 @@ class ExecutionServiceProvider(ExecutionProvider):
             commit_gate=services.commit_gate,
             rollback_manager=services.rollback_manager,
             cleanup_coordinator=services.cleanup_coordinator,
+            effect_store=services.effect_store,
+            effect_manager=services.effect_manager,
+            memory_manager=services.memory_manager,
+            download_manager=services.download_manager,
+            selective_rollback_executor=services.selective_rollback,
         )

@@ -18,6 +18,7 @@ from ra_agent.memory import (
 
 from .download_manager import DownloadLifecycleManager
 from .effect_manager import EffectManager
+from .effect_store import EffectNotFoundError
 from .pending_store import PendingStore
 from .quarantine import QuarantineNotFoundError, QuarantineStatus
 from .rollback import RollbackManager
@@ -197,15 +198,17 @@ class RequestCleanupCoordinator:
 
             effect_manager = self._effect_manager
             if not failures and effect_manager is not None:
-                await self._attempt(
-                    "effect_commit",
-                    lambda: effect_manager.mark_committed(
+                try:
+                    await effect_manager.mark_committed(
                         context.request_id,
                         checkpoint_id=context.checkpoint_id,
-                    ),
-                    completed,
-                    failures,
-                )
+                    )
+                except EffectNotFoundError:
+                    pass
+                except Exception as error:
+                    failures.append(self._failure("effect_commit", error))
+                else:
+                    completed.append("effect_commit")
 
             return self._finish_report(
                 context.request_id,

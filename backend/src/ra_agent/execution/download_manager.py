@@ -16,6 +16,7 @@ from .artifacts import (
     validate_execution_artifacts,
 )
 from .effect_manager import EffectManager
+from .effect_store import EffectNotFoundError
 from .quarantine import (
     FilesystemQuarantineStore,
     QuarantineIntegrityError,
@@ -75,7 +76,7 @@ class DownloadLifecycleManager:
         record = await self._validate_pending_action(request, execution, post_check)
         if record.status is QuarantineStatus.COMMITTED:
             if self._effect_manager is not None:
-                await self._effect_manager.mark_committed(request.request_id)
+                await self._mark_effect_committed(request.request_id)
             return record
         if record.status is not QuarantineStatus.QUARANTINED:
             raise DownloadLifecyclePreconditionError(
@@ -84,7 +85,7 @@ class DownloadLifecycleManager:
         committed = await self._store.mark_committed(request.request_id)
         if self._effect_manager is not None:
             try:
-                await self._effect_manager.mark_committed(request.request_id)
+                await self._mark_effect_committed(request.request_id)
             except Exception:
                 await self._store.mark_rolled_back(
                     request.request_id,
@@ -92,6 +93,16 @@ class DownloadLifecycleManager:
                 )
                 raise
         return committed
+
+    async def _mark_effect_committed(self, request_id: str) -> None:
+        """Keep legacy injected executors compatible when they do not emit V2 effects."""
+
+        if self._effect_manager is None:
+            return
+        try:
+            await self._effect_manager.mark_committed(request_id)
+        except EffectNotFoundError:
+            return
 
     async def reject(
         self,

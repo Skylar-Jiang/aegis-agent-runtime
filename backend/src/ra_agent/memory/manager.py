@@ -16,6 +16,7 @@ from ra_agent.execution.artifacts import (
     validate_execution_artifacts,
 )
 from ra_agent.execution.effect_manager import EffectManager
+from ra_agent.execution.effect_store import EffectNotFoundError
 
 from .models import MemoryRecord
 from .store import FilesystemMemoryStore, MemoryIntegrityError
@@ -69,7 +70,7 @@ class MemoryLifecycleManager:
         if record.status is not MemoryStatus.PENDING:
             if record.status is MemoryStatus.TRUSTED:
                 if self._effect_manager is not None:
-                    await self._effect_manager.mark_committed(request.request_id)
+                    await self._mark_effect_committed(request.request_id)
                 return record
             raise MemoryLifecyclePreconditionError(
                 f"memory commit requires PENDING state, got {record.status.value}"
@@ -77,7 +78,7 @@ class MemoryLifecycleManager:
         trusted = await self._store.mark_trusted(request.request_id)
         if self._effect_manager is not None:
             try:
-                await self._effect_manager.mark_committed(request.request_id)
+                await self._mark_effect_committed(request.request_id)
             except Exception:
                 await self._store.mark_rolled_back(
                     request.request_id,
@@ -85,6 +86,14 @@ class MemoryLifecycleManager:
                 )
                 raise
         return trusted
+
+    async def _mark_effect_committed(self, request_id: str) -> None:
+        if self._effect_manager is None:
+            return
+        try:
+            await self._effect_manager.mark_committed(request_id)
+        except EffectNotFoundError:
+            return
 
     async def reject(
         self,
