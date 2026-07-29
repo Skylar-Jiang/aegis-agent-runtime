@@ -5,12 +5,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ra_agent.contracts import (
+    EffectStatus,
     ExecutionStatus,
+    MemoryStatus,
     SourceType,
     TaskContract,
     TaskGraph,
     TaskNode,
     ToolCallRequest,
+    ToolExecutionResult,
 )
 from ra_agent.core.bootstrap import (
     build_runtime_container,
@@ -19,6 +22,12 @@ from ra_agent.core.bootstrap import (
 )
 from ra_agent.core.config import RuntimeMode, Settings
 from ra_agent.database.migrate import upgrade_database
+from ra_agent.execution.effect_manager import EffectManager
+from ra_agent.execution.effect_store import FilesystemEffectStore
+from ra_agent.execution.selective_rollback import SelectiveRollbackExecutor
+from ra_agent.memory import FilesystemMemoryStore, MemoryLifecycleManager
+from ra_agent.runtime.graph_scheduler import RuntimeTaskGraphScheduler
+from ra_agent.tools.implementations.memory_tools import MemoryWriteHandler
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -182,3 +191,78 @@ def test_shared_effect_target_is_serialized_through_live_runtime(tmp_path: Path)
     assert result.node_results["first"].status is ExecutionStatus.COMMITTED
     assert result.node_results["second"].status is ExecutionStatus.COMMITTED
     assert (settings.workspace_root / "same.txt").read_text(encoding="utf-8") == "second"
+
+
+def test_graph_cancellation_selectively_rolls_back_pending_memory_effect(
+    tmp_path: Path,
+) -> None:
+    async def run() -> None:
+        memory_store = FilesystemMemoryStore(tmp_path / "memory", max_value_bytes=4096)
+        effect_store = FilesystemEffectStore(tmp_path / "effects")
+        effect_manager = EffectManager(effect_store)
+        memory_manager = MemoryLifecycleManager(memory_store, effect_manager)
+        contract = TaskContract(
+            allowed_actions=["memory_write"],
+            allowed_resources=["cancelled-note"],
+            max_affected_objects=1,
+        )
+        node = _node(
+            task_id="task-cancel-memory",
+            graph_id="graph-cancel-memory",
+            node_id="memory",
+            tool_name="memory_write",
+            arguments={"key": "cancelled-note", "value": "temporary"},
+            contract=contract,
+            effect_targets=["memory:cancelled-note"],
+        )
+        staged = await MemoryWriteHandler(memory_store)(node.request)
+        await effect_manager.register_pending(node.request, staged)
+
+        class Scheduler:
+            def __init__(self) -> None:
+                self.started = asyncio.Event()
+                self.cancelled = asyncio.Event()
+
+            async def schedule(self, request: ToolCallRequest) -> ToolExecutionResult:
+                self.started.set()
+                await self.cancelled.wait()
+                return ToolExecutionResult(
+                    task_id=request.task_id,
+                    step_id=request.step_id,
+                    request_id=request.request_id,
+                    status=ExecutionStatus.CANCELLED,
+                    error="cancelled",
+                )
+
+            async def cancel_task(self, task_id: str) -> None:
+                assert task_id == "task-cancel-memory"
+                self.cancelled.set()
+
+        runtime = Scheduler()
+        scheduler = RuntimeTaskGraphScheduler(
+            runtime_scheduler=runtime,
+            effect_store=effect_store,
+            rollback_executor=SelectiveRollbackExecutor(
+                effect_store=effect_store,
+                effect_manager=effect_manager,
+                memory_manager=memory_manager,
+            ),
+        )
+        graph = TaskGraph(
+            graph_id="graph-cancel-memory",
+            task_id="task-cancel-memory",
+            max_parallelism=1,
+            nodes=[node],
+        )
+        task = asyncio.create_task(scheduler.schedule_graph(graph))
+        await runtime.started.wait()
+        await scheduler.cancel_graph(graph.graph_id)
+        result = await task
+
+        assert result.node_results["memory"].status is ExecutionStatus.ROLLED_BACK
+        effect = await effect_store.get_by_request_id(node.request.request_id)
+        assert effect is not None
+        assert effect.status is EffectStatus.ROLLED_BACK
+        assert (await memory_store.get(node.request.request_id)).status is MemoryStatus.ROLLED_BACK
+
+    asyncio.run(run())
