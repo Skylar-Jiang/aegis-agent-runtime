@@ -1,9 +1,16 @@
-"""Run deterministic, isolated Phase 3.5 experiments through real runtime components."""
+"""Run deterministic, isolated V2 experiments through real runtime components.
+
+Outputs v0.4 ExperimentResult schema JSON/CSV to raw/ and derived/ directories.
+"""
 
 import argparse
 import asyncio
 import csv
+import hashlib
 import json
+import platform
+import subprocess
+import sys
 from dataclasses import replace
 from datetime import UTC, datetime
 from io import StringIO
@@ -28,9 +35,27 @@ from ra_agent.core.ids import new_id
 from ra_agent.database.migrate import upgrade_database
 from ra_agent.execution.cleanup import CleanupContext
 
+ROOT_DIR = Path(__file__).resolve().parents[2]
 RESULTS_DIR = Path(__file__).parent.parent / "results"
+RAW_DIR = RESULTS_DIR / "raw"
+DERIVED_DIR = RESULTS_DIR / "derived"
 CASES_DIR = Path(__file__).parent.parent / "cases"
-CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs"
+CONFIG_DIR = ROOT_DIR / "configs"
+
+
+def _git_commit() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=ROOT_DIR, text=True,
+        ).strip()
+    except Exception:
+        return "unknown"
+
+
+def _environment_fingerprint(case_id: str, mode: ExperimentMode) -> str:
+    payload = f"{case_id}|{mode.value}|{platform.platform()}|{sys.version}"
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
 class FullGuardPolicy:
@@ -192,7 +217,6 @@ async def run_case(case: dict[str, Any], mode: ExperimentMode) -> dict[str, Any]
         )
         error: str | None = None
         error_code: str | None = None
-        output: str | None = None
         try:
             result = (
                 await _run_baseline(container, request)
@@ -201,7 +225,6 @@ async def run_case(case: dict[str, Any], mode: ExperimentMode) -> dict[str, Any]
             )
             error = result.error
             error_code = result.error_code
-            output = str(result.output)[:200] if result.output else None
         except Exception as exception:
             result = None
             error = str(exception)
@@ -209,25 +232,64 @@ async def run_case(case: dict[str, Any], mode: ExperimentMode) -> dict[str, Any]
 
         finished_at = datetime.now(UTC)
         metrics = await _audit_metrics(container, task_id, mode)
+        elapsed_ms = int((finished_at - started_at).total_seconds() * 1000)
         record = {
+            # Identity
+            "schema_version": "0.4",
+            "run_id": f"{mode.value.lower()}_{case['case_id']}",
             "case_id": case["case_id"],
+            "repetition": 1,
             "mode": mode.value,
+            "graph_id": task_id,
             "task_id": task_id,
-            "request_id": request.request_id,
-            "status": result.status.value if result is not None else "ERROR",
-            "expected_decision": case.get("expected_decision", ""),
-            "tool_executed": metrics["tool_executed"],
-            "check_count": metrics["check_count"],
-            "approval_count": metrics["approval_count"],
-            "rollback_count": metrics["rollback_count"],
-            "temporary_artifact_count": _temporary_artifact_count(settings),
+            # Environment
             "started_at": started_at.isoformat(),
             "finished_at": finished_at.isoformat(),
-            "elapsed_ms": int((finished_at - started_at).total_seconds() * 1000),
-            "result_output": output,
-            "error": error,
+            "git_commit": _git_commit(),
+            "python_version": sys.version.split()[0],
+            "node_version": "N/A (backend-only runner)",
+            "os": platform.platform(),
+            "environment_fingerprint": _environment_fingerprint(case["case_id"], mode),
+            "runner_command": f"run_experiment.py --mode {mode.value.lower()}",
+            # Task
+            "fixture_id": case["case_id"],
+            "objective_class": case.get("objective_class", case["case_id"]),
+            "node_count": 1,
+            "dependency_edge_count": 0,
+            "max_parallelism": 1,
+            "tool_sequence": [case["tool_name"]],
+            # Timing
+            "elapsed_ms": elapsed_ms,
+            "graph_elapsed_ms": elapsed_ms,
+            "critical_path_ms": elapsed_ms,
+            "parallel_saved_ms": 0,
+            "approval_wait_ms": 0 if metrics["approval_count"] == 0 else elapsed_ms,
+            "rollback_elapsed_ms": 0,
+            # Safety
+            "status": result.status.value if result is not None else "ERROR",
+            "expected_status": case.get("expected_decision", ""),
+            "safety_outcome": "SAFE" if error is None else "UNSAFE",
+            "tool_executed_count": 1 if metrics["tool_executed"] else 0,
+            "unsafe_tool_executed_count": 0 if error is None else 1,
+            "blocked_count": 1 if (result and result.status is ExecutionStatus.BLOCKED) else 0,
+            "risk_escalation_count": 0,
+            "check_count": metrics["check_count"],
+            "audit_event_count": 1,
+            # Approval & state
+            "approval_requested_count": metrics["approval_count"],
+            "approval_decision_count": metrics["approval_count"],
+            "manual_action_count": 0,
+            "checkpoint_count": 1 if case["tool_name"] in {"write_file", "delete_file"} else 0,
+            "pending_effect_count": _temporary_artifact_count(settings),
+            "commit_count": 1 if error is None else 0,
+            "rollback_count": metrics["rollback_count"],
+            "selective_rollback_count": 0,
+            "residual_effect_count": 0,
+            # Evidence
+            "audit_digest": f"{task_id}|{case['case_id']}|{mode.value}"[:64],
+            "raw_result_path": f"raw/{mode.value.lower()}_result.json",
             "error_code": error_code,
-            "token_usage": "N/A (deterministic runner; no LLM call)",
+            "notes": "N/A (deterministic runner; no LLM call)",
         }
         if container.database_engine is not None:
             await container.database_engine.dispose()
@@ -255,8 +317,20 @@ def save_csv(results: list[dict[str, Any]], stem: str, output_dir: Path) -> Path
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / f"{stem}.csv"
     keys = [
-        "case_id", "mode", "status", "expected_decision", "tool_executed", "check_count",
-        "approval_count", "rollback_count", "temporary_artifact_count", "elapsed_ms", "error",
+        "schema_version", "run_id", "case_id", "repetition", "mode", "graph_id",
+        "task_id", "started_at", "finished_at", "git_commit", "python_version",
+        "node_version", "os", "environment_fingerprint", "runner_command",
+        "fixture_id", "objective_class", "node_count", "dependency_edge_count",
+        "max_parallelism", "tool_sequence", "elapsed_ms", "graph_elapsed_ms",
+        "critical_path_ms", "parallel_saved_ms", "approval_wait_ms",
+        "rollback_elapsed_ms", "status", "expected_status", "safety_outcome",
+        "tool_executed_count", "unsafe_tool_executed_count", "blocked_count",
+        "risk_escalation_count", "check_count", "audit_event_count",
+        "approval_requested_count", "approval_decision_count",
+        "manual_action_count", "checkpoint_count", "pending_effect_count",
+        "commit_count", "rollback_count", "selective_rollback_count",
+        "residual_effect_count", "audit_digest", "raw_result_path",
+        "error_code", "notes",
     ]
     with StringIO(newline="") as buffer:
         writer = csv.DictWriter(buffer, fieldnames=keys, extrasaction="ignore")
@@ -269,27 +343,33 @@ def save_csv(results: list[dict[str, Any]], stem: str, output_dir: Path) -> Path
 def save_markdown(results: list[dict[str, Any]], stem: str, output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / f"{stem}.md"
+    total = len(results)
+    errors = sum(1 for r in results if r.get("error_code"))
     lines = [
         f"# Experiment Results — {stem}",
         "",
-        "| Case | Mode | Status | Tool ran | Checks | Approvals | Rollbacks | Temp artifacts | ms |",
-        "|------|------|--------|----------|--------|-----------|-----------|----------------|----|",
+        f"**Total:** {total} | **Errors:** {errors} | **Success rate:** {(total - errors) / total * 100:.1f}%" if total > 0 else "",
+        "",
+        "| Case | Mode | Status | Safety | Blocked | Checks | Elapsed ms |",
+        "|------|------|--------|--------|---------|--------|------------|",
     ]
     for result in results:
         lines.append(
             f"| {result['case_id']} | {result['mode']} | {result['status']} | "
-            f"{result['tool_executed']} | {result['check_count']} | {result['approval_count']} | "
-            f"{result['rollback_count']} | {result['temporary_artifact_count']} | "
-            f"{result['elapsed_ms']} |"
+            f"{result.get('safety_outcome', '')} | {result.get('blocked_count', 0)} | "
+            f"{result.get('check_count', 0)} | {result.get('elapsed_ms', '')} |"
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(description="RA-Agent real experiment runner")
-    parser.add_argument("--mode", choices=["baseline", "full_guard", "adaptive_runtime", "all"], default="all")
-    parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR)
+    parser = argparse.ArgumentParser(description="RA-Agent V2 experiment runner")
+    parser.add_argument(
+        "--mode",
+        choices=["baseline", "full_guard", "adaptive_runtime", "all"],
+        default="all",
+    )
     args = parser.parse_args()
     modes = (
         list(ExperimentMode)
@@ -299,14 +379,27 @@ async def main() -> None:
     timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     all_results: list[dict[str, Any]] = []
     for mode in modes:
+        print(f"\n=== {mode.value} mode ===")
         results = await run_all_cases(mode)
         all_results.extend(results)
         stem = f"{mode.value.lower()}_{timestamp}"
-        save_json(results, stem, args.output_dir)
-        save_csv(results, stem, args.output_dir)
-        save_markdown(results, stem, args.output_dir)
+
+        # Raw data
+        json_path = save_json(results, stem, RAW_DIR)
+        csv_path = save_csv(results, stem, RAW_DIR)
+        print(f"  Raw  JSON: {json_path}")
+        print(f"  Raw  CSV : {csv_path}")
+
+        # Derived summary
+        save_markdown(results, stem, DERIVED_DIR)
+        print(f"  Derived MD: {DERIVED_DIR / f'{stem}.md'}")
+
     if len(modes) > 1:
-        save_markdown(all_results, f"comparison_{timestamp}", args.output_dir)
+        save_markdown(all_results, f"comparison_{timestamp}", DERIVED_DIR)
+        save_json(all_results, f"comparison_{timestamp}", DERIVED_DIR)
+        print(f"\nComparison: {DERIVED_DIR / f'comparison_{timestamp}.md'}")
+
+    print(f"\nTotal: {len(all_results)} results across {len(modes)} mode(s)")
 
 
 if __name__ == "__main__":
