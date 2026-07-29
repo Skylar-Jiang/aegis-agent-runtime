@@ -9,6 +9,7 @@ from ra_agent.contracts import (
     RecoverabilityType,
     RiskLevel,
     RiskVerdict,
+    SourceType,
     ToolCallRequest,
     ToolSpec,
 )
@@ -28,7 +29,9 @@ from ra_agent.security.rule_engine import RuleEngine
         (RiskLevel.FORBIDDEN, PolicyDecision.BLOCK),
     ],
 )
-async def test_policy_mapping(rules: RuleEngine, risk: RiskLevel, expected: PolicyDecision) -> None:
+async def test_policy_mapping(
+    rules: RuleEngine, risk: RiskLevel, expected: PolicyDecision
+) -> None:
     verdict = RiskVerdict(
         request_id="request-policy",
         risk_level=risk,
@@ -77,11 +80,54 @@ async def test_delete_permission_requires_runtime_approval(
     request_factory: Callable[..., ToolCallRequest],
 ) -> None:
     request = request_factory("delete_file", arguments={"path": "draft.txt"})
-    result = await RuleBasedPermissionGate(rules).check(request, tool_specs["delete_file"])
+    result = await RuleBasedPermissionGate(rules).check(
+        request, tool_specs["delete_file"]
+    )
 
     assert result.allowed
     assert result.requires_approval
     assert result.decisions[0].status is PermissionStatus.GRANTED
+
+
+@pytest.mark.asyncio
+async def test_untrusted_write_permission_requires_adaptive_approval(
+    rules: RuleEngine,
+    tool_specs: dict[str, ToolSpec],
+    request_factory: Callable[..., ToolCallRequest],
+) -> None:
+    request = request_factory(
+        "write_file",
+        arguments={"path": "reports/result.md", "content": "derived"},
+        source_type=SourceType.EXTERNAL_DOCUMENT,
+    )
+
+    result = await RuleBasedPermissionGate(rules).check(
+        request, tool_specs["write_file"]
+    )
+
+    assert result.allowed
+    assert result.requires_approval
+    assert "signal:untrusted_data_flow" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_user_write_permission_does_not_add_manual_action(
+    rules: RuleEngine,
+    tool_specs: dict[str, ToolSpec],
+    request_factory: Callable[..., ToolCallRequest],
+) -> None:
+    request = request_factory(
+        "write_file",
+        arguments={"path": "reports/result.md", "content": "user-authored"},
+    )
+
+    result = await RuleBasedPermissionGate(rules).check(
+        request, tool_specs["write_file"]
+    )
+
+    assert result.allowed
+    assert not result.requires_approval
+    assert result.reason == "All required permissions are granted"
 
 
 @pytest.mark.asyncio

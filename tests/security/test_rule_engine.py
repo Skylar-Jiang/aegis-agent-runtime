@@ -18,7 +18,12 @@ def test_loads_complete_security_configuration(rules: RuleEngine) -> None:
     assert rules.decision_for(RiskLevel.MEDIUM) is PolicyDecision.SANDBOX_CHECK
     assert rules.decision_for(RiskLevel.HIGH) is PolicyDecision.REQUEST_APPROVAL
     assert rules.decision_for(RiskLevel.CRITICAL) is PolicyDecision.BLOCK
+    assert rules.tool_risk_floor("send_email_dry_run") is RiskLevel.LOW
+    assert rules.tool_risk_floor("unknown_tool") is RiskLevel.HIGH
     assert rules.risk_for("path_traversal") is RiskLevel.CRITICAL
+    assert rules.risk_for("untrusted_data_flow") is RiskLevel.HIGH
+    assert rules.risk_for("sensitive_egress") is RiskLevel.LOW
+    assert rules.risk_for("secret_egress") is RiskLevel.CRITICAL
     assert rules.matches_sensitive_path("nested/.ENV")
     assert rules.matches_sensitive_path("keys/service.pem")
     assert rules.matches_protected_path("configs/risk_rules.yaml")
@@ -43,6 +48,12 @@ def test_permission_configuration_is_complete(rules: RuleEngine) -> None:
         is PermissionStatus.DENIED
     )
     assert rules.permission_requires_approval(PermissionType.FILE_DELETE)
+    assert {item.value for item in rules.adaptive_source_types} == {
+        "external_document",
+        "tool_output",
+    }
+    assert "WRITE" in rules.adaptive_side_effect_types
+    assert "CONFIDENTIAL" in rules.adaptive_lineage_sensitivities
 
 
 def test_malformed_yaml_creates_fail_closed_engine(tmp_path: Path) -> None:
