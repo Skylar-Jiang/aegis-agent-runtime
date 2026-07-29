@@ -15,6 +15,7 @@ from .artifacts import (
     ArtifactContractError,
     validate_execution_artifacts,
 )
+from .effect_manager import EffectManager
 from .quarantine import (
     FilesystemQuarantineStore,
     QuarantineIntegrityError,
@@ -42,8 +43,13 @@ class DownloadLifecycleIntegrityError(DownloadLifecycleError):
 class DownloadLifecycleManager:
     """Apply PostCheck decisions to quarantine without implementing security checks."""
 
-    def __init__(self, store: FilesystemQuarantineStore) -> None:
+    def __init__(
+        self,
+        store: FilesystemQuarantineStore,
+        effect_manager: EffectManager | None = None,
+    ) -> None:
         self._store = store
+        self._effect_manager = effect_manager
 
     @property
     def store(self) -> FilesystemQuarantineStore:
@@ -68,12 +74,24 @@ class DownloadLifecycleManager:
             )
         record = await self._validate_pending_action(request, execution, post_check)
         if record.status is QuarantineStatus.COMMITTED:
+            if self._effect_manager is not None:
+                await self._effect_manager.mark_committed(request.request_id)
             return record
         if record.status is not QuarantineStatus.QUARANTINED:
             raise DownloadLifecyclePreconditionError(
                 f"download commit requires QUARANTINED state, got {record.status.value}"
             )
-        return await self._store.mark_committed(request.request_id)
+        committed = await self._store.mark_committed(request.request_id)
+        if self._effect_manager is not None:
+            try:
+                await self._effect_manager.mark_committed(request.request_id)
+            except Exception:
+                await self._store.mark_rolled_back(
+                    request.request_id,
+                    reason="effect commit update failed",
+                )
+                raise
+        return committed
 
     async def reject(
         self,
@@ -87,22 +105,30 @@ class DownloadLifecycleManager:
             )
         record = await self._validate_pending_action(request, execution, post_check)
         if record.status is QuarantineStatus.REJECTED:
+            if self._effect_manager is not None:
+                await self._effect_manager.mark_rejected(request.request_id)
             return record
         if record.status is not QuarantineStatus.QUARANTINED:
             raise DownloadLifecyclePreconditionError(
                 f"download rejection requires QUARANTINED state, got {record.status.value}"
             )
-        return await self._store.mark_rejected(
+        rejected = await self._store.mark_rejected(
             request.request_id,
             reason=post_check.reason,
         )
+        if self._effect_manager is not None:
+            await self._effect_manager.mark_rejected(request.request_id)
+        return rejected
 
     async def rollback(self, request_id: str, *, reason: str) -> QuarantineRecord:
         if not await self._store.verify_integrity(request_id):
             raise DownloadLifecycleIntegrityError(
                 "quarantine failed integrity verification before rollback"
             )
-        return await self._store.mark_rolled_back(request_id, reason=reason)
+        rolled_back = await self._store.mark_rolled_back(request_id, reason=reason)
+        if self._effect_manager is not None:
+            await self._effect_manager.mark_rolled_back(request_id, missing_ok=True)
+        return rolled_back
 
     async def _validate_pending_action(
         self,
