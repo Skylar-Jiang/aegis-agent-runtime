@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from pydantic import Field, model_validator
 
 from .common import ContractModel, UTCDateTime
@@ -5,6 +7,19 @@ from .enums import ExperimentMode
 
 
 class ExperimentResult(ContractModel):
+    _ALLOWED_METRIC_KEYS: ClassVar[frozenset[str]] = frozenset(
+        {
+            "sum_node_elapsed_ms",
+            "max_observed_concurrency",
+            "nodes_completed_during_approval",
+            "hidden_approval_wait_ms",
+            "affected_node_count",
+            "rolled_back_effect_count",
+            "preserved_node_count",
+            "preserved_effect_count",
+        }
+    )
+
     schema_version: str = Field(min_length=1)
     run_id: str = Field(min_length=1)
     case_id: str = Field(min_length=1)
@@ -50,6 +65,7 @@ class ExperimentResult(ContractModel):
     rollback_count: int = Field(ge=0)
     selective_rollback_count: int = Field(ge=0)
     residual_effect_count: int = Field(ge=0)
+    metrics: dict[str, int] = Field(default_factory=dict)
     audit_digest: str | None = None
     raw_result_path: str | None = None
     error_code: str | None = None
@@ -59,4 +75,8 @@ class ExperimentResult(ContractModel):
     def validate_timing(self) -> "ExperimentResult":
         if self.finished_at < self.started_at:
             raise ValueError("experiment finished_at must not precede started_at")
+        if any(value < 0 for value in self.metrics.values()):
+            raise ValueError("experiment metrics must be non-negative")
+        if unknown := set(self.metrics).difference(self._ALLOWED_METRIC_KEYS):
+            raise ValueError(f"unsupported experiment metrics: {sorted(unknown)}")
         return self

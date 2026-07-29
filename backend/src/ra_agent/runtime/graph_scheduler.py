@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from typing import Protocol, cast
+from urllib.parse import urlsplit, urlunsplit
 
 from ra_agent.audit import AuditRecorder
 from ra_agent.contracts import (
@@ -590,6 +591,30 @@ class RuntimeTaskGraphScheduler:
             ):
                 return None
             return f"memory:{key}"
+        if node.request.tool_name == "download_url":
+            url = node.request.arguments.get("url")
+            if not isinstance(url, str):
+                return None
+            try:
+                parsed = urlsplit(url)
+                port = parsed.port
+            except ValueError:
+                return None
+            if (
+                parsed.scheme.casefold() not in {"http", "https"}
+                or parsed.hostname is None
+                or parsed.username is not None
+                or parsed.password is not None
+            ):
+                return None
+            host = parsed.hostname.casefold()
+            netloc = f"[{host}]" if ":" in host else host
+            if port is not None:
+                netloc = f"{netloc}:{port}"
+            normalized = urlunsplit(
+                (parsed.scheme.casefold(), netloc, parsed.path or "/", parsed.query, "")
+            )
+            return f"download:{normalized}"
         return None
 
     @staticmethod

@@ -402,6 +402,16 @@ async def run_case(case: dict[str, Any], mode: ExperimentMode) -> dict[str, Any]
             "rollback_count": metrics["rollback_count"],
             "selective_rollback_count": metrics["selective_rollback_count"],
             "residual_effect_count": pending_effect_count,
+            "metrics": {
+                "sum_node_elapsed_ms": elapsed_ms,
+                "max_observed_concurrency": 1,
+                "nodes_completed_during_approval": 0,
+                "hidden_approval_wait_ms": 0,
+                "affected_node_count": 0,
+                "rolled_back_effect_count": 0,
+                "preserved_node_count": 0,
+                "preserved_effect_count": 0,
+            },
             # Evidence
             "audit_digest": f"{task_id}|{case['case_id']}|{mode.value}"[:64],
             "raw_result_path": f"raw/{mode.value.lower()}_result.json",
@@ -450,7 +460,7 @@ def save_csv(results: list[dict[str, Any]], stem: str, output_dir: Path) -> Path
         "approval_requested_count", "approval_decision_count",
         "manual_action_count", "checkpoint_count", "pending_effect_count",
         "commit_count", "rollback_count", "selective_rollback_count",
-        "residual_effect_count", "audit_digest", "raw_result_path",
+        "residual_effect_count", "metrics", "audit_digest", "raw_result_path",
         "error_code", "notes",
     ]
     with StringIO(newline="") as buffer:

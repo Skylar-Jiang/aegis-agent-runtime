@@ -343,6 +343,21 @@ def test_builtin_write_target_ignores_planner_declared_effect_targets() -> None:
     assert runtime.second_started.is_set()
 
 
+def test_builtin_download_target_is_normalized_without_planner_input() -> None:
+    scheduler = RuntimeTaskGraphScheduler(runtime_scheduler=object())
+
+    target = scheduler._node_targets(
+        _node(
+            "download",
+            tool_name="download_url",
+            arguments={"url": "HTTPS://Example.test:443/archive#fragment"},
+            effect_targets=["download:planner-declared-target"],
+        )
+    )
+
+    assert target == {"download:https://example.test:443/archive"}
+
+
 def test_branch_failure_rolls_back_only_its_committed_effect() -> None:
     class Scheduler:
         async def schedule(self, request: ToolCallRequest) -> ToolExecutionResult:

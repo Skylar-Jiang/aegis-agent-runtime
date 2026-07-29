@@ -238,6 +238,16 @@ def test_experiment_result_schema_is_strict_and_normalizes_utc() -> None:
         rollback_count=0,
         selective_rollback_count=0,
         residual_effect_count=0,
+        metrics={
+            "sum_node_elapsed_ms": 10,
+            "max_observed_concurrency": 1,
+            "nodes_completed_during_approval": 0,
+            "hidden_approval_wait_ms": 0,
+            "affected_node_count": 0,
+            "rolled_back_effect_count": 0,
+            "preserved_node_count": 0,
+            "preserved_effect_count": 0,
+        },
         audit_digest="digest",
         raw_result_path="artifacts/run-1.json",
         error_code=None,
@@ -245,7 +255,16 @@ def test_experiment_result_schema_is_strict_and_normalizes_utc() -> None:
     )
 
     assert experiment.started_at == datetime(2026, 7, 12, 0, 30, tzinfo=UTC)
+    assert experiment.metrics["max_observed_concurrency"] == 1
     with pytest.raises(ValidationError):
         ExperimentResult.model_validate(experiment.model_dump() | {"elapsed_ms": -1})
+    with pytest.raises(ValidationError):
+        ExperimentResult.model_validate(
+            experiment.model_dump() | {"metrics": {"sum_node_elapsed_ms": -1}}
+        )
+    with pytest.raises(ValidationError):
+        ExperimentResult.model_validate(
+            experiment.model_dump() | {"metrics": {"team_local_metric": 1}}
+        )
     with pytest.raises(ValidationError):
         ExperimentResult.model_validate(experiment.model_dump() | {"extra_field": "not allowed"})

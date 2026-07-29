@@ -14,7 +14,9 @@
 | 人工与状态 | `approval_requested_count, approval_decision_count, manual_action_count, checkpoint_count, pending_effect_count, commit_count, rollback_count, selective_rollback_count, residual_effect_count` |
 | 证据 | `audit_digest, raw_result_path, error_code, notes` |
 
-`mode` 只可为 `BASELINE/FULL_GUARD/ADAPTIVE_RUNTIME`。三模式对比必须使用同一 `fixture_id`、初始 workspace、任务图、工具版本、超时和重复次数；Baseline 的绕过范围必须在 `notes` 说明。`parallel_saved_ms = max(0, sum(node_elapsed_ms) - graph_elapsed_ms)`，且必须记录每节点时间明细或 audit digest 以供复算。
+`ExperimentResult.metrics` 是 v0.4 的冻结整数扩展位；只允许写入由 Runtime、Audit 或 runner 的 monotonic clock 推导的值。正式 Graph benchmark 必须写入：`sum_node_elapsed_ms`、`max_observed_concurrency`、`nodes_completed_during_approval`、`hidden_approval_wait_ms`、`affected_node_count`、`rolled_back_effect_count`、`preserved_node_count`、`preserved_effect_count`。未知值不得以猜测值填充；该场景不适用时填 `0` 并在 `notes` 说明原因。
+
+`mode` 只可为 `BASELINE/FULL_GUARD/ADAPTIVE_RUNTIME`。三模式对比必须使用同一 `fixture_id`、初始 workspace、任务图、工具版本、超时和重复次数；Baseline 的绕过范围必须在 `notes` 说明。`parallel_saved_ms = max(0, sum_node_elapsed_ms - graph_elapsed_ms)`，并且两个输入都须来自 `perf_counter_ns` 的真实测量。`approval_wait_ms` 仅计算从 `APPROVAL_REQUESTED` 到实际 grant/deny 的间隔；`hidden_approval_wait_ms` 只记录等待期间仍可执行的独立节点时间；`rollback_elapsed_ms` 仅计算 `ROLLBACK_STARTED` 到 `ROLLBACK_FINISHED`。禁止用总耗时、异常是否抛出或预期结果替代这些事实。
 
 ## 必须汇总的真实指标
 
