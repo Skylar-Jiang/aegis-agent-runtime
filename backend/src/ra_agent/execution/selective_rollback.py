@@ -155,6 +155,11 @@ class SelectiveRollbackExecutor:
             reason=reason,
         )
 
+    async def execute_rollback_plan(self, plan: RollbackPlan) -> RollbackPlanResult:
+        """Implement the frozen V2 rollback Protocol without changing legacy callers."""
+
+        return await self.execute(plan)
+
     async def _resolve_scope(
         self,
         plan: RollbackPlan,

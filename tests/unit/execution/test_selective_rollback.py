@@ -32,6 +32,7 @@ from ra_agent.execution.selective_rollback import (
     RollbackPlanValidationError,
     SelectiveRollbackExecutor,
 )
+from ra_agent.runtime import RollbackPlanExecutor
 from ra_agent.tools.implementations.write_file import WriteFileHandler
 from ra_agent.tools.path_resolver import SafePathResolver
 
@@ -382,3 +383,9 @@ async def test_repeated_plan_is_idempotent(tmp_path: Path) -> None:
     assert first.rolled_back_request_ids == ["request-repeat"]
     assert second.rolled_back_request_ids == ["request-repeat"]
     assert (environment.workspace / "item.txt").read_text(encoding="utf-8") == "old"
+
+
+def test_selective_rollback_executor_implements_frozen_protocol(tmp_path: Path) -> None:
+    environment = make_environment(tmp_path)
+
+    assert isinstance(executor(environment), RollbackPlanExecutor)
