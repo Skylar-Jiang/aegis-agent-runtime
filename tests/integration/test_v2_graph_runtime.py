@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from ra_agent.contracts import (
     ToolExecutionResult,
 )
 from ra_agent.core.bootstrap import (
+    build_mock_container,
     build_runtime_container,
     build_runtime_scheduler,
     build_task_graph_scheduler,
@@ -193,7 +195,7 @@ def test_shared_effect_target_is_serialized_through_live_runtime(tmp_path: Path)
     assert (settings.workspace_root / "same.txt").read_text(encoding="utf-8") == "second"
 
 
-def test_graph_cancellation_selectively_rolls_back_pending_memory_effect(
+def test_real_runtime_graph_cancellation_selectively_rolls_back_memory_effect(
     tmp_path: Path,
 ) -> None:
     async def run() -> None:
@@ -218,29 +220,30 @@ def test_graph_cancellation_selectively_rolls_back_pending_memory_effect(
         staged = await MemoryWriteHandler(memory_store)(node.request)
         await effect_manager.register_pending(node.request, staged)
 
-        class Scheduler:
+        class InterruptibleExecutor:
             def __init__(self) -> None:
                 self.started = asyncio.Event()
                 self.cancelled = asyncio.Event()
 
-            async def schedule(self, request: ToolCallRequest) -> ToolExecutionResult:
+            async def execute(
+                self,
+                request: ToolCallRequest,
+                *,
+                checkpoint_id: str | None = None,
+                approval_decision: object | None = None,
+            ) -> ToolExecutionResult:
                 self.started.set()
-                await self.cancelled.wait()
-                return ToolExecutionResult(
-                    task_id=request.task_id,
-                    step_id=request.step_id,
-                    request_id=request.request_id,
-                    status=ExecutionStatus.CANCELLED,
-                    error="cancelled",
-                )
+                try:
+                    await asyncio.Event().wait()
+                except asyncio.CancelledError:
+                    self.cancelled.set()
+                    raise
+                raise AssertionError("interrupted execution must not finish")
 
-            async def cancel_task(self, task_id: str) -> None:
-                assert task_id == "task-cancel-memory"
-                self.cancelled.set()
-
-        runtime = Scheduler()
+        executor = InterruptibleExecutor()
+        container = replace(build_mock_container(), tool_executor=executor)
         scheduler = RuntimeTaskGraphScheduler(
-            runtime_scheduler=runtime,
+            runtime_scheduler=build_runtime_scheduler(container),
             effect_store=effect_store,
             rollback_executor=SelectiveRollbackExecutor(
                 effect_store=effect_store,
@@ -255,10 +258,11 @@ def test_graph_cancellation_selectively_rolls_back_pending_memory_effect(
             nodes=[node],
         )
         task = asyncio.create_task(scheduler.schedule_graph(graph))
-        await runtime.started.wait()
+        await executor.started.wait()
         await scheduler.cancel_graph(graph.graph_id)
         result = await task
 
+        assert executor.cancelled.is_set()
         assert result.node_results["memory"].status is ExecutionStatus.ROLLED_BACK
         effect = await effect_store.get_by_request_id(node.request.request_id)
         assert effect is not None

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import PurePosixPath
 from typing import Protocol, cast
 
 from ra_agent.audit import AuditRecorder
@@ -57,6 +58,7 @@ class _GraphState:
     rollback_attempted: set[str] = field(default_factory=set)
     running: set[str] = field(default_factory=set)
     cancelled: bool = False
+    finished_at: datetime | None = None
     finished_audited: bool = False
     serialized_audited: set[str] = field(default_factory=set)
 
@@ -115,6 +117,8 @@ class RuntimeTaskGraphScheduler:
         state = self._states.get(graph_id)
         if state is None:
             raise KeyError(f"unknown graph: {graph_id}")
+        if state.cancelled:
+            raise RuntimeError("graph is cancelled and cannot resume")
         matching_nodes = [
             node_id
             for node_id, pending_approval_id in state.waiting.items()
@@ -140,6 +144,9 @@ class RuntimeTaskGraphScheduler:
         if state is None:
             raise KeyError(f"unknown graph: {graph_id}")
         state.cancelled = True
+        for node_id in tuple(state.waiting):
+            state.waiting.pop(node_id)
+            state.cancelled_nodes[node_id] = "graph_cancelled"
         for node in state.graph.nodes:
             if (
                 node.node_id not in state.results
@@ -179,8 +186,12 @@ class RuntimeTaskGraphScheduler:
                     node=node,
                 )
             state.running.update(node.node_id for node in batch)
-            results = await asyncio.gather(*(self._run_node(node) for node in batch))
-            state.running.difference_update(node.node_id for node in batch)
+            try:
+                results = await asyncio.gather(
+                    *(self._run_node(state, node) for node in batch)
+                )
+            finally:
+                state.running.difference_update(node.node_id for node in batch)
             for node, result in zip(batch, results, strict=True):
                 if result.status is ExecutionStatus.WAITING_APPROVAL:
                     approval_id = self._approval_id(result)
@@ -273,17 +284,46 @@ class RuntimeTaskGraphScheduler:
         failed_targets = set().union(
             *(self._node_targets(nodes[node_id]) for node_id in failed_nodes)
         )
-        for node_id, node in nodes.items():
-            if node_id in state.results or node_id in state.waiting:
-                continue
-            if any(dependency in failed_nodes for dependency in node.dependencies):
-                state.failed_descendants[node_id] = "dependency_failed"
-            elif self._node_targets(node) & failed_targets:
-                state.failed_descendants[node_id] = "effect_target_failed"
+        blocked_nodes = failed_nodes | set(state.failed_descendants)
+        changed = True
+        while changed:
+            changed = False
+            for node_id, node in nodes.items():
+                if (
+                    node_id in state.results
+                    or node_id in state.waiting
+                    or node_id in state.cancelled_nodes
+                    or node_id in state.failed_descendants
+                ):
+                    continue
+                if any(dependency in blocked_nodes for dependency in node.dependencies):
+                    state.failed_descendants[node_id] = "dependency_failed"
+                elif self._node_targets(node) & failed_targets:
+                    state.failed_descendants[node_id] = "effect_target_failed"
+                else:
+                    continue
+                blocked_nodes.add(node_id)
+                changed = True
 
-    async def _run_node(self, node: TaskNode) -> ToolExecutionResult:
+    async def _run_node(
+        self,
+        state: _GraphState,
+        node: TaskNode,
+    ) -> ToolExecutionResult:
         try:
             return await cast(_ToolScheduler, self._runtime_scheduler).schedule(node.request)
+        except asyncio.CancelledError:
+            return ToolExecutionResult(
+                task_id=node.request.task_id,
+                step_id=node.request.step_id,
+                request_id=node.request.request_id,
+                status=ExecutionStatus.CANCELLED,
+                error=(
+                    "graph cancelled"
+                    if state.cancelled
+                    else "controlled runtime execution interrupted"
+                ),
+            )
         except Exception as error:
             return self._failed_result(node.request, str(error) or type(error).__name__)
 
@@ -435,12 +475,12 @@ class RuntimeTaskGraphScheduler:
             node_results=state.results,
             blocked_nodes=blocked,
             started_at=state.started_at,
-            finished_at=datetime.now(UTC),
+            finished_at=self._finished_at(state),
         )
 
     async def _result_with_audit(self, state: _GraphState) -> TaskGraphResult:
         result = self._result(state)
-        if not state.waiting and not state.finished_audited:
+        if self._is_terminal(state) and not state.finished_audited:
             state.finished_audited = True
             await self._record(
                 state,
@@ -516,16 +556,65 @@ class RuntimeTaskGraphScheduler:
         }
 
     def _node_targets(self, node: TaskNode) -> set[str]:
-        if node.effect_targets:
-            return set(node.effect_targets)
-        if self._has_declared_side_effect(node):
-            return {"__undeclared_side_effect__"}
+        trusted_target = self._trusted_builtin_target(node)
+        if trusted_target is not None:
+            return {trusted_target}
+        if node.effect_targets or self._has_declared_side_effect(node):
+            return {"__untrusted_side_effect__"}
         return set()
 
     def _is_parallel_safe(self, node: TaskNode) -> bool:
-        return node.parallel_safe and not (
-            self._has_declared_side_effect(node) and not node.effect_targets
+        return node.parallel_safe and self._node_targets(node) != {
+            "__untrusted_side_effect__"
+        }
+
+    @staticmethod
+    def _trusted_builtin_target(node: TaskNode) -> str | None:
+        if node.request.tool_name in {"write_file", "delete_file"}:
+            path = node.request.arguments.get("path")
+            normalized_path = (
+                RuntimeTaskGraphScheduler._normalized_safe_relative_path(path)
+                if isinstance(path, str)
+                else None
+            )
+            if normalized_path is None:
+                return None
+            return f"file:{normalized_path}"
+        if node.request.tool_name == "memory_write":
+            key = node.request.arguments.get("key")
+            if (
+                not isinstance(key, str)
+                or not key
+                or key != key.strip()
+                or any(ord(character) < 32 for character in key)
+            ):
+                return None
+            return f"memory:{key}"
+        return None
+
+    @staticmethod
+    def _normalized_safe_relative_path(path: str) -> str | None:
+        if not path or "\\" in path or path.startswith("/") or ":" in path:
+            return None
+        candidate = PurePosixPath(path)
+        if any(part in {"", ".", ".."} for part in candidate.parts):
+            return None
+        return candidate.as_posix()
+
+    def _is_terminal(self, state: _GraphState) -> bool:
+        covered_nodes = (
+            set(state.results) | set(state.failed_descendants) | set(state.cancelled_nodes)
         )
+        return (
+            not state.waiting
+            and not state.running
+            and covered_nodes == {node.node_id for node in state.graph.nodes}
+        )
+
+    def _finished_at(self, state: _GraphState) -> datetime | None:
+        if self._is_terminal(state) and state.finished_at is None:
+            state.finished_at = datetime.now(UTC)
+        return state.finished_at
 
     def _has_declared_side_effect(self, node: TaskNode) -> bool:
         registry = getattr(self._runtime_scheduler, "tool_registry", None)

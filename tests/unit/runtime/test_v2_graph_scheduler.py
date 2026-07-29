@@ -1,6 +1,8 @@
 import asyncio
 from datetime import UTC, datetime
 
+import pytest
+
 from ra_agent.audit import InMemoryAuditRecorder
 from ra_agent.contracts import (
     EffectRecord,
@@ -24,6 +26,8 @@ def _node(
     dependencies: list[str] | None = None,
     parallel_safe: bool = True,
     effect_targets: list[str] | None = None,
+    tool_name: str = "read_file",
+    arguments: dict[str, object] | None = None,
 ) -> TaskNode:
     return TaskNode(
         task_id="task-graph-v2",
@@ -33,8 +37,8 @@ def _node(
             task_id="task-graph-v2",
             step_id=node_id,
             request_id=f"request-{node_id}",
-            tool_name="read_file",
-            arguments={"path": f"{node_id}.txt"},
+            tool_name=tool_name,
+            arguments=arguments or {"path": f"{node_id}.txt"},
             objective="verify graph scheduling",
             context_summary="v2 graph scheduler test",
             source_type=SourceType.AGENT,
@@ -202,6 +206,143 @@ def test_waiting_approval_pauses_only_its_descendant_then_resumes_it() -> None:
     assert runtime.calls == ["approval", "independent", "child"]
 
 
+def test_cancelled_graph_cancels_waiting_node_and_rejects_approval_resume() -> None:
+    class Scheduler:
+        def __init__(self) -> None:
+            self.resume_calls = 0
+
+        async def schedule(self, request: ToolCallRequest) -> ToolExecutionResult:
+            return ToolExecutionResult(
+                task_id=request.task_id,
+                step_id=request.step_id,
+                request_id=request.request_id,
+                status=ExecutionStatus.WAITING_APPROVAL,
+                output={"approval_id": "approval-1"},
+            )
+
+        async def cancel_task(self, task_id: str) -> None:
+            assert task_id == "task-graph-v2"
+
+        async def resume_after_approval(
+            self, request: ToolCallRequest, approval_id: str
+        ) -> ToolExecutionResult:
+            self.resume_calls += 1
+            raise AssertionError("a cancelled graph must not resume")
+
+    async def run() -> tuple[TaskGraphResult, TaskGraphResult, Scheduler]:
+        runtime = Scheduler()
+        scheduler = RuntimeTaskGraphScheduler(runtime_scheduler=runtime)
+        graph = TaskGraph(
+            graph_id="graph-v2",
+            task_id="task-graph-v2",
+            max_parallelism=1,
+            nodes=[_node("approval")],
+        )
+        waiting = await scheduler.schedule_graph(graph)
+        cancelled = await scheduler.cancel_graph(graph.graph_id)
+        with pytest.raises(RuntimeError, match="graph is cancelled"):
+            await scheduler.resume_after_approval(graph.graph_id, "approval-1")
+        return waiting, cancelled, runtime
+
+    waiting, cancelled, runtime = asyncio.run(run())
+
+    assert waiting.finished_at is None
+    assert waiting.blocked_nodes["approval"] == "WAITING_APPROVAL"
+    assert cancelled.finished_at is not None
+    assert cancelled.blocked_nodes["approval"] == "graph_cancelled"
+    assert runtime.resume_calls == 0
+
+
+def test_failure_blocks_all_descendants_without_executing_them() -> None:
+    class Scheduler:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        async def schedule(self, request: ToolCallRequest) -> ToolExecutionResult:
+            self.calls.append(request.step_id)
+            return ToolExecutionResult(
+                task_id=request.task_id,
+                step_id=request.step_id,
+                request_id=request.request_id,
+                status=ExecutionStatus.FAILED,
+                error="controlled failure",
+            )
+
+    runtime = Scheduler()
+    graph = TaskGraph(
+        graph_id="graph-v2",
+        task_id="task-graph-v2",
+        max_parallelism=1,
+        nodes=[
+            _node("a"),
+            _node("b", dependencies=["a"]),
+            _node("c", dependencies=["b"]),
+        ],
+    )
+
+    result = asyncio.run(RuntimeTaskGraphScheduler(runtime_scheduler=runtime).schedule_graph(graph))
+
+    assert runtime.calls == ["a"]
+    assert result.blocked_nodes["b"] == "dependency_failed"
+    assert result.blocked_nodes["c"] == "dependency_failed"
+
+
+def test_builtin_write_target_ignores_planner_declared_effect_targets() -> None:
+    class Scheduler:
+        def __init__(self) -> None:
+            self.first_started = asyncio.Event()
+            self.second_started = asyncio.Event()
+            self.release_first = asyncio.Event()
+
+        async def schedule(self, request: ToolCallRequest) -> ToolExecutionResult:
+            if request.step_id == "first":
+                self.first_started.set()
+                await self.release_first.wait()
+            else:
+                self.second_started.set()
+            return ToolExecutionResult(
+                task_id=request.task_id,
+                step_id=request.step_id,
+                request_id=request.request_id,
+                status=ExecutionStatus.COMMITTED,
+            )
+
+    async def run() -> Scheduler:
+        runtime = Scheduler()
+        graph = TaskGraph(
+            graph_id="graph-v2",
+            task_id="task-graph-v2",
+            max_parallelism=2,
+            nodes=[
+                _node(
+                    "first",
+                    tool_name="write_file",
+                    arguments={"path": "folder/./same.txt", "content": "first"},
+                    effect_targets=["file:planner-first"],
+                ),
+                _node(
+                    "second",
+                    tool_name="write_file",
+                    arguments={"path": "folder/same.txt", "content": "second"},
+                    effect_targets=["file:planner-second"],
+                ),
+            ],
+        )
+        task = asyncio.create_task(
+            RuntimeTaskGraphScheduler(runtime_scheduler=runtime).schedule_graph(graph)
+        )
+        await runtime.first_started.wait()
+        await asyncio.sleep(0)
+        assert not runtime.second_started.is_set()
+        runtime.release_first.set()
+        await task
+        return runtime
+
+    runtime = asyncio.run(run())
+
+    assert runtime.second_started.is_set()
+
+
 def test_branch_failure_rolls_back_only_its_committed_effect() -> None:
     class Scheduler:
         async def schedule(self, request: ToolCallRequest) -> ToolExecutionResult:
@@ -266,7 +407,12 @@ def test_branch_failure_rolls_back_only_its_committed_effect() -> None:
         max_parallelism=1,
         nodes=[
             _node("failed", effect_targets=["file:failed.txt"]),
-            _node("independent", effect_targets=["file:independent.txt"]),
+            _node(
+                "independent",
+                tool_name="write_file",
+                arguments={"path": "independent.txt", "content": "independent"},
+                effect_targets=["file:independent.txt"],
+            ),
         ],
     )
 
