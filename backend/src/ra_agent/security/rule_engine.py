@@ -14,6 +14,7 @@ from ra_agent.contracts import (
     PermissionType,
     PolicyDecision,
     RiskLevel,
+    SourceType,
 )
 
 
@@ -37,6 +38,7 @@ class RuleEngine:
         error: str | None,
         default_risk: RiskLevel,
         default_decision: PolicyDecision,
+        tool_risk_floors: dict[str, RiskLevel],
         decisions: dict[RiskLevel, PolicyDecision],
         signals: dict[str, SignalRule],
         allowed_network_schemes: tuple[str, ...],
@@ -53,6 +55,9 @@ class RuleEngine:
         permission_statuses: dict[str, dict[PermissionType, PermissionStatus]],
         default_permission_status: PermissionStatus,
         approval_required: frozenset[PermissionType],
+        adaptive_source_types: frozenset[SourceType],
+        adaptive_side_effect_types: frozenset[str],
+        adaptive_lineage_sensitivities: frozenset[str],
         delayed_authorization: bool,
         sensitive_patterns: tuple[str, ...],
         sensitive_case_sensitive: bool,
@@ -61,6 +66,7 @@ class RuleEngine:
         self.error = error
         self.default_risk = default_risk
         self.default_decision = default_decision
+        self._tool_risk_floors = tool_risk_floors
         self._decisions = decisions
         self._signals = signals
         self.allowed_network_schemes = allowed_network_schemes
@@ -78,6 +84,9 @@ class RuleEngine:
         self._permission_statuses = permission_statuses
         self.default_permission_status = default_permission_status
         self.approval_required = approval_required
+        self.adaptive_source_types = adaptive_source_types
+        self.adaptive_side_effect_types = adaptive_side_effect_types
+        self.adaptive_lineage_sensitivities = adaptive_lineage_sensitivities
         self.delayed_authorization = delayed_authorization
         self.sensitive_patterns = sensitive_patterns
         self.sensitive_case_sensitive = sensitive_case_sensitive
@@ -119,6 +128,7 @@ class RuleEngine:
             error=reason,
             default_risk=RiskLevel.FORBIDDEN,
             default_decision=PolicyDecision.BLOCK,
+            tool_risk_floors={},
             decisions={level: PolicyDecision.BLOCK for level in RiskLevel},
             signals={},
             allowed_network_schemes=(),
@@ -135,6 +145,9 @@ class RuleEngine:
             permission_statuses={},
             default_permission_status=PermissionStatus.DENIED,
             approval_required=frozenset(),
+            adaptive_source_types=frozenset(),
+            adaptive_side_effect_types=frozenset(),
+            adaptive_lineage_sensitivities=frozenset(),
             delayed_authorization=True,
             sensitive_patterns=(),
             sensitive_case_sensitive=False,
@@ -153,6 +166,7 @@ class RuleEngine:
                 "version",
                 "default_risk",
                 "default_decision",
+                "tool_risk_floors",
                 "decision_by_risk",
                 "signals",
                 "network",
@@ -170,6 +184,7 @@ class RuleEngine:
                 "tool_permissions",
                 "permission_statuses",
                 "approval_required",
+                "adaptive_approval",
                 "delayed_authorization",
             },
             "permissions.yaml",
@@ -191,6 +206,16 @@ class RuleEngine:
         default_decision = cls._enum(
             PolicyDecision, risk_rules.get("default_decision"), "default_decision"
         )
+        floor_data = cls._mapping(risk_rules.get("tool_risk_floors"), "tool_risk_floors")
+        tool_risk_floors = {
+            str(tool): cls._enum(RiskLevel, risk, f"tool_risk_floors.{tool}")
+            for tool, risk in floor_data.items()
+            if isinstance(tool, str) and tool
+        }
+        if len(tool_risk_floors) != len(floor_data) or not tool_risk_floors:
+            raise SecurityConfigurationError(
+                "tool_risk_floors must be a non-empty mapping with string tool names"
+            )
 
         decision_data = cls._mapping(risk_rules.get("decision_by_risk"), "decision_by_risk")
         decisions = {
@@ -227,6 +252,11 @@ class RuleEngine:
             "policy_modification",
             "unknown_tool",
             "missing_network_target",
+            "untrusted_data_flow",
+            "sensitive_egress",
+            "invalid_lineage",
+            "unapproved_recipient",
+            "secret_egress",
         }
         missing_signals = required_signals - set(signals)
         if missing_signals:
@@ -355,6 +385,58 @@ class RuleEngine:
                 permissions.get("approval_required"), "approval_required"
             )
         )
+        configured_permissions = {
+            permission for required in tool_permissions.values() for permission in required
+        }
+        unknown_approval_permissions = approval_required - configured_permissions
+        if unknown_approval_permissions:
+            names = ", ".join(sorted(item.value for item in unknown_approval_permissions))
+            raise SecurityConfigurationError(
+                f"approval_required contains unused permissions: {names}"
+            )
+
+        adaptive_approval = cls._mapping(permissions.get("adaptive_approval"), "adaptive_approval")
+        cls._require_keys(
+            adaptive_approval,
+            {
+                "untrusted_source_types",
+                "side_effect_types",
+                "lineage_sensitivities",
+            },
+            "adaptive_approval",
+        )
+        adaptive_source_types = frozenset(
+            cls._enum(SourceType, source, "adaptive_approval.untrusted_source_types")
+            for source in cls._string_list(
+                adaptive_approval.get("untrusted_source_types"),
+                "adaptive_approval.untrusted_source_types",
+            )
+        )
+        adaptive_side_effect_types = frozenset(
+            cls._string_list(
+                adaptive_approval.get("side_effect_types"),
+                "adaptive_approval.side_effect_types",
+            )
+        )
+        adaptive_lineage_sensitivities = frozenset(
+            value.upper()
+            for value in cls._string_list(
+                adaptive_approval.get("lineage_sensitivities"),
+                "adaptive_approval.lineage_sensitivities",
+            )
+        )
+        if not adaptive_source_types or not adaptive_side_effect_types:
+            raise SecurityConfigurationError(
+                "adaptive_approval source and side-effect sets must not be empty"
+            )
+        allowed_sensitivities = {"PUBLIC", "INTERNAL", "CONFIDENTIAL", "SECRET"}
+        if (
+            not adaptive_lineage_sensitivities
+            or not adaptive_lineage_sensitivities <= allowed_sensitivities
+        ):
+            raise SecurityConfigurationError(
+                "adaptive_approval.lineage_sensitivities contains an unknown value"
+            )
         delayed_authorization = permissions.get("delayed_authorization")
         if not isinstance(delayed_authorization, bool):
             raise SecurityConfigurationError("delayed_authorization must be a boolean")
@@ -373,6 +455,7 @@ class RuleEngine:
             error=None,
             default_risk=default_risk,
             default_decision=default_decision,
+            tool_risk_floors=tool_risk_floors,
             decisions=decisions,
             signals=signals,
             allowed_network_schemes=allowed_network_schemes,
@@ -389,6 +472,9 @@ class RuleEngine:
             permission_statuses=permission_statuses,
             default_permission_status=default_permission_status,
             approval_required=approval_required,
+            adaptive_source_types=adaptive_source_types,
+            adaptive_side_effect_types=adaptive_side_effect_types,
+            adaptive_lineage_sensitivities=adaptive_lineage_sensitivities,
             delayed_authorization=delayed_authorization,
             sensitive_patterns=sensitive_patterns,
             sensitive_case_sensitive=sensitive_case_sensitive,
@@ -398,6 +484,11 @@ class RuleEngine:
         if not self.valid:
             return PolicyDecision.BLOCK
         return self._decisions.get(risk, PolicyDecision.BLOCK)
+
+    def tool_risk_floor(self, tool_name: str) -> RiskLevel:
+        if not self.valid:
+            return RiskLevel.FORBIDDEN
+        return self._tool_risk_floors.get(tool_name, self.default_risk)
 
     def risk_for(self, signal: str) -> RiskLevel:
         if not self.valid:

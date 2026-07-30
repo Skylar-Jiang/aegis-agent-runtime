@@ -8,6 +8,7 @@ from ra_agent.contracts import (
     ToolSpec,
 )
 
+from .adaptive_approval import AdaptiveApprovalEvaluator
 from .rule_engine import RuleEngine
 
 
@@ -25,8 +26,14 @@ class RuleBasedPermissionGate:
         PermissionStatus.NOT_REQUIRED,
     }
 
-    def __init__(self, rules: RuleEngine) -> None:
+    def __init__(
+        self,
+        rules: RuleEngine,
+        *,
+        approval_evaluator: AdaptiveApprovalEvaluator | None = None,
+    ) -> None:
         self.rules = rules
+        self.approval_evaluator = approval_evaluator or AdaptiveApprovalEvaluator(rules)
 
     async def check(self, request: ToolCallRequest, tool_spec: ToolSpec) -> PermissionCheckResult:
         if not self.rules.valid:
@@ -73,11 +80,13 @@ class RuleBasedPermissionGate:
             for permission in tool_spec.required_permissions
         ]
         allowed = all(decision.status in self._EXECUTABLE_STATUSES for decision in decisions)
-        requires_approval = any(
-            self.rules.permission_requires_approval(decision.permission) for decision in decisions
-        )
+        approval_reasons = self.approval_evaluator.approval_reasons(request, tool_spec)
+        requires_approval = bool(approval_reasons)
         if allowed and requires_approval:
-            reason = "Permissions are granted but Runtime approval is required"
+            reason = (
+                "Permissions are granted but adaptive Runtime approval is required: "
+                + ", ".join(approval_reasons)
+            )
         elif allowed:
             reason = "All required permissions are granted"
         else:

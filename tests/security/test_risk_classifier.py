@@ -151,13 +151,144 @@ async def test_memory_injection_is_blocked(
 
 
 @pytest.mark.asyncio
+async def test_configured_tool_floor_cannot_be_lowered_by_tool_metadata(
+    rules: RuleEngine,
+    tool_specs: dict[str, ToolSpec],
+    request_factory: Callable[..., ToolCallRequest],
+) -> None:
+    weakened_specs = dict(tool_specs)
+    weakened_specs["delete_file"] = tool_specs["delete_file"].model_copy(
+        update={"base_risk": RiskLevel.LOW}
+    )
+    request = request_factory("delete_file", arguments={"path": "old.txt"})
+
+    verdict = await RuleBasedRiskClassifier(rules, weakened_specs).classify(request)
+
+    assert weakened_specs["delete_file"].base_risk is RiskLevel.LOW
+    assert verdict.risk_level is RiskLevel.HIGH
+    assert verdict.recommended_decision is PolicyDecision.REQUEST_APPROVAL
+    assert "configured_floor=HIGH" in verdict.reason
+
+
+@pytest.mark.asyncio
+async def test_untrusted_output_escalates_only_when_it_drives_a_side_effect(
+    rules: RuleEngine,
+    tool_specs: dict[str, ToolSpec],
+    request_factory: Callable[..., ToolCallRequest],
+) -> None:
+    classifier = RuleBasedRiskClassifier(rules, tool_specs)
+
+    read_verdict = await classifier.classify(
+        request_factory(
+            "read_file",
+            arguments={"path": "docs/input.txt"},
+            source_type=SourceType.TOOL_OUTPUT,
+        )
+    )
+    write_verdict = await classifier.classify(
+        request_factory(
+            "write_file",
+            arguments={"path": "reports/result.md", "content": "derived result"},
+            source_type=SourceType.TOOL_OUTPUT,
+        )
+    )
+
+    assert read_verdict.risk_level is RiskLevel.LOW
+    assert "untrusted_data_flow" not in read_verdict.signals
+    assert write_verdict.risk_level is RiskLevel.HIGH
+    assert write_verdict.recommended_decision is PolicyDecision.REQUEST_APPROVAL
+    assert "untrusted_data_flow" in write_verdict.signals
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("artifact", "recipient", "expected_signal"),
+    [
+        (
+            {
+                "artifact_id": "confidential-report",
+                "owner": "user",
+                "sensitivity": "CONFIDENTIAL",
+                "source": "reports/private.md",
+                "allowed_recipients": ["judge@example.com"],
+            },
+            "judge@example.com",
+            "sensitive_egress",
+        ),
+        ({"owner": "user"}, "judge@example.com", "invalid_lineage"),
+        (
+            {
+                "artifact_id": "public-report",
+                "owner": "user",
+                "sensitivity": "PUBLIC",
+                "source": "reports/public.md",
+                "allowed_recipients": ["judge@example.com"],
+            },
+            "attacker@example.com",
+            "unapproved_recipient",
+        ),
+    ],
+)
+async def test_data_lineage_escalates_or_blocks_egress(
+    rules: RuleEngine,
+    tool_specs: dict[str, ToolSpec],
+    request_factory: Callable[..., ToolCallRequest],
+    artifact: dict[str, object],
+    recipient: str,
+    expected_signal: str,
+) -> None:
+    verdict = await RuleBasedRiskClassifier(rules, tool_specs).classify(
+        request_factory(
+            "send_email_dry_run",
+            arguments={"artifact": artifact, "recipient": recipient},
+        )
+    )
+
+    assert expected_signal in verdict.signals
+    if expected_signal == "sensitive_egress":
+        assert verdict.risk_level is RiskLevel.LOW
+        assert verdict.recommended_decision is PolicyDecision.FAST_EXECUTE
+    else:
+        assert verdict.risk_level is RiskLevel.CRITICAL
+        assert verdict.recommended_decision is PolicyDecision.BLOCK
+
+
+@pytest.mark.asyncio
+async def test_secret_in_egress_payload_is_blocked_before_tool_execution(
+    rules: RuleEngine,
+    tool_specs: dict[str, ToolSpec],
+    request_factory: Callable[..., ToolCallRequest],
+) -> None:
+    verdict = await RuleBasedRiskClassifier(rules, tool_specs).classify(
+        request_factory(
+            "send_email_dry_run",
+            arguments={
+                "artifact": {
+                    "artifact_id": "public-report",
+                    "owner": "user",
+                    "sensitivity": "PUBLIC",
+                    "source": "reports/public.md",
+                    "allowed_recipients": ["judge@example.com"],
+                },
+                "recipient": "judge@example.com",
+                "body": "api_key=abcdefgh12345678",
+            },
+        )
+    )
+
+    assert verdict.risk_level is RiskLevel.CRITICAL
+    assert verdict.recommended_decision is PolicyDecision.BLOCK
+    assert "secret_egress" in verdict.signals
+
+
+@pytest.mark.asyncio
 async def test_invalid_configuration_always_blocks(
     tool_specs: dict[str, ToolSpec],
     request_factory: Callable[..., ToolCallRequest],
 ) -> None:
-    verdict = await RuleBasedRiskClassifier(RuleEngine.invalid("broken yaml"), tool_specs).classify(
-        request_factory("list_dir", arguments={"path": "."})
-    )
+    verdict = await RuleBasedRiskClassifier(
+        RuleEngine.invalid("broken yaml"), tool_specs
+    ).classify(request_factory("list_dir", arguments={"path": "."}))
 
     assert verdict.risk_level is RiskLevel.FORBIDDEN
     assert verdict.recommended_decision is PolicyDecision.BLOCK

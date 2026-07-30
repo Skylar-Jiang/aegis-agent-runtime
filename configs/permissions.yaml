@@ -34,4 +34,8 @@ permission_statuses:
     NETWORK_UPLOAD: GRANTED
 
 approval_required: [FILE_DELETE, SHELL_EXEC]
+adaptive_approval:
+  untrusted_source_types: [external_document, tool_output]
+  side_effect_types: [WRITE, DELETE, PROCESS, EGRESS_DRY_RUN]
+  lineage_sensitivities: [CONFIDENTIAL, SECRET]
 delayed_authorization: true

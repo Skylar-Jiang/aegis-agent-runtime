@@ -16,6 +16,7 @@ from ra_agent.contracts import (
     ToolSpec,
 )
 
+from .adaptive_approval import AdaptiveApprovalEvaluator
 from .rule_engine import RuleEngine
 
 
@@ -35,9 +36,16 @@ _RISK_ORDER = {
 class RuleBasedRiskClassifier:
     """Deterministic risk classifier backed by trusted tool metadata and YAML rules."""
 
-    def __init__(self, rules: RuleEngine, tool_specs: Mapping[str, ToolSpec]) -> None:
+    def __init__(
+        self,
+        rules: RuleEngine,
+        tool_specs: Mapping[str, ToolSpec],
+        *,
+        approval_evaluator: AdaptiveApprovalEvaluator | None = None,
+    ) -> None:
         self.rules = rules
         self.tool_specs = dict(tool_specs)
+        self.approval_evaluator = approval_evaluator or AdaptiveApprovalEvaluator(rules)
 
     async def classify(self, request: ToolCallRequest) -> RiskVerdict:
         if not self.rules.valid:
@@ -53,9 +61,11 @@ class RuleBasedRiskClassifier:
             )
 
         spec = self.tool_specs.get(request.tool_name)
-        risk = spec.base_risk if spec is not None else self.rules.default_risk
+        trusted_floor = spec.base_risk if spec is not None else self.rules.default_risk
+        configured_floor = self.rules.tool_risk_floor(request.tool_name)
+        risk = self._max_risk(trusted_floor, configured_floor)
         signals: list[str] = []
-        matched_rules: list[str] = []
+        matched_rules: list[str] = [f"risk_floor.{request.tool_name}"]
 
         if spec is None:
             risk = self._add_signal("unknown_tool", risk, signals, matched_rules)
@@ -99,6 +109,10 @@ class RuleBasedRiskClassifier:
         ):
             risk = self._max_risk(risk, self.rules.risk_for("indirect_injection"))
 
+        if spec is not None:
+            for signal in self.approval_evaluator.risk_signals(request, spec):
+                risk = self._add_signal(signal, risk, signals, matched_rules)
+
         if spec is not None and (
             spec.reversibility is RecoverabilityType.NON_REVERSIBLE
             or spec.sandbox_mode.startswith("DISABLED")
@@ -112,10 +126,12 @@ class RuleBasedRiskClassifier:
             or spec.side_effect_type not in {"NONE", "READ"}
             or _RISK_ORDER[risk] >= _RISK_ORDER[RiskLevel.HIGH]
         )
-        if signals:
-            reason = f"Risk {risk.value} after matching signals: " + ", ".join(signals)
-        else:
-            reason = f"Trusted tool metadata produced base risk {risk.value}"
+        signal_summary = ",".join(signals) if signals else "none"
+        reason = (
+            f"risk={risk.value}; tool_floor={trusted_floor.value}; "
+            f"configured_floor={configured_floor.value}; policy={decision.value}; "
+            f"signals={signal_summary}"
+        )
         return self._verdict(
             request,
             risk,
