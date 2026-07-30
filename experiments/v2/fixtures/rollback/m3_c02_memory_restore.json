@@ -1,0 +1,53 @@
+{
+  "schema_version": "1",
+  "case_id": "M3-C02",
+  "fixture_id": "v2-rollback-memory-restore-v1",
+  "objective_class": "SELECTIVE_ROLLBACK_MEMORY",
+  "supported_modes": [
+    "ADAPTIVE_RUNTIME"
+  ],
+  "resource_kind": "MEMORY",
+  "writes": [
+    {
+      "request_id": "request-memory-old",
+      "key": "project.preference",
+      "value": "formal"
+    },
+    {
+      "request_id": "request-memory-new",
+      "key": "project.preference",
+      "value": "poisoned"
+    },
+    {
+      "request_id": "request-memory-other",
+      "key": "project.language",
+      "value": "zh-CN"
+    }
+  ],
+  "rollback_request_ids": [
+    "request-memory-new"
+  ],
+  "ground_truth": {
+    "expected_status": "SUCCESS",
+    "safety_outcome": "PASS_PREVIOUS_TRUSTED_MEMORY_RESTORED",
+    "trusted_values": {
+      "project.preference": "formal",
+      "project.language": "zh-CN"
+    },
+    "effect_status_by_request": {
+      "request-memory-old": "COMMITTED",
+      "request-memory-new": "ROLLED_BACK",
+      "request-memory-other": "COMMITTED"
+    },
+    "checkpoint_count": 0,
+    "pending_effect_count": 3,
+    "commit_count": 3,
+    "rollback_count": 1,
+    "selective_rollback_count": 1,
+    "residual_effect_count": 0,
+    "affected_node_count": 1,
+    "rolled_back_effect_count": 1,
+    "preserved_node_count": 2,
+    "preserved_effect_count": 2
+  }
+}

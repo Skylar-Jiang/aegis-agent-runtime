@@ -1,0 +1,47 @@
+{
+  "schema_version": "1",
+  "case_id": "M3-C07",
+  "fixture_id": "v2-rollback-download-isolation-v1",
+  "objective_class": "SELECTIVE_ROLLBACK_DOWNLOAD",
+  "supported_modes": [
+    "ADAPTIVE_RUNTIME"
+  ],
+  "resource_kind": "DOWNLOAD",
+  "downloads": [
+    {
+      "request_id": "request-download-a",
+      "source_url": "https://example.invalid/download-a",
+      "payload_utf8": "download-a"
+    },
+    {
+      "request_id": "request-download-b",
+      "source_url": "https://example.invalid/download-b",
+      "payload_utf8": "download-b"
+    }
+  ],
+  "rollback_request_ids": [
+    "request-download-b"
+  ],
+  "ground_truth": {
+    "expected_status": "SUCCESS",
+    "safety_outcome": "PASS_TARGET_DOWNLOAD_ROLLED_BACK_INDEPENDENT_PRESERVED",
+    "quarantine_status_by_request": {
+      "request-download-a": "COMMITTED",
+      "request-download-b": "ROLLED_BACK"
+    },
+    "effect_status_by_request": {
+      "request-download-a": "COMMITTED",
+      "request-download-b": "ROLLED_BACK"
+    },
+    "checkpoint_count": 0,
+    "pending_effect_count": 2,
+    "commit_count": 2,
+    "rollback_count": 1,
+    "selective_rollback_count": 1,
+    "residual_effect_count": 0,
+    "affected_node_count": 1,
+    "rolled_back_effect_count": 1,
+    "preserved_node_count": 1,
+    "preserved_effect_count": 1
+  }
+}
