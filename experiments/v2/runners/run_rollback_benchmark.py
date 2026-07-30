@@ -60,7 +60,10 @@ from ra_agent.execution.quarantine import (  # noqa: E402
     QuarantineStatus,
 )
 from ra_agent.execution.rollback import FilesystemRollbackManager  # noqa: E402
-from ra_agent.execution.selective_rollback import SelectiveRollbackExecutor  # noqa: E402
+from ra_agent.execution.selective_rollback import (  # noqa: E402
+    RollbackPlanValidationError,
+    SelectiveRollbackExecutor,
+)
 from ra_agent.memory import FilesystemMemoryStore, MemoryLifecycleManager  # noqa: E402
 from ra_agent.tools.implementations.memory_tools import MemoryWriteHandler  # noqa: E402
 from ra_agent.tools.implementations.write_file import WriteFileHandler  # noqa: E402
@@ -70,9 +73,13 @@ from ra_agent.tools.path_resolver import SafePathResolver  # noqa: E402
 FIXTURE_FILES = {
     "M3-C01": "m3_c01_file_selective.json",
     "M3-C02": "m3_c02_memory_restore.json",
+    "M3-C03": "m3_c03_commit_failure.json",
+    "M3-C04": "m3_c04_user_conflict.json",
+    "M3-C05": "m3_c05_idempotent_retry.json",
+    "M3-C06": "m3_c06_scope_rejection.json",
     "M3-C07": "m3_c07_download_isolation.json",
 }
-SUPPORTED_MODES = frozenset({ExperimentMode.ADAPTIVE_RUNTIME})
+SUPPORTED_MODES = frozenset(ExperimentMode)
 RAW_JSONL_NAME = "rollback_benchmark.jsonl"
 RAW_CSV_NAME = "rollback_benchmark.csv"
 
@@ -92,6 +99,7 @@ class RunFacts:
     rollback_elapsed_ms: int = 0
     tool_executed_count: int = 0
     check_count: int = 0
+    blocked_count: int = 0
     affected_node_count: int = 0
     rolled_back_effect_count: int = 0
     preserved_node_count: int = 0
@@ -104,6 +112,7 @@ class ScenarioObservation:
     status: str
     safety_outcome: str
     notes: str
+    error_code: str | None = None
 
 
 @dataclass(slots=True)
@@ -194,6 +203,56 @@ def _load_fixture(case_id: str) -> dict[str, Any]:
     if payload.get("case_id") != case_id:
         raise ValueError(f"fixture case_id mismatch: {path}")
     return payload
+
+
+def _ground_truth(
+    fixture: dict[str, Any],
+    mode: ExperimentMode,
+) -> dict[str, Any]:
+    by_mode = fixture.get("ground_truth_by_mode")
+    if isinstance(by_mode, dict):
+        selected = by_mode.get(mode.value)
+        if not isinstance(selected, dict):
+            raise ValueError(
+                f"fixture {fixture['case_id']} has no ground truth for {mode.value}"
+            )
+        return selected
+    ground_truth = fixture.get("ground_truth")
+    if not isinstance(ground_truth, dict):
+        raise ValueError(f"fixture {fixture['case_id']} has no ground truth")
+    return ground_truth
+
+
+def _all_request_ids(fixture: dict[str, Any]) -> list[str]:
+    records = fixture.get("writes") or fixture.get("downloads") or []
+    return [str(record["request_id"]) for record in records]
+
+
+def _rollback_request_ids(
+    fixture: dict[str, Any],
+    mode: ExperimentMode,
+) -> list[str]:
+    if mode is ExperimentMode.ADAPTIVE_RUNTIME:
+        return list(fixture["rollback_request_ids"])
+    return list(fixture.get("coarse_rollback_request_ids", _all_request_ids(fixture)))
+
+
+def _mode_note(mode: ExperimentMode) -> str:
+    if mode is ExperimentMode.BASELINE:
+        return (
+            "BASELINE controlled ablation: adaptive rollback scope narrowing is "
+            "bypassed and the safe rollback executor receives the complete fixture "
+            "effect scope. No real user directory or external system is used."
+        )
+    if mode is ExperimentMode.FULL_GUARD:
+        return (
+            "FULL_GUARD conservative policy: all hard boundaries remain enabled, "
+            "but the rollback plan includes the complete reversible fixture scope."
+        )
+    return (
+        "ADAPTIVE_RUNTIME: the RollbackPlan contains only the fixture-declared "
+        "affected effects and preserves independent committed work."
+    )
 
 
 def _request(
@@ -338,7 +397,7 @@ async def _execute_selective_rollback(
     try:
         result = await executor.execute(plan)
     finally:
-        facts.rollback_elapsed_ms = _elapsed_ms(rollback_started_ns)
+        facts.rollback_elapsed_ms += _elapsed_ms(rollback_started_ns)
     facts.rollback_count = len(result.rolled_back_request_ids) + len(
         result.failed_request_ids
     )
@@ -348,6 +407,7 @@ async def _execute_selective_rollback(
 async def _run_file_case(
     *,
     fixture: dict[str, Any],
+    mode: ExperimentMode,
     run_id: str,
     task_id: str,
     run_root: Path,
@@ -377,9 +437,10 @@ async def _run_file_case(
             facts=facts,
         )
 
+    selected_request_ids = _rollback_request_ids(fixture, mode)
     rollback_effect_ids = [
         effect_by_request[request_id]
-        for request_id in fixture["rollback_request_ids"]
+        for request_id in selected_request_ids
     ]
     result = await _execute_selective_rollback(
         executor=SelectiveRollbackExecutor(
@@ -397,7 +458,7 @@ async def _run_file_case(
         facts=facts,
     )
 
-    ground_truth = fixture["ground_truth"]
+    ground_truth = _ground_truth(fixture, mode)
     _assert_equal("rollback result status", result.status.value, ground_truth["expected_status"])
 
     for relative_path, expected_content in ground_truth["final_state"].items():
@@ -423,7 +484,7 @@ async def _run_file_case(
     facts.rolled_back_effect_count = sum(
         effect.status is EffectStatus.ROLLED_BACK for effect in all_effects
     )
-    rollback_requests = set(fixture["rollback_request_ids"])
+    rollback_requests = set(selected_request_ids)
     facts.preserved_effect_count = sum(
         effect.status is EffectStatus.COMMITTED
         and effect.request_id not in rollback_requests
@@ -432,10 +493,8 @@ async def _run_file_case(
     facts.affected_node_count = len(rollback_requests)
     facts.preserved_node_count = facts.preserved_effect_count
     facts.residual_effect_count = sum(
-        status_by_request.get(request_id) != expected_status
-        for request_id, expected_status in ground_truth[
-            "effect_status_by_request"
-        ].items()
+        status_by_request.get(request_id) != EffectStatus.ROLLED_BACK.value
+        for request_id in rollback_requests
     )
 
     _validate_metric_ground_truth(facts, ground_truth)
@@ -443,8 +502,8 @@ async def _run_file_case(
         status=result.status.value,
         safety_outcome=ground_truth["safety_outcome"],
         notes=(
-            "Deterministic local file fixture; TaskGraph timing and Audit are "
-            "not applicable in phase A/B."
+            f"{_mode_note(mode)} Deterministic local file fixture; "
+            "TaskGraph timing and Audit are not applicable to this runner."
         ),
     )
 
@@ -481,6 +540,7 @@ async def _commit_memory(
 async def _run_memory_case(
     *,
     fixture: dict[str, Any],
+    mode: ExperimentMode,
     run_id: str,
     task_id: str,
     run_root: Path,
@@ -510,9 +570,10 @@ async def _run_memory_case(
             facts=facts,
         )
 
+    selected_request_ids = _rollback_request_ids(fixture, mode)
     rollback_effect_ids = [
         effect_by_request[request_id]
-        for request_id in fixture["rollback_request_ids"]
+        for request_id in selected_request_ids
     ]
     result = await _execute_selective_rollback(
         executor=SelectiveRollbackExecutor(
@@ -529,7 +590,7 @@ async def _run_memory_case(
         facts=facts,
     )
 
-    ground_truth = fixture["ground_truth"]
+    ground_truth = _ground_truth(fixture, mode)
     _assert_equal("rollback result status", result.status.value, ground_truth["expected_status"])
 
     for key, expected_value in ground_truth["trusted_values"].items():
@@ -547,7 +608,7 @@ async def _run_memory_case(
         ground_truth["effect_status_by_request"],
     )
 
-    rollback_requests = set(fixture["rollback_request_ids"])
+    rollback_requests = set(selected_request_ids)
     facts.rolled_back_effect_count = sum(
         effect.status is EffectStatus.ROLLED_BACK for effect in all_effects
     )
@@ -559,10 +620,8 @@ async def _run_memory_case(
     facts.affected_node_count = len(rollback_requests)
     facts.preserved_node_count = facts.preserved_effect_count
     facts.residual_effect_count = sum(
-        status_by_request.get(request_id) != expected_status
-        for request_id, expected_status in ground_truth[
-            "effect_status_by_request"
-        ].items()
+        status_by_request.get(request_id) != EffectStatus.ROLLED_BACK.value
+        for request_id in rollback_requests
     )
 
     _validate_metric_ground_truth(facts, ground_truth)
@@ -570,8 +629,8 @@ async def _run_memory_case(
         status=result.status.value,
         safety_outcome=ground_truth["safety_outcome"],
         notes=(
-            "Deterministic local Memory fixture; previous TRUSTED version is "
-            "read from FilesystemMemoryStore after selective rollback."
+            f"{_mode_note(mode)} Deterministic local Memory fixture; trusted "
+            "values are read from FilesystemMemoryStore after rollback."
         ),
     )
 
@@ -665,6 +724,7 @@ async def _commit_download(
 async def _run_download_case(
     *,
     fixture: dict[str, Any],
+    mode: ExperimentMode,
     run_id: str,
     task_id: str,
     run_root: Path,
@@ -696,9 +756,10 @@ async def _run_download_case(
             facts=facts,
         )
 
+    selected_request_ids = _rollback_request_ids(fixture, mode)
     rollback_effect_ids = [
         effect_by_request[request_id]
-        for request_id in fixture["rollback_request_ids"]
+        for request_id in selected_request_ids
     ]
     result = await _execute_selective_rollback(
         executor=SelectiveRollbackExecutor(
@@ -715,7 +776,7 @@ async def _run_download_case(
         facts=facts,
     )
 
-    ground_truth = fixture["ground_truth"]
+    ground_truth = _ground_truth(fixture, mode)
     _assert_equal("rollback result status", result.status.value, ground_truth["expected_status"])
 
     quarantine_status_by_request = {
@@ -738,7 +799,7 @@ async def _run_download_case(
         ground_truth["effect_status_by_request"],
     )
 
-    rollback_requests = set(fixture["rollback_request_ids"])
+    rollback_requests = set(selected_request_ids)
     facts.rolled_back_effect_count = sum(
         effect.status is EffectStatus.ROLLED_BACK for effect in all_effects
     )
@@ -750,10 +811,8 @@ async def _run_download_case(
     facts.affected_node_count = len(rollback_requests)
     facts.preserved_node_count = facts.preserved_effect_count
     facts.residual_effect_count = sum(
-        status_by_request.get(request_id) != expected_status
-        for request_id, expected_status in ground_truth[
-            "effect_status_by_request"
-        ].items()
+        status_by_request.get(request_id) != EffectStatus.ROLLED_BACK.value
+        for request_id in rollback_requests
     )
 
     _validate_metric_ground_truth(facts, ground_truth)
@@ -761,8 +820,367 @@ async def _run_download_case(
         status=result.status.value,
         safety_outcome=ground_truth["safety_outcome"],
         notes=(
-            "Deterministic local quarantine payloads were used; no network "
-            "connection or external download occurred."
+            f"{_mode_note(mode)} Deterministic local quarantine payloads were "
+            "used; no network connection or external download occurred."
+        ),
+    )
+
+
+async def _run_commit_failure_case(
+    *,
+    fixture: dict[str, Any],
+    mode: ExperimentMode,
+    task_id: str,
+    run_root: Path,
+    facts: RunFacts,
+) -> ScenarioObservation:
+    environment = _make_file_environment(run_root)
+    for relative_path, content in fixture["initial_state"].items():
+        target = environment.workspace / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+
+    write = fixture["write"]
+    request = _request(
+        task_id=task_id,
+        tool_name="write_file",
+        request_id=write["request_id"],
+        arguments={"path": write["path"], "content": write["content"]},
+    )
+    checkpoint = await environment.checkpoint_manager.create(request)
+    facts.checkpoint_count += 1
+    execution = await WriteFileHandler(
+        environment.resolver,
+        environment.pending_store,
+    )(request)
+    facts.tool_executed_count += 1
+    facts.tool_sequence.append(request.tool_name)
+    await environment.pending_store.bind_checkpoint(
+        request.request_id,
+        checkpoint.checkpoint_id,
+    )
+    execution = execution.model_copy(
+        update={"checkpoint_id": checkpoint.checkpoint_id}
+    )
+    await environment.effect_manager.register_pending(request, execution)
+    facts.pending_effect_count += 1
+
+    original_mark_committed = environment.pending_store.mark_committed
+
+    async def fail_mark_committed(request_id: str) -> None:
+        raise OSError(f"simulated metadata failure for {request_id}")
+
+    setattr(environment.pending_store, "mark_committed", fail_mark_committed)
+    commit_error: OSError | None = None
+    try:
+        try:
+            await environment.commit_gate.commit(
+                execution,
+                DeepCheckResult(
+                    request_id=request.request_id,
+                    passed=True,
+                    reason="deterministic injected commit failure",
+                ),
+            )
+        except OSError as error:
+            commit_error = error
+    finally:
+        setattr(environment.pending_store, "mark_committed", original_mark_committed)
+    facts.check_count += 1
+    if commit_error is None:
+        raise GroundTruthMismatch("commit failure injection did not raise OSError")
+
+    ground_truth = _ground_truth(fixture, mode)
+    if mode is not ExperimentMode.BASELINE:
+        rollback_started_ns = perf_counter_ns()
+        try:
+            await environment.rollback_manager.rollback(
+                checkpoint.checkpoint_id,
+                request.request_id,
+            )
+        finally:
+            facts.rollback_elapsed_ms += _elapsed_ms(rollback_started_ns)
+        facts.rollback_count = 1
+        await environment.effect_manager.mark_rolled_back(
+            request.request_id,
+            missing_ok=True,
+        )
+
+    for relative_path, expected_content in ground_truth["final_state"].items():
+        actual = (environment.workspace / relative_path).read_text(encoding="utf-8")
+        _assert_equal(f"final file {relative_path}", actual, expected_content)
+
+    all_effects = await environment.effect_store.list_by_task_id(task_id)
+    status_by_request = {
+        effect.request_id: effect.status.value for effect in all_effects
+    }
+    _assert_equal(
+        "effect status map",
+        status_by_request,
+        ground_truth["effect_status_by_request"],
+    )
+    facts.affected_node_count = 1
+    facts.rolled_back_effect_count = sum(
+        effect.status is EffectStatus.ROLLED_BACK for effect in all_effects
+    )
+    facts.preserved_node_count = 0
+    facts.preserved_effect_count = 0
+    facts.residual_effect_count = sum(
+        effect.status is not EffectStatus.ROLLED_BACK for effect in all_effects
+    )
+    _validate_metric_ground_truth(facts, ground_truth)
+    return ScenarioObservation(
+        status=ground_truth["expected_status"],
+        safety_outcome=ground_truth["safety_outcome"],
+        error_code=ground_truth.get("error_code"),
+        notes=(
+            f"{_mode_note(mode)} A deterministic metadata failure was injected "
+            "after the workspace write. BASELINE retains the controlled residual; "
+            "guarded modes restore the checkpoint."
+        ),
+    )
+
+
+async def _run_user_conflict_case(
+    *,
+    fixture: dict[str, Any],
+    mode: ExperimentMode,
+    run_id: str,
+    task_id: str,
+    run_root: Path,
+    facts: RunFacts,
+) -> ScenarioObservation:
+    environment = _make_file_environment(run_root)
+    for relative_path, content in fixture["initial_state"].items():
+        target = environment.workspace / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+
+    effect_by_request: dict[str, str] = {}
+    for write in fixture["writes"]:
+        request = _request(
+            task_id=task_id,
+            tool_name="write_file",
+            request_id=write["request_id"],
+            arguments={"path": write["path"], "content": write["content"]},
+        )
+        effect_by_request[request.request_id] = await _commit_file(
+            environment=environment,
+            request=request,
+            facts=facts,
+        )
+
+    user_change = fixture["user_change"]
+    (environment.workspace / user_change["path"]).write_text(
+        user_change["content"],
+        encoding="utf-8",
+    )
+    selected_request_ids = _rollback_request_ids(fixture, mode)
+    result = await _execute_selective_rollback(
+        executor=SelectiveRollbackExecutor(
+            effect_store=environment.effect_store,
+            effect_manager=environment.effect_manager,
+            checkpoint_manager=environment.checkpoint_manager,
+            rollback_manager=environment.rollback_manager,
+        ),
+        plan=_plan(
+            run_id=run_id,
+            task_id=task_id,
+            effect_ids=[effect_by_request[item] for item in selected_request_ids],
+            case_id=fixture["case_id"],
+        ),
+        facts=facts,
+    )
+
+    ground_truth = _ground_truth(fixture, mode)
+    _assert_equal("rollback result status", result.status.value, ground_truth["expected_status"])
+    for relative_path, expected_content in ground_truth["final_state"].items():
+        actual = (environment.workspace / relative_path).read_text(encoding="utf-8")
+        _assert_equal(f"final file {relative_path}", actual, expected_content)
+
+    all_effects = await environment.effect_store.list_by_task_id(task_id)
+    status_by_request = {
+        effect.request_id: effect.status.value for effect in all_effects
+    }
+    _assert_equal("effect status map", status_by_request, ground_truth["effect_status_by_request"])
+    facts.affected_node_count = len(selected_request_ids)
+    facts.rolled_back_effect_count = sum(
+        effect.status is EffectStatus.ROLLED_BACK for effect in all_effects
+    )
+    facts.preserved_node_count = 0
+    facts.preserved_effect_count = 0
+    facts.residual_effect_count = sum(
+        status_by_request.get(request_id) != EffectStatus.ROLLED_BACK.value
+        for request_id in selected_request_ids
+    )
+    _validate_metric_ground_truth(facts, ground_truth)
+    return ScenarioObservation(
+        status=result.status.value,
+        safety_outcome=ground_truth["safety_outcome"],
+        error_code=ground_truth.get("error_code"),
+        notes=(
+            f"{_mode_note(mode)} The later user edit is preserved; the run "
+            "intentionally reports partial failure and one residual effect."
+        ),
+    )
+
+
+async def _run_idempotent_case(
+    *,
+    fixture: dict[str, Any],
+    mode: ExperimentMode,
+    run_id: str,
+    task_id: str,
+    run_root: Path,
+    facts: RunFacts,
+) -> ScenarioObservation:
+    environment = _make_file_environment(run_root)
+    for relative_path, content in fixture["initial_state"].items():
+        (environment.workspace / relative_path).write_text(content, encoding="utf-8")
+    write = fixture["writes"][0]
+    request = _request(
+        task_id=task_id,
+        tool_name="write_file",
+        request_id=write["request_id"],
+        arguments={"path": write["path"], "content": write["content"]},
+    )
+    effect_id = await _commit_file(
+        environment=environment,
+        request=request,
+        facts=facts,
+    )
+    rollback_plan = _plan(
+        run_id=run_id,
+        task_id=task_id,
+        effect_ids=[effect_id],
+        case_id=fixture["case_id"],
+    )
+    rollback_executor = SelectiveRollbackExecutor(
+        effect_store=environment.effect_store,
+        effect_manager=environment.effect_manager,
+        checkpoint_manager=environment.checkpoint_manager,
+        rollback_manager=environment.rollback_manager,
+    )
+    first = await _execute_selective_rollback(
+        executor=rollback_executor,
+        plan=rollback_plan,
+        facts=facts,
+    )
+    second = await _execute_selective_rollback(
+        executor=rollback_executor,
+        plan=rollback_plan,
+        facts=facts,
+    )
+    # Both results report the same request, but only the first call mutates the resource.
+    facts.rollback_count = 1
+
+    ground_truth = _ground_truth(fixture, mode)
+    _assert_equal("first rollback status", first.status.value, ground_truth["expected_status"])
+    _assert_equal("second rollback status", second.status.value, ground_truth["expected_status"])
+    for relative_path, expected_content in ground_truth["final_state"].items():
+        actual = (environment.workspace / relative_path).read_text(encoding="utf-8")
+        _assert_equal(f"final file {relative_path}", actual, expected_content)
+    all_effects = await environment.effect_store.list_by_task_id(task_id)
+    status_by_request = {
+        effect.request_id: effect.status.value for effect in all_effects
+    }
+    _assert_equal("effect status map", status_by_request, ground_truth["effect_status_by_request"])
+    facts.affected_node_count = 1
+    facts.rolled_back_effect_count = 1
+    facts.preserved_node_count = 0
+    facts.preserved_effect_count = 0
+    facts.residual_effect_count = 0
+    _validate_metric_ground_truth(facts, ground_truth)
+    return ScenarioObservation(
+        status=second.status.value,
+        safety_outcome=ground_truth["safety_outcome"],
+        notes=(
+            f"{_mode_note(mode)} The same RollbackPlan is executed twice; the "
+            "second execution is an idempotent no-op at the resource layer."
+        ),
+    )
+
+
+async def _run_scope_rejection_case(
+    *,
+    fixture: dict[str, Any],
+    mode: ExperimentMode,
+    run_id: str,
+    task_id: str,
+    run_root: Path,
+    facts: RunFacts,
+) -> ScenarioObservation:
+    environment = _make_file_environment(run_root)
+    for relative_path, content in fixture["initial_state"].items():
+        (environment.workspace / relative_path).write_text(content, encoding="utf-8")
+
+    effect_ids: list[str] = []
+    for write in fixture["writes"]:
+        request_task_id = task_id if write["task_id"] == "task-local" else f"external-{task_id}"
+        request = _request(
+            task_id=request_task_id,
+            tool_name="write_file",
+            request_id=write["request_id"],
+            arguments={"path": write["path"], "content": write["content"]},
+        )
+        effect_ids.append(
+            await _commit_file(
+                environment=environment,
+                request=request,
+                facts=facts,
+            )
+        )
+
+    facts.selective_rollback_count += 1
+    rollback_started_ns = perf_counter_ns()
+    try:
+        try:
+            await SelectiveRollbackExecutor(
+                effect_store=environment.effect_store,
+                effect_manager=environment.effect_manager,
+                checkpoint_manager=environment.checkpoint_manager,
+                rollback_manager=environment.rollback_manager,
+            ).execute(
+                _plan(
+                    run_id=run_id,
+                    task_id=task_id,
+                    effect_ids=effect_ids,
+                    case_id=fixture["case_id"],
+                )
+            )
+        except RollbackPlanValidationError:
+            pass
+        else:
+            raise GroundTruthMismatch("cross-task rollback scope was not rejected")
+    finally:
+        facts.rollback_elapsed_ms += _elapsed_ms(rollback_started_ns)
+
+    ground_truth = _ground_truth(fixture, mode)
+    for relative_path, expected_content in ground_truth["final_state"].items():
+        actual = (environment.workspace / relative_path).read_text(encoding="utf-8")
+        _assert_equal(f"final file {relative_path}", actual, expected_content)
+    all_effects = [
+        await environment.effect_store.get(effect_id) for effect_id in effect_ids
+    ]
+    status_by_request = {
+        effect.request_id: effect.status.value for effect in all_effects
+    }
+    _assert_equal("effect status map", status_by_request, ground_truth["effect_status_by_request"])
+    facts.blocked_count = 1
+    facts.rollback_count = 0
+    facts.affected_node_count = 0
+    facts.rolled_back_effect_count = 0
+    facts.preserved_node_count = len(all_effects)
+    facts.preserved_effect_count = len(all_effects)
+    facts.residual_effect_count = 0
+    _validate_metric_ground_truth(facts, ground_truth)
+    return ScenarioObservation(
+        status=ground_truth["expected_status"],
+        safety_outcome=ground_truth["safety_outcome"],
+        error_code=ground_truth.get("error_code"),
+        notes=(
+            f"{_mode_note(mode)} Cross-task scope is rejected during preflight; "
+            "zero resource rollback mutation occurs."
         ),
     )
 
@@ -790,6 +1208,7 @@ def _validate_metric_ground_truth(
 async def _run_scenario(
     *,
     fixture: dict[str, Any],
+    mode: ExperimentMode,
     run_id: str,
     task_id: str,
     run_root: Path,
@@ -799,6 +1218,7 @@ async def _run_scenario(
     if kind == "FILE":
         return await _run_file_case(
             fixture=fixture,
+            mode=mode,
             run_id=run_id,
             task_id=task_id,
             run_root=run_root,
@@ -807,6 +1227,7 @@ async def _run_scenario(
     if kind == "MEMORY":
         return await _run_memory_case(
             fixture=fixture,
+            mode=mode,
             run_id=run_id,
             task_id=task_id,
             run_root=run_root,
@@ -815,6 +1236,42 @@ async def _run_scenario(
     if kind == "DOWNLOAD":
         return await _run_download_case(
             fixture=fixture,
+            mode=mode,
+            run_id=run_id,
+            task_id=task_id,
+            run_root=run_root,
+            facts=facts,
+        )
+    if kind == "COMMIT_FAILURE":
+        return await _run_commit_failure_case(
+            fixture=fixture,
+            mode=mode,
+            task_id=task_id,
+            run_root=run_root,
+            facts=facts,
+        )
+    if kind == "USER_CONFLICT":
+        return await _run_user_conflict_case(
+            fixture=fixture,
+            mode=mode,
+            run_id=run_id,
+            task_id=task_id,
+            run_root=run_root,
+            facts=facts,
+        )
+    if kind == "IDEMPOTENT":
+        return await _run_idempotent_case(
+            fixture=fixture,
+            mode=mode,
+            run_id=run_id,
+            task_id=task_id,
+            run_root=run_root,
+            facts=facts,
+        )
+    if kind == "SCOPE_REJECTION":
+        return await _run_scope_rejection_case(
+            fixture=fixture,
+            mode=mode,
             run_id=run_id,
             task_id=task_id,
             run_root=run_root,
@@ -844,11 +1301,11 @@ def _build_result(
     environment_fingerprint: str,
     runner_command: str,
 ) -> ExperimentResult:
-    ground_truth = fixture["ground_truth"]
+    ground_truth = _ground_truth(fixture, mode)
     if error is None and observation is not None:
         status = observation.status
         safety_outcome = observation.safety_outcome
-        error_code = None
+        error_code = observation.error_code
         notes = observation.notes
     else:
         status = ExecutionStatus.FAILED.value
@@ -863,9 +1320,10 @@ def _build_result(
     if node_version == "N/A":
         notes = f"{notes} node_version=N/A because Node.js was unavailable."
 
-    logical_node_count = len(
-        fixture.get("writes", fixture.get("downloads", []))
-    )
+    logical_records = fixture.get("writes") or fixture.get("downloads") or []
+    if not logical_records and fixture.get("write") is not None:
+        logical_records = [fixture["write"]]
+    logical_node_count = len(logical_records)
 
     return ExperimentResult(
         schema_version="0.4",
@@ -900,7 +1358,7 @@ def _build_result(
         safety_outcome=safety_outcome,
         tool_executed_count=facts.tool_executed_count,
         unsafe_tool_executed_count=0,
-        blocked_count=0,
+        blocked_count=facts.blocked_count,
         false_block_count=0,
         risk_escalation_count=0,
         check_count=facts.check_count,
@@ -989,11 +1447,6 @@ async def _run_one(
     keep_workspace: bool,
     environment: dict[str, str],
 ) -> ExperimentResult:
-    if mode not in SUPPORTED_MODES:
-        raise ValueError(
-            "phase A/B runner only supports ADAPTIVE_RUNTIME; "
-            "BASELINE and FULL_GUARD require the frozen mode semantics"
-        )
     if mode.value not in fixture["supported_modes"]:
         raise ValueError(
             f"fixture {fixture['case_id']} does not support mode {mode.value}"
@@ -1017,6 +1470,7 @@ async def _run_one(
     try:
         observation = await _run_scenario(
             fixture=fixture,
+            mode=mode,
             run_id=run_id,
             task_id=task_id,
             run_root=run_root,
@@ -1089,12 +1543,6 @@ async def run_benchmark(
 ) -> list[ExperimentResult]:
     if repetitions < 1:
         raise ValueError("repetitions must be at least 1")
-    if mode not in SUPPORTED_MODES:
-        raise ValueError(
-            "phase A/B runner only supports ADAPTIVE_RUNTIME; "
-            "do not relabel the same execution path as another mode"
-        )
-
     output_dir.mkdir(parents=True, exist_ok=True)
     raw_jsonl_path = output_dir / RAW_JSONL_NAME
     raw_csv_path = output_dir / RAW_CSV_NAME
@@ -1141,8 +1589,8 @@ async def run_benchmark(
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Run the formal member 3 V2 selective rollback benchmark "
-            "for File, Memory and Download fixtures."
+            "Run the formal member 3 V2 rollback benchmark for File, Memory, "
+            "Download, conflict, idempotency and scope fixtures."
         )
     )
     selection = parser.add_mutually_exclusive_group(required=True)
@@ -1155,7 +1603,7 @@ def _parse_args() -> argparse.Namespace:
     selection.add_argument(
         "--all-cases",
         action="store_true",
-        help="Run M3-C01, M3-C02 and M3-C07.",
+        help="Run all M3-C01 through M3-C07 rollback cases.",
     )
     parser.add_argument(
         "--mode",

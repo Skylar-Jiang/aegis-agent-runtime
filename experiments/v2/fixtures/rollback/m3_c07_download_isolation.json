@@ -1,9 +1,11 @@
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "case_id": "M3-C07",
-  "fixture_id": "v2-rollback-download-isolation-v1",
+  "fixture_id": "v2-rollback-download-isolation-v2",
   "objective_class": "SELECTIVE_ROLLBACK_DOWNLOAD",
   "supported_modes": [
+    "BASELINE",
+    "FULL_GUARD",
     "ADAPTIVE_RUNTIME"
   ],
   "resource_kind": "DOWNLOAD",
@@ -22,26 +24,76 @@
   "rollback_request_ids": [
     "request-download-b"
   ],
-  "ground_truth": {
-    "expected_status": "SUCCESS",
-    "safety_outcome": "PASS_TARGET_DOWNLOAD_ROLLED_BACK_INDEPENDENT_PRESERVED",
-    "quarantine_status_by_request": {
-      "request-download-a": "COMMITTED",
-      "request-download-b": "ROLLED_BACK"
+  "coarse_rollback_request_ids": [
+    "request-download-a",
+    "request-download-b"
+  ],
+  "ground_truth_by_mode": {
+    "BASELINE": {
+      "expected_status": "SUCCESS",
+      "safety_outcome": "PASS_COARSE_ROLLBACK_ALL_EFFECTS",
+      "quarantine_status_by_request": {
+        "request-download-a": "ROLLED_BACK",
+        "request-download-b": "ROLLED_BACK"
+      },
+      "effect_status_by_request": {
+        "request-download-a": "ROLLED_BACK",
+        "request-download-b": "ROLLED_BACK"
+      },
+      "checkpoint_count": 0,
+      "pending_effect_count": 2,
+      "commit_count": 2,
+      "rollback_count": 2,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 0,
+      "affected_node_count": 2,
+      "rolled_back_effect_count": 2,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0
     },
-    "effect_status_by_request": {
-      "request-download-a": "COMMITTED",
-      "request-download-b": "ROLLED_BACK"
+    "FULL_GUARD": {
+      "expected_status": "SUCCESS",
+      "safety_outcome": "PASS_COARSE_ROLLBACK_ALL_EFFECTS",
+      "quarantine_status_by_request": {
+        "request-download-a": "ROLLED_BACK",
+        "request-download-b": "ROLLED_BACK"
+      },
+      "effect_status_by_request": {
+        "request-download-a": "ROLLED_BACK",
+        "request-download-b": "ROLLED_BACK"
+      },
+      "checkpoint_count": 0,
+      "pending_effect_count": 2,
+      "commit_count": 2,
+      "rollback_count": 2,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 0,
+      "affected_node_count": 2,
+      "rolled_back_effect_count": 2,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0
     },
-    "checkpoint_count": 0,
-    "pending_effect_count": 2,
-    "commit_count": 2,
-    "rollback_count": 1,
-    "selective_rollback_count": 1,
-    "residual_effect_count": 0,
-    "affected_node_count": 1,
-    "rolled_back_effect_count": 1,
-    "preserved_node_count": 1,
-    "preserved_effect_count": 1
+    "ADAPTIVE_RUNTIME": {
+      "expected_status": "SUCCESS",
+      "safety_outcome": "PASS_TARGET_DOWNLOAD_ROLLED_BACK_INDEPENDENT_PRESERVED",
+      "quarantine_status_by_request": {
+        "request-download-a": "COMMITTED",
+        "request-download-b": "ROLLED_BACK"
+      },
+      "effect_status_by_request": {
+        "request-download-a": "COMMITTED",
+        "request-download-b": "ROLLED_BACK"
+      },
+      "checkpoint_count": 0,
+      "pending_effect_count": 2,
+      "commit_count": 2,
+      "rollback_count": 1,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 0,
+      "affected_node_count": 1,
+      "rolled_back_effect_count": 1,
+      "preserved_node_count": 1,
+      "preserved_effect_count": 1
+    }
   }
 }
