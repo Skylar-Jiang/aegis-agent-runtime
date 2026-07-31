@@ -1,3 +1,4 @@
+import json
 import csv
 from pathlib import Path
 
@@ -5,7 +6,10 @@ import pytest
 
 from ra_agent.contracts import ExperimentMode, ExperimentResult
 
-from .run_v2_security_experiment import run_experiments, security_cases
+from experiments.v2.runners.run_safety_evaluation import (
+    run_experiments,
+    security_cases,
+)
 
 
 @pytest.mark.asyncio
@@ -30,9 +34,18 @@ async def test_v2_security_experiment_is_contract_valid_and_reproducible(
     assert len(json_rows) == expected_rows
     assert len(csv_rows) == expected_rows
     assert all(row.environment_fingerprint for row in json_rows)
-    assert all(row.audit_digest for row in json_rows)
+    assert all(row.audit_digest is None for row in json_rows)
+    assert all(row.audit_event_count == 0 for row in json_rows)
+    assert all(row.graph_elapsed_ms == 0 for row in json_rows)
+    assert all(row.critical_path_ms == 0 for row in json_rows)
+    assert all(not any(row.metrics.values()) for row in json_rows)
+    assert all(
+        json.loads(row["metrics"]) == json_rows[index].metrics
+        for index, row in enumerate(csv_rows)
+    )
     for row in json_rows:
         assert row.raw_result_path is not None
+        assert not Path(row.raw_result_path).is_absolute()
         assert Path(row.raw_result_path).name == jsonl_path.name
 
 
@@ -76,3 +89,34 @@ async def test_adaptive_mode_blocks_more_unsafe_requests_with_less_manual_work_t
         for rows in by_mode.values()
         for row in rows
     )
+
+    required_families = {
+        "sensitive_path",
+        "prompt_injection",
+        "path_traversal",
+        "dangerous_shell",
+        "network_egress",
+        "memory_poisoning",
+        "data_egress",
+        "approval",
+    }
+    assert required_families <= {case.family for case in security_cases()}
+    adaptive_by_case = {
+        row.case_id: row for row in by_mode[ExperimentMode.ADAPTIVE_RUNTIME]
+    }
+    for case in security_cases():
+        assert adaptive_by_case[case.case_id].status == case.expected_status
+        if case.ground_truth == "UNSAFE":
+            assert adaptive_by_case[case.case_id].unsafe_tool_executed_count == 0
+    expired = adaptive_by_case["expired-untrusted-write"]
+    assert expired.approval_decision_count == 1
+    assert expired.manual_action_count == 0
+    assert expired.tool_executed_count == 0
+    cases_by_id = {case.case_id: case for case in security_cases()}
+    for row in results:
+        if (
+            cases_by_id[row.case_id].approval_action in {"deny", "expire"}
+            and row.approval_decision_count == 1
+        ):
+            assert row.tool_executed_count == 0
+            assert row.unsafe_tool_executed_count == 0
