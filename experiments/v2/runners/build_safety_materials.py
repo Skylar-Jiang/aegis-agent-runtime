@@ -260,6 +260,9 @@ def _comparison_svg(
     payload: dict[str, object],
 ) -> str:
     width, height = 1200, 620
+    run_id = _first_payload_value(payload, "run_ids")
+    commit = _first_payload_value(payload, "git_commits")
+    run_date = _first_payload_value(payload, "run_dates")
     panels = (
         ("Manual actions / repetition", "manual_actions_per_repetition", 8.0, ""),
         ("Unsafe request block rate", "unsafe_request_block_rate", 1.0, "%"),
@@ -273,9 +276,8 @@ def _comparison_svg(
         "V2 Security: safety vs. manual effort</text>",
         '<text x="60" y="102" fill="#94a3b8" font-size="16" '
         'font-family="Segoe UI, sans-serif">'
-        f"run={escape(str(payload['run_ids'][0]))} · "
-        f"commit={escape(str(payload['git_commits'][0])[:12])} · "
-        f"date={escape(str(payload['run_dates'][0]))} · n={payload['sample_size']}</text>",
+        f"run={escape(run_id)} · commit={escape(commit[:12])} · "
+        f"date={escape(run_date)} · n={payload['sample_size']}</text>",
     ]
     for panel_index, (title, key, maximum, suffix) in enumerate(panels):
         x0 = 45 + panel_index * 390
@@ -393,6 +395,13 @@ def _display_path(path: Path) -> str:
         return path.resolve().relative_to(ROOT).as_posix()
     except ValueError:
         return path.resolve().as_posix()
+
+
+def _first_payload_value(payload: dict[str, object], key: str) -> str:
+    values = payload.get(key)
+    if not isinstance(values, list) or not values:
+        raise ValueError(f"derived payload is missing {key}")
+    return str(values[0])
 
 
 def parse_args() -> argparse.Namespace:

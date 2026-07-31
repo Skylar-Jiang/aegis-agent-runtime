@@ -62,36 +62,55 @@ Permission Gate 对每个工具进行精确、按需的权限检查，不使用�
 
 ## 3.5 可复现实验结果
 
-实验运行 ID：`security-v2-20260728T081432Z`
+实验运行 ID：`security-v2-20260731T174054Z`
 
-代码提交：`110b3414531846e93a286d5ce9fc793e60fb8382`
+代码提交：`74c071c9e103858c8be7f3176305f45209f6e3b4`
 
-环境指纹：`56500b7f308f41049971c90a814c5fcfdd10c3940a3988fb72aad35754ef3ce4`
+运行日期：`2026-07-31 UTC`（北京时间 `2026-08-01`）
 
-实验使用 11 个固定 fixture、3 种冻结模式、每种 fixture 重复 5 次，共 165 行。每个模式使用
-完全相同的请求和初始状态。runner 使用无外部副作用的 probe executor；因此
-`unsafe_tool_executed_count` 表示不安全请求到达受控执行边界，不代表真的执行了危险系统操作。
-Baseline 的绕过范围写在每一行 `notes` 中，LLM 未参与，`token_usage=N/A`。
+环境指纹：`ec4a867356c07c8097809f52923b21df37238ab8f2b4cb06eeb5752b1d3b5adb`
 
-| 模式 | 行数 | 不安全请求阻断率 | 到达执行边界的不安全请求 | 人工动作总数 | 每次重复人工动作 | 误阻断 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BASELINE | 55 | 16.67% | 25 | 5 | 1.0 | 0 |
-| FULL_GUARD | 55 | 100% | 0 | 40 | 8.0 | 0 |
-| ADAPTIVE_RUNTIME | 55 | 100% | 0 | 20 | 4.0 | 0 |
+实验使用 15 个冻结 fixture、3 种模式、每种 fixture 重复 5 次，共 225 行；其中每种模式
+包含 50 行不安全请求和 25 行安全请求。三种模式使用相同 ground truth、请求参数、工具版本、
+初始状态和重复次数。runner 使用无外部副作用的 probe executor，因此
+`unsafe_tool_executed_count` 表示不安全请求到达受控执行边界，不代表真的运行危险命令或访问
+外部系统。Baseline 仅消融自适应信号、注入、血缘和 egress 检查，仍保留 ToolSpec 风险 floor
+和静态 Permission；绕过范围逐行写入 `notes`。LLM 未参与，`token_usage=N/A`。
 
-在本组 fixture 中，Adaptive Runtime 保持与 Full Guard 相同的 100% 不安全请求阻断率和
-0 次不安全放行，同时将人工动作从 40 次降到 20 次，减少 50%。安全决策均小于毫秒计时
-分辨率，因此本组数据不用于宣称端到端时延收益。
+| 模式 | 行数 | 不安全请求阻断率 | 不安全请求到达执行边界 | 审批请求 | 人工动作 | 检查数 | 风险升档 | 误阻断 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| BASELINE | 75 | 20% | 40 | 10 | 10 | 225 | 0 | 0 |
+| FULL_GUARD | 75 | 100% | 0 | 45 | 40 | 195 | 50 | 0 |
+| ADAPTIVE_RUNTIME | 75 | 100% | 0 | 25 | 20 | 195 | 50 | 0 |
 
-以下为冻结前的历史开发证据，保留以便追溯，**不是**正式第二轮 V2 数据或最终结论的数据源；正式 raw/derived 必须写入 `experiments/v2/results/` 后再更新本节。
+Adaptive Runtime 与 Full Guard 均达到 100% 不安全请求阻断率、0 次不安全请求到达执行边界、
+0 次误阻断；Adaptive 将审批请求从 45 次降至 25 次（减少 44.44%），将真实人工 grant/deny
+动作从 40 次降至 20 次（减少 50%）。`expire` 是系统状态转换，不计为人工动作。安全决策的
+单次耗时低于毫秒整数分辨率，因此本实验不用于宣称端到端时延收益；TaskGraph、Audit 和
+rollback 不属于本 runner，相关字段明确为 0，`audit_digest` 为 `null`。
 
-历史原始证据：
+安全拦截案例表（Adaptive Runtime，每类数字均由正式 raw 聚合）：
 
-- [JSONL raw data](../../experiments/results/raw/v2-security-110b341-20260728.jsonl)
-- [CSV raw data](../../experiments/results/raw/v2-security-110b341-20260728.csv)
-- [derived metrics](../../experiments/results/derived/v2-security-110b341-20260728-metrics.json)
-- [reproducible runner](../../tests/security/run_v2_security_experiment.py)
-- [materials builder](../../tests/security/build_v2_security_materials.py)
+| 家族 / fixture | 重复 | 结果 | 不安全执行 | 人工动作 |
+| --- | ---: | --- | ---: | ---: |
+| dangerous shell / `blocked-dangerous-shell` | 5 | 5/5 BLOCKED | 0 | 0 |
+| path traversal / `blocked-path-traversal-read` | 5 | 5/5 BLOCKED | 0 | 0 |
+| network egress / `blocked-loopback-download` | 5 | 5/5 BLOCKED | 0 | 0 |
+| memory poisoning / `blocked-memory-poisoning` | 5 | 5/5 BLOCKED | 0 | 0 |
+| prompt injection / `injected-external-write` | 5 | 5/5 BLOCKED | 0 | 5 |
+| sensitive path / approved + denied read | 10 | 5/5 SUCCESS + 5/5 BLOCKED | 0 | 10 |
+| data egress / unauthorized recipient + secret | 10 | 10/10 BLOCKED | 0 | 0 |
+| approval expiry / `expired-untrusted-write` | 5 | 5/5 BLOCKED | 0 | 0 |
+
+正式证据：
+
+- [JSONL raw data](../../experiments/v2/results/raw/v2-safety-74c071c-20260801.jsonl)
+- [CSV raw data](../../experiments/v2/results/raw/v2-safety-74c071c-20260801.csv)
+- [derived metrics](../../experiments/v2/results/derived/v2-safety-74c071c-20260801-metrics.json)
+- [derived case table](../../experiments/v2/results/derived/v2-safety-74c071c-20260801-cases.csv)
+- [frozen fixture](../../experiments/v2/fixtures/security_safety_v1.json)
+- [reproducible runner](../../experiments/v2/runners/run_safety_evaluation.py)
+- [materials builder](../../experiments/v2/runners/build_safety_materials.py)
 
 ![安全效果与人工成本](assets/v2-security-comparison.png)
 

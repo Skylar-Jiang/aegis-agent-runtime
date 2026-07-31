@@ -45,7 +45,9 @@ async def test_v2_security_experiment_is_contract_valid_and_reproducible(
     )
     for row in json_rows:
         assert row.raw_result_path is not None
-        assert not Path(row.raw_result_path).is_absolute()
+        assert Path(row.raw_result_path).is_absolute() == (
+            not jsonl_path.resolve().is_relative_to(Path.cwd().resolve())
+        )
         assert Path(row.raw_result_path).name == jsonl_path.name
 
 
