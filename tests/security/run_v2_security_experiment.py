@@ -1,6 +1,6 @@
 """Backward-compatible entrypoint for the frozen V2 safety runner."""
 
-from experiments.v2.runners.run_safety_evaluation import (
+from experiments.v2.runners.run_safety_evaluation import (  # pyright: ignore[reportMissingImports]
     DEFAULT_FIXTURE_PATH,
     SecurityCase,
     main,

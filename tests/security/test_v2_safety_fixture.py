@@ -3,7 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from experiments.v2.runners.run_safety_evaluation import security_cases
+from experiments.v2.runners.run_safety_evaluation import (  # pyright: ignore[reportMissingImports]
+    security_cases,
+)
 
 
 def test_frozen_safety_fixture_has_unique_complete_ground_truth() -> None:

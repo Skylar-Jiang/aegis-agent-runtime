@@ -1,6 +1,9 @@
 """Backward-compatible entrypoint for frozen V2 safety report materials."""
 
-from experiments.v2.runners.build_safety_materials import build_materials, main
+from experiments.v2.runners.build_safety_materials import (  # pyright: ignore[reportMissingImports]
+    build_materials,
+    main,
+)
 
 __all__ = ["build_materials"]
 

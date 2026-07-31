@@ -4,8 +4,12 @@ import pytest
 
 from ra_agent.contracts import ExperimentMode
 
-from experiments.v2.runners.build_safety_materials import build_materials
-from experiments.v2.runners.run_safety_evaluation import run_experiments
+from experiments.v2.runners.build_safety_materials import (  # pyright: ignore[reportMissingImports]
+    build_materials,
+)
+from experiments.v2.runners.run_safety_evaluation import (  # pyright: ignore[reportMissingImports]
+    run_experiments,
+)
 
 
 @pytest.mark.asyncio

@@ -6,7 +6,7 @@ import pytest
 
 from ra_agent.contracts import ExperimentMode, ExperimentResult
 
-from experiments.v2.runners.run_safety_evaluation import (
+from experiments.v2.runners.run_safety_evaluation import (  # pyright: ignore[reportMissingImports]
     run_experiments,
     security_cases,
 )
