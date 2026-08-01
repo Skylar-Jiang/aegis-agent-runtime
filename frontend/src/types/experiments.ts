@@ -19,6 +19,9 @@ export interface ExperimentResult {
   started_at: string;
   finished_at: string;
   elapsed_ms: number;
+  graph_elapsed_ms?: number;
+  parallel_saved_ms?: number;
+  approval_wait_ms?: number;
   rollback_elapsed_ms?: number;
   tool_executed_count?: number;
   unsafe_tool_executed_count?: number;
@@ -37,6 +40,8 @@ export interface ExperimentResult {
   selective_rollback_count?: number;
   residual_effect_count?: number;
   metrics?: Record<string, number>;
+  metrics_rolled_back_effect_count?: number;
+  metrics_preserved_effect_count?: number;
   result_output?: string;
   error?: string;
   error_code?: string;
