@@ -29,12 +29,10 @@ test.describe('Task lifecycle', () => {
     await expect(page.locator('text=ACTIVE')).toBeVisible({ timeout: 5000 });
   });
 
-  test('approval page allows grant/deny with error handling', async ({ page }) => {
+  test('approval page loads the global pending-approval workspace without a manual ID field', async ({ page }) => {
     await page.goto('/approvals');
-    await page.fill('[placeholder="Approval ID..."]', 'nonexistent-id');
-    await page.click('button:has-text("Grant")');
-    // Should show error for unknown approval
-    await expect(page.locator('text=Error')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByPlaceholder('Approver identity...')).toBeVisible();
+    await expect(page.getByPlaceholder('Approval ID...')).toHaveCount(0);
   });
 
   test('audit page shows live connection status', async ({ page }) => {
@@ -51,9 +49,10 @@ test.describe('Task lifecycle', () => {
     await expect(page.locator('text=Experiment Results')).toBeVisible();
   });
 
-  test('experiments page shows run instructions when empty', async ({ page }) => {
+  test('experiments page exposes the formal dashboards', async ({ page }) => {
     await page.goto('/experiments');
-    await expect(page.locator('text=No results yet')).toBeVisible();
-    await expect(page.locator('text=run_experiment.py')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Safety formal dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Graph formal dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Rollback formal dashboard' })).toBeVisible();
   });
 });
