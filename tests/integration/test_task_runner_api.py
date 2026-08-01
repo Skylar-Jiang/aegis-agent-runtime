@@ -126,9 +126,10 @@ def test_task_approvals_are_queryable_by_task() -> None:
 
         assert response.status_code == 200
         assert response.json()["data"] == [
-            {
-                "approval_id": "approval-for-task",
-                "status": "PENDING",
+                {
+                    "approval_id": "approval-for-task",
+                    "task_id": task_id,
+                    "status": "PENDING",
                 "tool_name": "delete_file",
                 "reason": "destructive action",
                 "step_id": "step-1",
