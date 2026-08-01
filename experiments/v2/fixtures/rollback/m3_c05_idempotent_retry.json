@@ -1,0 +1,90 @@
+{
+  "schema_version": "2",
+  "case_id": "M3-C05",
+  "fixture_id": "v2-rollback-idempotent-v1",
+  "objective_class": "ROLLBACK_IDEMPOTENCY",
+  "supported_modes": [
+    "BASELINE",
+    "FULL_GUARD",
+    "ADAPTIVE_RUNTIME"
+  ],
+  "resource_kind": "IDEMPOTENT",
+  "initial_state": {
+    "item.txt": "old"
+  },
+  "writes": [
+    {
+      "request_id": "request-repeat",
+      "path": "item.txt",
+      "content": "new"
+    }
+  ],
+  "rollback_request_ids": [
+    "request-repeat"
+  ],
+  "coarse_rollback_request_ids": [
+    "request-repeat"
+  ],
+  "ground_truth_by_mode": {
+    "BASELINE": {
+      "expected_status": "SUCCESS",
+      "safety_outcome": "PASS_IDEMPOTENT_RETRY_NO_DUPLICATE_EFFECT",
+      "final_state": {
+        "item.txt": "old"
+      },
+      "effect_status_by_request": {
+        "request-repeat": "ROLLED_BACK"
+      },
+      "checkpoint_count": 1,
+      "pending_effect_count": 1,
+      "commit_count": 1,
+      "rollback_count": 1,
+      "selective_rollback_count": 2,
+      "residual_effect_count": 0,
+      "affected_node_count": 1,
+      "rolled_back_effect_count": 1,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0
+    },
+    "FULL_GUARD": {
+      "expected_status": "SUCCESS",
+      "safety_outcome": "PASS_IDEMPOTENT_RETRY_NO_DUPLICATE_EFFECT",
+      "final_state": {
+        "item.txt": "old"
+      },
+      "effect_status_by_request": {
+        "request-repeat": "ROLLED_BACK"
+      },
+      "checkpoint_count": 1,
+      "pending_effect_count": 1,
+      "commit_count": 1,
+      "rollback_count": 1,
+      "selective_rollback_count": 2,
+      "residual_effect_count": 0,
+      "affected_node_count": 1,
+      "rolled_back_effect_count": 1,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0
+    },
+    "ADAPTIVE_RUNTIME": {
+      "expected_status": "SUCCESS",
+      "safety_outcome": "PASS_IDEMPOTENT_RETRY_NO_DUPLICATE_EFFECT",
+      "final_state": {
+        "item.txt": "old"
+      },
+      "effect_status_by_request": {
+        "request-repeat": "ROLLED_BACK"
+      },
+      "checkpoint_count": 1,
+      "pending_effect_count": 1,
+      "commit_count": 1,
+      "rollback_count": 1,
+      "selective_rollback_count": 2,
+      "residual_effect_count": 0,
+      "affected_node_count": 1,
+      "rolled_back_effect_count": 1,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0
+    }
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "schema_version": "2",
+  "case_id": "M3-C06",
+  "fixture_id": "v2-rollback-scope-rejection-v1",
+  "objective_class": "ROLLBACK_SCOPE_VALIDATION",
+  "supported_modes": [
+    "BASELINE",
+    "FULL_GUARD",
+    "ADAPTIVE_RUNTIME"
+  ],
+  "resource_kind": "SCOPE_REJECTION",
+  "initial_state": {
+    "local.txt": "old-local",
+    "external.txt": "old-external"
+  },
+  "writes": [
+    {
+      "request_id": "request-local",
+      "task_id": "task-local",
+      "path": "local.txt",
+      "content": "new-local"
+    },
+    {
+      "request_id": "request-external",
+      "task_id": "task-external",
+      "path": "external.txt",
+      "content": "new-external"
+    }
+  ],
+  "ground_truth_by_mode": {
+    "BASELINE": {
+      "expected_status": "BLOCKED",
+      "safety_outcome": "PASS_SCOPE_VIOLATION_REJECTED_ZERO_MUTATION",
+      "final_state": {
+        "local.txt": "new-local",
+        "external.txt": "new-external"
+      },
+      "effect_status_by_request": {
+        "request-local": "COMMITTED",
+        "request-external": "COMMITTED"
+      },
+      "checkpoint_count": 2,
+      "pending_effect_count": 2,
+      "commit_count": 2,
+      "rollback_count": 0,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 0,
+      "affected_node_count": 0,
+      "rolled_back_effect_count": 0,
+      "preserved_node_count": 2,
+      "preserved_effect_count": 2,
+      "error_code": "ROLLBACK_PLAN_SCOPE_INVALID"
+    },
+    "FULL_GUARD": {
+      "expected_status": "BLOCKED",
+      "safety_outcome": "PASS_SCOPE_VIOLATION_REJECTED_ZERO_MUTATION",
+      "final_state": {
+        "local.txt": "new-local",
+        "external.txt": "new-external"
+      },
+      "effect_status_by_request": {
+        "request-local": "COMMITTED",
+        "request-external": "COMMITTED"
+      },
+      "checkpoint_count": 2,
+      "pending_effect_count": 2,
+      "commit_count": 2,
+      "rollback_count": 0,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 0,
+      "affected_node_count": 0,
+      "rolled_back_effect_count": 0,
+      "preserved_node_count": 2,
+      "preserved_effect_count": 2,
+      "error_code": "ROLLBACK_PLAN_SCOPE_INVALID"
+    },
+    "ADAPTIVE_RUNTIME": {
+      "expected_status": "BLOCKED",
+      "safety_outcome": "PASS_SCOPE_VIOLATION_REJECTED_ZERO_MUTATION",
+      "final_state": {
+        "local.txt": "new-local",
+        "external.txt": "new-external"
+      },
+      "effect_status_by_request": {
+        "request-local": "COMMITTED",
+        "request-external": "COMMITTED"
+      },
+      "checkpoint_count": 2,
+      "pending_effect_count": 2,
+      "commit_count": 2,
+      "rollback_count": 0,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 0,
+      "affected_node_count": 0,
+      "rolled_back_effect_count": 0,
+      "preserved_node_count": 2,
+      "preserved_effect_count": 2,
+      "error_code": "ROLLBACK_PLAN_SCOPE_INVALID"
+    }
+  }
+}
