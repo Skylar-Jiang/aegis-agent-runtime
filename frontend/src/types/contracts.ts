@@ -1,4 +1,4 @@
-// Mirror of backend contracts/ — v0.3
+// Mirror of backend contracts/ — v0.4
 
 export type AuditEventType =
   | 'TASK_CREATED' | 'PLAN_CREATED' | 'TOOL_REQUESTED'

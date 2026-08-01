@@ -172,7 +172,7 @@ export function ExperimentsPage() {
                     <td className="p-2 font-mono text-blue-400">{r.case_id}</td>
                     <td className={`p-2 ${MODE_COLORS[r.mode] || ''}`}>{r.mode}</td>
                     <td className="p-2"><StatusBadge status={r.status} /></td>
-                    <td className="p-2 text-gray-600">{r.expected_decision}</td>
+                    <td className="p-2 text-gray-600">{r.expected_status}</td>
                     <td className="p-2">{r.elapsed_ms}</td>
                     <td className="p-2 text-red-400 max-w-48 truncate">{r.error || '-'}</td>
                   </tr>
