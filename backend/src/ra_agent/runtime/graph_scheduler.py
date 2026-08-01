@@ -89,14 +89,24 @@ class RuntimeTaskGraphScheduler:
         effect_store: _EffectStore | None = None,
         rollback_executor: _RollbackExecutor | None = None,
         audit_recorder: AuditRecorder | None = None,
+        pause_on_waiting_approval: bool = False,
     ) -> None:
         self._runtime_scheduler = runtime_scheduler
         self._effect_store = effect_store
         self._rollback_executor = rollback_executor
         self._audit_recorder = audit_recorder
+        self._pause_on_waiting_approval = pause_on_waiting_approval
         self._states: dict[str, _GraphState] = {}
 
     async def schedule_graph(self, graph: TaskGraph) -> TaskGraphResult:
+        await self.prepare_graph(graph)
+        state = self._states[graph.graph_id]
+        await self._run_ready_nodes(state)
+        return await self._result_with_audit(state)
+
+    async def prepare_graph(self, graph: TaskGraph) -> TaskGraphResult:
+        """Register an in-process graph before its background execution begins."""
+
         state = self._states.get(graph.graph_id)
         if state is None:
             state = _GraphState(graph=graph, started_at=datetime.now(UTC))
@@ -109,8 +119,15 @@ class RuntimeTaskGraphScheduler:
             )
         elif state.graph != graph:
             raise ValueError("graph_id already belongs to a different TaskGraph")
-        await self._run_ready_nodes(state)
-        return await self._result_with_audit(state)
+        return self._result(state)
+
+    async def snapshot(self, graph_id: str) -> TaskGraphResult:
+        """Return the in-process graph state without exposing tool output."""
+
+        state = self._states.get(graph_id)
+        if state is None:
+            raise KeyError(f"unknown graph: {graph_id}")
+        return self._result(state)
 
     async def resume_after_approval(
         self, graph_id: str, approval_id: str
@@ -221,6 +238,8 @@ class RuntimeTaskGraphScheduler:
         nodes: dict[str, TaskNode],
     ) -> list[TaskNode]:
         if state.cancelled:
+            return []
+        if self._pause_on_waiting_approval and state.waiting:
             return []
         waiting_targets = set().union(
             *(self._node_targets(nodes[node_id]) for node_id in state.waiting)

@@ -17,6 +17,7 @@ from ra_agent.core.container import ServiceContainer
 from ra_agent.core.ids import new_id
 
 from .deps import get_agent_runner, get_services
+from .task_graphs import is_known_graph_task, list_approval_views
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -154,22 +155,9 @@ async def list_task_approvals(
     request: Request,
     services: Annotated[ServiceContainer, Depends(get_services)],
 ) -> APIResponse[list[dict[str, str]]]:
-    if task_id not in _runs(request):
+    if task_id not in _runs(request) and not is_known_graph_task(request, task_id):
         raise HTTPException(status_code=404, detail="Unknown task")
-    approvals = await services.approval_service.list_for_task(task_id)
-    return APIResponse(
-        data=[
-            {
-                "approval_id": approval.approval_id,
-                "status": approval.status.value,
-                "tool_name": approval.tool_name,
-                "reason": approval.reason,
-                "step_id": approval.step_id,
-                "request_id": approval.request_id,
-            }
-            for approval in approvals
-        ]
-    )
+    return APIResponse(data=await list_approval_views(services, task_id=task_id))
 
 
 @router.get("/{task_id}/steps")
