@@ -224,6 +224,7 @@ async def approval_view(
     status = decision.status if decision is not None else approval.status
     return {
         "approval_id": approval.approval_id,
+        "task_id": approval.task_id,
         "status": status.value,
         "tool_name": approval.tool_name,
         "reason": approval.reason,
@@ -235,9 +236,13 @@ async def approval_view(
 async def list_approval_views(
     services: ServiceContainer,
     *,
-    task_id: str,
+    task_id: str | None = None,
     status: ApprovalStatus | None = None,
 ) -> list[dict[str, str]]:
-    approvals = await services.approval_service.list_for_task(task_id)
+    approvals = (
+        await services.approval_service.list_for_task(task_id)
+        if task_id is not None
+        else await services.approval_service.list_all()
+    )
     views = [await approval_view(services, approval) for approval in approvals]
     return [view for view in views if status is None or view["status"] == status.value]

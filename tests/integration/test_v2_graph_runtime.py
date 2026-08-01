@@ -5,6 +5,8 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from ra_agent.contracts import (
     EffectStatus,
     ExecutionStatus,
@@ -268,5 +270,7 @@ def test_real_runtime_graph_cancellation_selectively_rolls_back_memory_effect(
         assert effect is not None
         assert effect.status is EffectStatus.ROLLED_BACK
         assert (await memory_store.get(node.request.request_id)).status is MemoryStatus.ROLLED_BACK
+        with pytest.raises(RuntimeError, match="cancelled and cannot resume"):
+            await scheduler.resume_after_approval(graph.graph_id, "approval-after-cancel")
 
     asyncio.run(run())

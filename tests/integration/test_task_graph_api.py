@@ -186,6 +186,51 @@ def test_graph_task_approvals_and_effects_are_discoverable_by_task() -> None:
     assert effects.json()["data"] == []
 
 
+def test_global_approvals_include_task_identity_and_decision_response() -> None:
+    app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
+    scheduler = RecordingGraphScheduler()
+    app.state.task_graph_scheduler = scheduler
+    graph = _graph()
+    now = datetime.now(UTC)
+
+    with TestClient(app) as client:
+        client.post("/api/task-graphs", json=graph.model_dump(mode="json"))
+        asyncio.run(
+            app.state.services.approval_service.create(
+                ApprovalRequest(
+                    approval_id="global-approval",
+                    task_id=graph.task_id,
+                    step_id="delete-node",
+                    request_id="delete-request",
+                    tool_name="delete_file",
+                    request_fingerprint="fingerprint",
+                    reason="high risk graph node",
+                    requested_at=now,
+                    expires_at=now + timedelta(minutes=5),
+                )
+            )
+        )
+        listed = client.get("/api/approvals?status=PENDING")
+        granted = client.post(
+            "/api/approvals/global-approval/grant?decided_by=reviewer"
+        )
+
+    assert listed.status_code == 200
+    assert listed.json()["data"] == [
+        {
+            "approval_id": "global-approval",
+            "task_id": "graph-task",
+            "status": "PENDING",
+            "tool_name": "delete_file",
+            "reason": "high risk graph node",
+            "step_id": "delete-node",
+            "request_id": "delete-request",
+        }
+    ]
+    assert granted.status_code == 200
+    assert granted.json()["data"]["task_id"] == "graph-task"
+
+
 def test_graph_effect_projection_excludes_untrusted_effect_content() -> None:
     class EffectStore:
         async def list_by_task_id(self, task_id: str) -> tuple[EffectRecord, ...]:

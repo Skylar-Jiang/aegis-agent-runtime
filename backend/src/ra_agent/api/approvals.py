@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from ra_agent.contracts import APIResponse, ApprovalStatus
+from ra_agent.contracts import APIResponse, ApprovalDecision, ApprovalStatus
 from ra_agent.core.container import ServiceContainer
 
 from .deps import get_services
@@ -20,9 +20,7 @@ async def list_approvals(
     status: ApprovalStatus | None = None,
     task_id: str | None = None,
 ) -> APIResponse[list[dict[str, str]]]:
-    if task_id is None:
-        return APIResponse(data=[])
-    if not is_known_graph_task(request, task_id) and task_id not in getattr(
+    if task_id is not None and not is_known_graph_task(request, task_id) and task_id not in getattr(
         request.app.state, "task_runs", {}
     ):
         raise HTTPException(status_code=404, detail="Unknown task")
@@ -35,7 +33,7 @@ async def grant(
     services: Annotated[ServiceContainer, Depends(get_services)],
     decided_by: Annotated[str, Query(min_length=1, pattern=r".*\S.*")],
     reason: str = "approved",
-) -> APIResponse[dict[str, str]]:
+) -> APIResponse[ApprovalDecision]:
     try:
         decision = await services.approval_service.grant(
             approval_id, decided_by, reason
@@ -44,14 +42,7 @@ async def grant(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return APIResponse(
-        data={
-            "approval_id": decision.approval_id,
-            "status": decision.status.value,
-            "decided_by": decision.decided_by,
-            "reason": decision.reason,
-        }
-    )
+    return APIResponse(data=decision)
 
 
 @router.post("/{approval_id}/deny")
@@ -60,7 +51,7 @@ async def deny(
     services: Annotated[ServiceContainer, Depends(get_services)],
     decided_by: Annotated[str, Query(min_length=1, pattern=r".*\S.*")],
     reason: str = "denied",
-) -> APIResponse[dict[str, str]]:
+) -> APIResponse[ApprovalDecision]:
     try:
         decision = await services.approval_service.deny(
             approval_id, decided_by, reason
@@ -69,11 +60,4 @@ async def deny(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return APIResponse(
-        data={
-            "approval_id": decision.approval_id,
-            "status": decision.status.value,
-            "decided_by": decision.decided_by,
-            "reason": decision.reason,
-        }
-    )
+    return APIResponse(data=decision)
