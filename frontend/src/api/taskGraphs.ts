@@ -4,10 +4,15 @@ export interface TaskGraphSnapshot {
   graph_id: string;
   task_id: string;
   status: string;
+  started_at?: string | null;
+  finished_at?: string | null;
   nodes: Array<{
     node_id: string;
+    dependencies: string[];
     status: string;
     blocked_reason?: string | null;
+    started_at?: string | null;
+    finished_at?: string | null;
   }>;
 }
 
@@ -18,6 +23,7 @@ export interface EffectView {
   status: string;
   checkpoint_id?: string | null;
   artifact_refs?: string[];
+  created_at?: string | null;
 }
 
 export interface ApprovalView {

@@ -1,83 +1,44 @@
 import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+
 import { grantApproval, denyApproval, listApprovals, type ApprovalListItem } from '../api/approvals';
 import { StatusBadge } from '../components/StatusBadge';
 
 export function ApprovalsPage() {
-  const [approvalId, setApprovalId] = useState('');
+  const [searchParams] = useSearchParams();
+  const taskId = searchParams.get('task_id') ?? undefined;
   const [decidedBy, setDecidedBy] = useState('');
   const [result, setResult] = useState<{ status: string; decided_by?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [approvals, setApprovals] = useState<ApprovalListItem[]>([]);
+  const [loading, setLoading] = useState(false);
 
   async function refreshApprovals() {
+    setLoading(true);
+    setError(null);
     try {
-      setApprovals(await listApprovals());
-    } catch (e) {
-      setError((e as Error).message);
+      setApprovals(await listApprovals(taskId, 'PENDING'));
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setLoading(false);
     }
   }
 
-  useEffect(() => {
-    void refreshApprovals();
-  }, []);
+  useEffect(() => { void refreshApprovals(); }, [taskId]);
 
-  async function handleAction(action: 'grant' | 'deny') {
-    if (!approvalId || !decidedBy.trim()) return;
+  async function handleAction(approvalId: string, action: 'grant' | 'deny') {
+    if (!decidedBy.trim()) return;
     setError(null);
     try {
       const fn = action === 'grant' ? grantApproval : denyApproval;
       const decision = await fn(approvalId, decidedBy.trim());
       setResult({ status: decision.status, decided_by: decision.decided_by });
       await refreshApprovals();
-    } catch (e) {
-      setError((e as Error).message);
+    } catch (cause) {
+      setError((cause as Error).message);
     }
   }
 
-  return (
-    <div>
-      <h1 className="mb-4 text-xl font-semibold">Approvals</h1>
-      <div className="mb-4 flex gap-2">
-        <input
-          className="flex-1 rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200"
-          placeholder="Approval ID..."
-          value={approvalId}
-          onChange={(e) => setApprovalId(e.target.value)}
-        />
-        <input
-          className="flex-1 rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200"
-          placeholder="Approver identity..."
-          value={decidedBy}
-          onChange={(e) => setDecidedBy(e.target.value)}
-        />
-        <button
-          className="rounded bg-green-700 px-4 py-2 text-sm text-white hover:bg-green-600 disabled:opacity-50"
-          onClick={() => handleAction('grant')}
-          disabled={!approvalId || !decidedBy.trim()}
-        >
-          Grant
-        </button>
-        <button
-          className="rounded bg-red-700 px-4 py-2 text-sm text-white hover:bg-red-600 disabled:opacity-50"
-          onClick={() => handleAction('deny')}
-          disabled={!approvalId || !decidedBy.trim()}
-        >
-          Deny
-        </button>
-      </div>
-      <section className="mb-4 overflow-x-auto rounded border border-gray-800">
-        <table className="w-full text-left text-xs text-gray-400">
-          <thead className="bg-gray-900 text-gray-500"><tr><th className="p-2">Task</th><th className="p-2">Tool</th><th className="p-2">Status</th><th className="p-2">Approval</th></tr></thead>
-          <tbody>{approvals.map((approval) => <tr key={approval.approval_id} className="cursor-pointer border-t border-gray-800 hover:bg-gray-900/50" onClick={() => setApprovalId(approval.approval_id)}><td className="p-2 font-mono">{approval.task_id}</td><td className="p-2">{approval.tool_name}</td><td className="p-2"><StatusBadge status={approval.status} /></td><td className="p-2 font-mono">{approval.approval_id}</td></tr>)}</tbody>
-        </table>
-      </section>
-      {error && <p className="text-red-400 text-sm">Error: {error}</p>}
-      {result && (
-        <div className="rounded border border-gray-800 bg-gray-900 p-3 text-sm">
-          <p>Status: <StatusBadge status={result.status} /></p>
-          {result.decided_by && <p className="mt-1 text-gray-400">By: {result.decided_by}</p>}
-        </div>
-      )}
-    </div>
-  );
+  return <div><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-xl font-semibold">Approvals</h1><p className="mt-1 text-sm text-gray-500">Global pending approvals{taskId ? ` for ${taskId}` : ''}.</p></div><button className="rounded border border-gray-700 px-3 py-2 text-sm text-gray-200 disabled:opacity-50" disabled={loading} onClick={() => void refreshApprovals()}>{loading ? 'Refreshing…' : 'Refresh'}</button></div><div className="mb-4"><label className="block text-xs text-gray-500" htmlFor="decided-by">Approver identity</label><input id="decided-by" className="mt-1 w-full rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200" placeholder="Approver identity..." value={decidedBy} onChange={(event) => setDecidedBy(event.target.value)} /></div>{error && <p className="mb-4 rounded border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">Error: {error}</p>}{approvals.length === 0 && !loading ? <p className="rounded border border-gray-800 bg-gray-900 p-4 text-sm text-gray-500">No pending approvals match this scope.</p> : <div className="grid gap-3">{approvals.map((approval) => <article key={approval.approval_id} className="rounded border border-gray-800 bg-gray-900 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex items-center gap-2"><span className="font-mono text-blue-400">{approval.tool_name}</span><StatusBadge status={approval.status} /></div><p className="mt-2 text-sm text-gray-300">{approval.reason}</p><p className="mt-2 font-mono text-xs text-gray-500">Task {approval.task_id}</p></div><div className="flex gap-2"><button className="rounded bg-green-700 px-3 py-2 text-sm text-white disabled:opacity-50" disabled={!decidedBy.trim() || loading} onClick={() => void handleAction(approval.approval_id, 'grant')} aria-label={`Grant ${approval.approval_id}`}>Grant</button><button className="rounded bg-red-700 px-3 py-2 text-sm text-white disabled:opacity-50" disabled={!decidedBy.trim() || loading} onClick={() => void handleAction(approval.approval_id, 'deny')} aria-label={`Deny ${approval.approval_id}`}>Deny</button></div></div><div className="mt-3 flex gap-3 text-xs"><Link aria-label={`Open task ${approval.task_id}`} className="text-blue-400 hover:text-blue-300" to={`/?task_id=${encodeURIComponent(approval.task_id)}`}>Open task</Link><Link aria-label={`Open runtime for ${approval.task_id}`} className="text-blue-400 hover:text-blue-300" to={`/runtime?task_id=${encodeURIComponent(approval.task_id)}`}>Open runtime</Link></div></article>)}</div>}{result && <div className="mt-4 rounded border border-gray-800 bg-gray-900 p-3 text-sm"><p>Status: <StatusBadge status={result.status} /></p>{result.decided_by && <p className="mt-1 text-gray-400">By: {result.decided_by}</p>}</div>}</div>;
 }

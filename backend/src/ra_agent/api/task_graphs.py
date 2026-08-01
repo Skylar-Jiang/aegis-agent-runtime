@@ -86,6 +86,7 @@ def _snapshot(result: TaskGraphResult, graph: TaskGraph) -> dict[str, Any]:
         nodes.append(
             {
                 "node_id": node.node_id,
+                "dependencies": node.dependencies,
                 "request_id": node.request.request_id,
                 "step_id": node.request.step_id,
                 "status": (

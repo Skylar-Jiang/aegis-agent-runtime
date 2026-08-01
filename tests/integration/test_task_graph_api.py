@@ -133,6 +133,9 @@ def test_graph_routes_submit_snapshot_cancel_resume_and_keep_output_redacted() -
         assert snapshot.status_code == 200
         node = snapshot.json()["data"]["nodes"][0]
         assert node["status"] == "COMMITTED"
+        assert node["dependencies"] == []
+        assert "started_at" in node
+        assert "finished_at" in node
         assert "output" not in node
         assert "untrusted_raw_output" not in str(snapshot.json())
 

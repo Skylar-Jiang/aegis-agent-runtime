@@ -11,8 +11,11 @@ export interface ApprovalListItem {
   request_id: string;
 }
 
-export function listApprovals(taskId?: string): Promise<ApprovalListItem[]> {
-  const query = taskId ? `?task_id=${encodeURIComponent(taskId)}` : '';
+export function listApprovals(taskId?: string, status?: string): Promise<ApprovalListItem[]> {
+  const params = new URLSearchParams();
+  if (taskId) params.set('task_id', taskId);
+  if (status) params.set('status', status);
+  const query = params.size ? `?${params.toString()}` : '';
   return get(`/approvals${query}`);
 }
 
