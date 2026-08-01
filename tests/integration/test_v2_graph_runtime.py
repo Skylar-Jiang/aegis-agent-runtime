@@ -151,6 +151,58 @@ def test_waiting_approval_pauses_only_conflicting_work_and_resumes_descendant(
     assert not (settings.workspace_root / "delete.txt").exists()
 
 
+def test_denied_approval_blocks_the_graph_and_its_descendant(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    upgrade_database(settings.database_url)
+    settings.workspace_root.mkdir(parents=True)
+    (settings.workspace_root / "delete.txt").write_text("preserve", encoding="utf-8")
+    contract = TaskContract(
+        allowed_actions=["delete_file", "read_file"],
+        allowed_resources=["delete.txt"],
+        max_affected_objects=1,
+    )
+    container = build_runtime_container(settings)
+    scheduler = build_task_graph_scheduler(
+        container,
+        runtime_scheduler=build_runtime_scheduler(container),
+    )
+    graph = TaskGraph(
+        graph_id="graph-denied-approval",
+        task_id="task-denied-approval",
+        max_parallelism=1,
+        nodes=[
+            _node(
+                task_id="task-denied-approval",
+                graph_id="graph-denied-approval",
+                node_id="delete",
+                tool_name="delete_file",
+                arguments={"path": "delete.txt"},
+                contract=contract,
+                effect_targets=["file:delete.txt"],
+            ),
+            _node(
+                task_id="task-denied-approval",
+                graph_id="graph-denied-approval",
+                node_id="after-delete",
+                tool_name="read_file",
+                arguments={"path": "delete.txt"},
+                contract=contract,
+                dependencies=["delete"],
+            ),
+        ],
+    )
+
+    first = asyncio.run(scheduler.schedule_graph(graph))
+    assert first.blocked_nodes["delete"] == "WAITING_APPROVAL"
+    pending = asyncio.run(container.approval_service.list_for_task(graph.task_id))
+    asyncio.run(container.approval_service.deny(pending[0].approval_id, "reviewer", "denied"))
+    result = asyncio.run(scheduler.resume_after_approval(graph.graph_id, pending[0].approval_id))
+
+    assert result.node_results["delete"].status is ExecutionStatus.BLOCKED
+    assert result.blocked_nodes["after-delete"] == "dependency_failed"
+    assert (settings.workspace_root / "delete.txt").read_text(encoding="utf-8") == "preserve"
+
+
 def test_shared_effect_target_is_serialized_through_live_runtime(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     upgrade_database(settings.database_url)
