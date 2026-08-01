@@ -37,7 +37,7 @@ export function ExperimentsPage() {
     const m = r.mode || '';
     if (!modeStats[m]) {
       modeStats[m] = {
-        total: 0, errors: 0, blocked: 0,
+        total: 0, errors: 0, blocked: 0, false_blocks: 0,
         success_rate: '0%', block_rate: '0%', avg_elapsed_ms: 0,
       };
     }
@@ -45,6 +45,7 @@ export function ExperimentsPage() {
     s.total++;
     if (r.error) s.errors++;
     if (r.status === 'BLOCKED') s.blocked++;
+    s.false_blocks += Number(r.false_block_count ?? 0);
     s.avg_elapsed_ms = Math.round(
       ((s.avg_elapsed_ms * (s.total - 1)) + (r.elapsed_ms || 0)) / s.total,
     );
@@ -123,6 +124,7 @@ export function ExperimentsPage() {
                   <th className="p-2">Total</th>
                   <th className="p-2">Errors</th>
                   <th className="p-2">Blocked</th>
+                  <th className="p-2">False blocks</th>
                   <th className="p-2">Success Rate</th>
                   <th className="p-2">Block Rate</th>
                   <th className="p-2">Avg Time (ms)</th>
@@ -139,6 +141,9 @@ export function ExperimentsPage() {
                       <td className="p-2">{s.total}</td>
                       <td className="p-2 text-red-400">{s.errors || '-'}</td>
                       <td className="p-2 text-orange-400">{s.blocked || '-'}</td>
+                      <td aria-label={`False blocks for ${mode}`} className="p-2 text-orange-400">
+                        {s.false_blocks || '-'}
+                      </td>
                       <td className="p-2 text-green-400">{s.success_rate}</td>
                       <td className="p-2">{s.block_rate}</td>
                       <td className="p-2">{s.avg_elapsed_ms}</td>
@@ -172,7 +177,9 @@ export function ExperimentsPage() {
                     <td className="p-2 font-mono text-blue-400">{r.case_id}</td>
                     <td className={`p-2 ${MODE_COLORS[r.mode] || ''}`}>{r.mode}</td>
                     <td className="p-2"><StatusBadge status={r.status} /></td>
-                    <td className="p-2 text-gray-600">{r.expected_decision}</td>
+                    <td aria-label={`Expected status ${r.expected_status}`} className="p-2 text-gray-600">
+                      {r.expected_status}
+                    </td>
                     <td className="p-2">{r.elapsed_ms}</td>
                     <td className="p-2 text-red-400 max-w-48 truncate">{r.error || '-'}</td>
                   </tr>

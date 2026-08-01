@@ -6,6 +6,7 @@ import { TasksPage } from './pages/TasksPage'
 import { ApprovalsPage } from './pages/ApprovalsPage'
 import { AuditPage } from './pages/AuditPage'
 import { ExperimentsPage } from './pages/ExperimentsPage'
+import { TaskGraphPage } from './pages/TaskGraphPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 5000 } },
@@ -21,6 +22,7 @@ export default function App() {
             <Route path="/approvals" element={<ApprovalsPage />} />
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/experiments" element={<ExperimentsPage />} />
+            <Route path="/runtime" element={<TaskGraphPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
