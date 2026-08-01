@@ -1,6 +1,6 @@
 import type { APIResponse } from '../types/contracts';
 
-const BASE = '/api';
+const BASE = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || '/api';
 
 class ApiError extends Error {
   constructor(
