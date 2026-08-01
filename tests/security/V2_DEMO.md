@@ -44,14 +44,15 @@ python -m pytest tests\security -q
 ## 复现实验和素材
 
 ```powershell
-python tests\security\run_v2_security_experiment.py `
+python -m experiments.v2.runners.run_safety_evaluation `
   --output-directory experiments/v2/results/raw `
-  --output-stem v2-security-110b341-20260728 `
+  --output-stem v2-safety-74c071c-20260801 `
   --repetitions 5
 
-python tests\security\build_v2_security_materials.py `
-  --raw-jsonl experiments/v2/results/raw/v2-security-110b341-20260728.jsonl `
-  --derived-json experiments/v2/results/derived/v2-security-110b341-20260728-metrics.json `
+python -m experiments.v2.runners.build_safety_materials `
+  --raw-jsonl experiments/v2/results/raw/v2-safety-74c071c-20260801.jsonl `
+  --derived-json experiments/v2/results/derived/v2-safety-74c071c-20260801-metrics.json `
+  --case-table-csv experiments/v2/results/derived/v2-safety-74c071c-20260801-cases.csv `
   --comparison-svg docs/report-v2/assets/v2-security-comparison.svg `
   --approval-card-svg docs/report-v2/assets/v2-adaptive-approval-card.svg
 ```
@@ -60,8 +61,9 @@ python tests\security\build_v2_security_materials.py `
 
 - `docs/report-v2/assets/v2-security-comparison.png`
 - `docs/report-v2/assets/v2-adaptive-approval-card.png`
-- raw run ID：`security-v2-20260728T081432Z`
-- 数据代码提交：`110b3414531846e93a286d5ce9fc793e60fb8382`
+- raw run ID：`security-v2-20260731T174054Z`
+- 数据代码提交：`74c071c9e103858c8be7f3176305f45209f6e3b4`
+- 运行日期：`2026-07-31 UTC`（北京时间 `2026-08-01`）
 
 限制说明：实验 probe 不产生外部副作用；Baseline 的 unsafe count 表示请求到达受控执行边界，
 不是实际执行危险命令。当前 `run_shell` 审批后仍由 Runtime fail-closed 阻断。
