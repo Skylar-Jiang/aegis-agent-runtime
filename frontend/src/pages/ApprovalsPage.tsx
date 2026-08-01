@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { grantApproval, denyApproval, listApprovals, type ApprovalListItem } from '../api/approvals';
@@ -13,7 +13,7 @@ export function ApprovalsPage() {
   const [approvals, setApprovals] = useState<ApprovalListItem[]>([]);
   const [loading, setLoading] = useState(false);
 
-  async function refreshApprovals() {
+  const refreshApprovals = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -23,9 +23,9 @@ export function ApprovalsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [taskId]);
 
-  useEffect(() => { void refreshApprovals(); }, [taskId]);
+  useEffect(() => { void refreshApprovals(); }, [refreshApprovals]);
 
   async function handleAction(approvalId: string, action: 'grant' | 'deny') {
     if (!decidedBy.trim()) return;
