@@ -1,4 +1,4 @@
-from scripts.verify_final_experiments import verify
+from scripts.verify_final_experiments import verify  # pyright: ignore[reportMissingImports]
 
 
 def test_fixed_formal_experiments_reconstruct_from_raw() -> None:

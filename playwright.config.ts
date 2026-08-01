@@ -10,7 +10,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'cd backend && uv run uvicorn ra_agent.main:app --host 127.0.0.1 --port 8000',
+      command: 'py -3.11 -m uv run --project backend uvicorn ra_agent.main:app --host 127.0.0.1 --port 8000',
       port: 8000,
       reuseExistingServer: true,
     },
