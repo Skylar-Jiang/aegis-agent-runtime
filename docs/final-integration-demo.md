@@ -14,6 +14,7 @@ corepack pnpm --dir frontend exec playwright test -c ..\playwright.config.ts
 
 ```powershell
 $env:RUNTIME_MODE = "live-agent"
+$env:ENABLE_DEMO_FIXTURES = "true" # local selective-rollback demo only
 py -3.11 -m uv run --project backend uvicorn ra_agent.main:app --host 127.0.0.1 --port 8000
 corepack pnpm --dir frontend exec vite --host 127.0.0.1 --port 5173
 ```
@@ -27,7 +28,7 @@ corepack pnpm --dir frontend exec vite --host 127.0.0.1 --port 5173
 3. 展示 `WAITING_APPROVAL`：独立节点完成，高风险删除节点暂停，后代不被误执行。
 4. 在 Approval 卡片执行 Grant；刷新 Runtime，展示 Graph 恢复、依赖节点收敛与 Audit 记录。
 5. 使用第二个审批卡片执行 Deny；展示目标和后代 `BLOCKED`，无危险删除提交。
-6. 展示 Cancel：Graph 收敛为取消状态，随后 resume API 返回冲突；回滚/保留 Effect 的真实语义由回滚集成测试覆盖。
+6. 在本地 demo fixture 中展示 Cancel：Runtime 页先显示真实的独立 `COMMITTED` Memory Effect 与受影响 `PENDING` Memory Effect；点击 `Cancel graph` 后，真实 `SelectiveRollbackExecutor` 将受影响 Effect 变为 `ROLLED_BACK`，独立 Effect 以 `PRESERVED` 脱敏投影保留。随后 resume API 返回 409，Audit 显示 Cancel、Rollback、Preserved 与 Graph 终态。
 7. 打开 Audit，展示危险 `rm -rf` 规则升档后被 Safety block，未进入受控 Shell 执行。
 8. 打开 Experiment Dashboard，展示只读正式数据：Safety 225、Graph 18、Rollback 105。Graph 是固定时延的确定性工程行为验证，不用于统计显著性结论。
 
@@ -37,3 +38,5 @@ corepack pnpm --dir frontend exec vite --host 127.0.0.1 --port 5173
 py -3.11 scripts/verify_final_experiments.py --report docs/final-integration-experiment-reconstruction.json
 corepack pnpm --dir frontend exec playwright test -c ..\playwright.config.ts tests/e2e/final-runtime-scenarios.spec.ts
 ```
+
+`ENABLE_DEMO_FIXTURES` 默认是 `false`；未显式启用时 `/api/demo/selective-rollback` 返回 404。该入口只使用本地隔离 Runtime 的真实 Memory、EffectStore 与 SelectiveRollbackExecutor，不写入正式实验数据。
