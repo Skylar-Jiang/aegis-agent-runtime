@@ -39,20 +39,6 @@ Agent 将语言模型的决策接入外部工具后，系统可能读取不可�
 
 \Aegis{} 的设计目标是使安全判断、任务推进和状态恢复处于同一条可验证链路中。首先，所有真实副作用经由统一 Runtime Scheduler 进入受控执行，风险未确定或权限不足时采用 Fail-Closed 行为。其次，可恢复的文件、下载与 Memory 状态遵循 Pending 到可信状态的生命周期；检查失败、拒绝或取消时，系统据已冻结的关联关系恢复受影响范围。再次，审批不成为全局暂停信号：仅依赖等待节点或与其 Effect target 冲突的节点被阻断，无依赖且无冲突的节点可继续调度。最后，Risk、Policy、Permission、Approval、Checkpoint、Effect、Commit/Rollback 和 Audit 都形成结构化事实，以支持全过程审计可追溯性。
 
-\section{三项核心创新}
-
-\subsection{Transactional Controlled Execution}
-
-事务式受控执行把可恢复副作用从立即可信的结果改为具有边界的生命周期。运行时在适用时建立 Checkpoint，使 Effect 先以 Pending 形态存在；只有通过必要检查和提交门后，结果才进入 Committed 状态。此机制不宣称完整 ACID 语义，也不把本地恢复等同于对不可逆外部世界副作用的撤销。其目标是在当前原型覆盖的受控资源上，明确副作用何时可见、何时可信、何时可恢复。
-
-\subsection{Approval-aware TaskGraph Scheduling}
-
-审批感知调度把任务组织为带依赖关系的图，并结合审批状态和 Effect target 冲突范围选择就绪节点。当高风险节点进入 \texttt{WAITING\_APPROVAL}，它的后继或冲突节点不跨越安全边界；无依赖且无冲突的独立节点继续推进。Grant 后图恢复推进；Deny 或 Cancel 后受影响范围收敛，Cancel 后 Resume 返回冲突状态。当前原型将同一节点的 speculative overlap 明确标为 \texttt{NOT\_SUPPORTED}。
-
-\subsection{Dependency-aware Selective Rollback}
-
-选择性回滚以 TaskGraph、Checkpoint 和 Effect 关联关系确定恢复范围。它回滚受影响依赖闭包内的 Effect，保留未进入受影响范围且已安全提交的独立 Effect；保留原因与回滚原因均写入脱敏投影和 Audit。该机制避免把部分失败简单等同于整任务恢复，也不把不可逆 Effect 伪装为可由本地状态恢复的对象。
-
 \section{适用范围与边界}
 
 \Aegis{} 适用于需要工具调用、运行时审计、人工审批和受控恢复的本地或企业自动化工作流，例如安全敏感代码辅助、文件处理和多步骤业务准备流程。当前原型未覆盖分布式调度、服务重启恢复、完整 ACID 事务、真实支付或邮件发送、通用 MCP/Skill 协议，以及同一节点 speculative execution。对外发类动作，系统以受控、脱敏和干运行边界为前提；本作品不据此声称对开放网络环境中的任意副作用完成通用回滚。

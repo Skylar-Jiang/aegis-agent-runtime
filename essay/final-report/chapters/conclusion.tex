@@ -16,26 +16,4 @@
 
 \section{复现说明}
 
-项目代码、测试和正式实验数据位于公开仓库：\url{https://github.com/Skylar-Jiang/aegis-agent-runtime}。在完成依赖安装后，可在仓库根目录按以下命令执行最终验收：
-
-\begingroup\small
-\begin{verbatim}
-# Backend static checks and full test suite
-py -3.11 -m ruff check backend/src tests
-py -3.11 -m pyright --project backend/pyproject.toml
-py -3.11 -m pytest -q
-
-# Formal experiment reconstruction
-py -3.11 scripts/verify_final_experiments.py \
-  --report docs/final-integration-experiment-reconstruction.json
-
-# Frontend and browser E2E checks
-corepack pnpm --dir frontend lint
-corepack pnpm --dir frontend typecheck
-corepack pnpm --dir frontend test -- --run
-corepack pnpm --dir frontend build
-corepack pnpm --dir frontend exec playwright test -c ..\playwright.config.ts
-\end{verbatim}
-\endgroup
-
-上述命令使用锁定依赖和正式 raw/derived 数据，不连接真实 LLM，也不执行真实云部署。Playwright 使用隔离的本地运行时目录验证审批 Grant/Deny、取消后的收敛与拒绝 Resume、危险 Shell 拦截以及 Audit 投影；其中演示 fixture 仅在明确启用时可访问，默认配置保持关闭。
+项目代码、测试和正式实验数据位于公开仓库：\url{https://github.com/Skylar-Jiang/aegis-agent-runtime}。第~\ref{sec:engineering-reproduction} 节给出了当前 README 对应的完整命令。它们使用锁定依赖和正式 raw/derived 数据，不连接真实 LLM，也不执行真实云部署；Playwright 在隔离的本地运行时目录验证审批 Grant/Deny、取消后的收敛与拒绝 Resume、危险 Shell 拦截以及 Audit 投影，其中演示 fixture 仅在明确启用时可访问，默认配置保持关闭。

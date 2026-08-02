@@ -1,0 +1,101 @@
+\chapter{作品测试与分析}
+
+\section{正式实验设计与数据链路}
+
+本作品的正式实验由 raw 记录和由其自动生成的 derived 汇总共同构成；不手工填写实验数字。Safety、Graph 与 Rollback 的固定数据规模见表~\ref{tab:formal-data}. Safety 在确定性受控规则下验证风险、策略、审批和审计机制，不依赖 LLM 裁决形成正式结论；Graph 使用固定时延、确定性受控环境验证工程行为，不作统计显著性主张。
+
+\begin{table}[H]
+  \centering
+  \caption{三组正式实验数据规模与用途}
+  \label{tab:formal-data}
+  \begin{tabularx}{\linewidth}{l c c X}
+    \toprule
+    实验组 & 固定规模 & 数据结构 & 验证对象 \\
+    \midrule
+    Safety & 225 行 & 15 fixtures $\times$ 3 modes $\times$ 5 repetitions & 风险升级、策略阻断、审批与审计事实 \\
+    Graph & 18 行 & 2 fixtures $\times$ 3 modes $\times$ 3 repetitions & 审批等待与独立节点推进的调度行为 \\
+    Rollback & 105 行 & 7 cases $\times$ 3 modes $\times$ 5 repetitions & Effect 范围、恢复结果与独立成果保留 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Rollback 正式结果}
+
+Rollback 的 7 个 Case 覆盖文件选择性回滚、Memory 版本恢复、提交失败、用户修改冲突、幂等重试、跨任务范围拒绝与下载隔离回滚。每条记录保存 Case、Mode、repetition、运行信息、耗时、Ground Truth、Effect 计数和结果路径；重建程序同时检查 JSONL/CSV 一致性、7$\times$3$\times$5 矩阵和 derived 汇总。图~\ref{fig:rollback-coverage} 给出场景覆盖，表~\ref{tab:rollback-derived} 的数值直接来自 \path{experiments/v2/results/derived/rollback_summary_by_mode.csv}。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.90\linewidth]{member3_case_coverage.png}
+  \caption{Rollback 正式实验的 Case 覆盖}
+  \label{fig:rollback-coverage}
+\end{figure}
+
+\begin{table}[H]
+  \centering
+  \caption{Rollback 按 Mode 的 derived 汇总}
+  \label{tab:rollback-derived}
+  \scriptsize
+  \begin{tabular}{lrrrr}
+    \toprule
+    Mode & 行数 & Ground Truth 达标率 & 中位回滚耗时/ms & 平均保留 Effect \\
+    \midrule
+    BASELINE & 35 & 85.71\% & 47 & 0.286 \\
+    FULL\_GUARD & 35 & 100.00\% & 40 & 0.286 \\
+    ADAPTIVE\_RUNTIME & 35 & 100.00\% & 27 & 0.857 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+图~\ref{fig:rollback-pass-rate} 展示与 derived 汇总一致的 Ground Truth 达标率。用户修改冲突的残留记录表示系统主动保护了用户后写入的内容，不能被误读为静默覆盖成功。跨任务范围拒绝在 Preflight 阶段完成，因而不会启动资源回滚。以上结果说明，在该受控工程环境中，显式范围机制能够回滚受影响 Effect 并保留独立的安全提交成果；它不外推为开放环境中的通用恢复保证。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.82\linewidth]{rollback_success_rate_by_mode.png}
+  \caption{Rollback 各 Mode 的 Ground Truth 达标率}
+  \label{fig:rollback-pass-rate}
+\end{figure}
+
+\section{浏览器端闭环证据}
+
+最终浏览器验证在隔离的本地 Runtime 上完成，不连接真实云部署或真实 LLM。其 11 个 Playwright 用例覆盖 Approval 的 Grant/Deny、Cancel 后图收敛与拒绝 Resume、危险 Shell 拦截、Effect 脱敏投影和 Audit 事件。图~\ref{fig:browser-selective} 是同一运行时的真实选择性回滚场景：Cancel 前存在 \code{PENDING} 与已提交的独立 Effect；Cancel 后受影响 Memory Effect 为 \code{ROLLED\_BACK}，独立 Effect 显示为 \code{PRESERVED}，并具有相应 Audit 事件。该演示 fixture 默认关闭，仅在隔离的浏览器测试服务中显式启用，使用真实 Runtime、EffectStore、Checkpoint 和 SelectiveRollbackExecutor，而非静态前端数据。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.96\linewidth]{selective-rollback-preserved.png}
+  \caption{本地浏览器场景：Cancel 后的回滚与独立 Effect 保留（2026-08-02）}
+  \label{fig:browser-selective}
+\end{figure}
+
+图~\ref{fig:browser-security} 记录了危险 Shell 输入被风险策略阻断并写入 Audit Timeline 的场景。界面只呈现脱敏状态、关联标识和安全理由，不显示密钥、原始不可信内容或隐藏推理。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.96\linewidth]{security-blocked-audit.png}
+  \caption{本地浏览器场景：危险 Shell 阻断与 Audit 记录（2026-08-02）}
+  \label{fig:browser-security}
+\end{figure}
+
+\section{工程验收与复现}
+\label{sec:engineering-reproduction}
+
+最终工程 Gate 的结果为 Ruff 通过、Pyright 0 errors/0 warnings、Backend 889 passed/8 skipped、Vitest 14 passed 和 Playwright 11 passed。正式实验重建和工程验收均以仓库根目录 README 中的锁定依赖命令执行：Ruff、Pyright、完整 pytest、前端 lint/typecheck/Vitest/build、Playwright，以及 \path{scripts/verify_final_experiments.py}。重建命令从正式 raw 生成并核验 Safety 225、Graph 18、Rollback 105 的 derived 结果；不改写 run ID，也不手工修改实验数字。
+
+\begingroup\small
+\begin{verbatim}
+# Backend static checks and full test suite
+py -3.11 -m ruff check backend/src tests
+py -3.11 -m pyright --project backend/pyproject.toml
+py -3.11 -m pytest -q
+
+# Formal experiment reconstruction
+py -3.11 scripts/verify_final_experiments.py \
+  --report docs/final-integration-experiment-reconstruction.json
+
+# Frontend and browser E2E checks
+corepack pnpm --dir frontend lint
+corepack pnpm --dir frontend typecheck
+corepack pnpm --dir frontend test -- --run
+corepack pnpm --dir frontend build
+corepack pnpm --dir frontend exec playwright test -c ..\playwright.config.ts
+\end{verbatim}
+\endgroup

@@ -1,0 +1,17 @@
+\chapter{创新性说明}
+
+\section{Transactional Controlled Execution}
+
+第一项核心创新是 \textbf{Transactional Controlled Execution}。它将可恢复副作用置于可检查的 Effect 生命周期中，以 Checkpoint、Pending、验证、Commit、Rollback 和 Cleanup 约束真实资源何时可见、何时可信和何时可恢复。该机制把工具调用从“函数返回即完成”改为具有关联关系和状态边界的受控执行过程，但不宣称完整 ACID、分布式事务或服务重启恢复。
+
+\section{Approval-aware TaskGraph Scheduling}
+
+第二项核心创新是 \textbf{Approval-aware TaskGraph Scheduling}。它把审批状态与任务依赖和 Effect target 冲突范围一同纳入调度决策：等待审批的节点不会越过安全边界，其后继或冲突节点受到约束，而无依赖、无冲突的独立节点可以继续推进。Grant、Deny 与 Cancel 分别导致可验证的恢复、阻断和收敛状态；同一节点 speculative overlap 明确为 \code{NOT\_SUPPORTED}。
+
+\section{Dependency-aware Selective Rollback}
+
+第三项核心创新是 \textbf{Dependency-aware Selective Rollback}。它以 TaskGraph、Effect、request 和 Checkpoint 的关联关系定位受影响依赖闭包：回滚处于该范围内的可恢复 Effect，保留范围外且已安全提交的独立 Effect，并通过脱敏状态与 Audit 记录解释回滚或保留原因。该机制区别于按整任务清空的粗粒度恢复，也不将不可逆外部行为宣称为本地可撤销资源。
+
+\section{支撑机制与组合边界}
+
+Risk、Policy、Permission、Approval 与 Audit 不是独立的核心创新命名，而是使三项机制可执行、可验证和可追溯的支撑层。它们对不可信提案采用 Fail-Closed 的运行时边界，绑定审批对象与实际执行请求，并以结构化事实连接节点、Effect 和资源状态。作品的创新落点是上述三项机制在同一 Runtime 内的组合与工程闭环，而不是声称单独发明风险评估、人工审批或审计本身。

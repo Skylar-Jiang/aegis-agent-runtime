@@ -1,0 +1,37 @@
+\chapter{作品设计与实现}
+
+\section{统一运行时链路}
+
+\Aegis{} 将 Planner 输出视为不可信提案，并在工具调用进入真实资源之前统一经过风险分类、Policy 与 Permission 判定、必要的 Approval、受控执行以及 Audit 记录。Risk、Policy、Permission、Approval 和 Audit 在这里承担的是运行时支撑职责：它们把请求、决策、状态转换和资源关联形成可检索的脱敏事实，并不替代本作品的三项核心创新。
+
+任务由带依赖边的 TaskGraph 表示。高风险节点进入 \code{WAITING\_APPROVAL} 时，系统只约束该节点的后继或同一 Effect target 的冲突范围；无依赖且无冲突的节点仍可继续。Grant 后受影响图恢复推进，Deny 或 Cancel 后相关节点收敛。当前原型明确不支持同一节点的 speculative overlap（\code{NOT\_SUPPORTED}），也未覆盖分布式调度或服务重启恢复。
+
+\section{Transactional Controlled Execution}
+
+对文件、Memory 和下载等可恢复副作用，运行时采用 Checkpoint、Pending Effect、验证、Commit、Rollback 与 Cleanup 的受控链路。候选结果先登记为 \code{PENDING}，并携带 task、request、规范化 target、Checkpoint 与摘要关联；只有必要校验通过后才转为 \code{COMMITTED}。取消、拒绝或验证失败时，执行器依据已登记的关联关系恢复可逆资源，并将对应事实标记为 \code{ROLLED\_BACK}、\code{REJECTED} 或 \code{CLEANED}。图~\ref{fig:effect-lifecycle} 给出统一生命周期。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.94\linewidth]{effect_lifecycle.png}
+  \caption{受控副作用的 Effect 生命周期}
+  \label{fig:effect-lifecycle}
+\end{figure}
+
+这种“事务式”表述限定为工程级的受控提交与恢复语义：它不宣称完整 ACID、分布式事务或对不可逆外部世界副作用的通用撤销。前端只展示 Effect kind、脱敏 target reference、Checkpoint 标识、状态以及回滚或保留原因；不展示密钥、原始不可信工具输出或隐藏推理。
+
+\section{Memory 状态完整性与审批感知调度}
+
+Memory 写入以可信状态为边界：新记录在通过校验前不进入可信检索；批准提交后才成为可用状态。撤销某个新版本时，运行时仅恢复该 Key 的先前可信版本，其他 Key 与独立版本不进入撤销范围。结合 TaskGraph，审批、取消与恢复都以 task、node、request、Effect 和 Checkpoint 的关联关系为依据；浏览器端的 Approval、Graph、Effect、Audit 与 Dashboard 使用同一 task 标识查询，并以脱敏投影展示状态。
+
+\section{Dependency-aware Selective Rollback}
+
+选择性回滚通过显式范围与依赖关系决定处理集合。执行前的 Preflight 校验 Effect、request、Checkpoint 和 task 的归属；跨任务引用、未知对象或关联不一致的计划会在产生资源变化前被拒绝。执行时，系统回滚受影响依赖闭包内的 Effect，并保留未进入该范围且已安全提交的独立 Effect。图~\ref{fig:selective-rollback} 描述了目标 Effect 被回滚、独立 Effect 被保留的机制。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.94\linewidth]{selective_rollback_before_after.png}
+  \caption{依赖感知选择性回滚与独立 Effect 保留}
+  \label{fig:selective-rollback}
+\end{figure}
+
+资源目标以规范化 \code{target\_ref} 关联，同一目标按既定关联顺序恢复，计划外目标不进入回滚队列。若提交后检测到用户再次修改，系统保留用户内容并记录残留与原因，不以旧 Checkpoint 覆盖新内容。重复执行同一已完成计划不会重复修改资源；Cancel 后 Resume 返回冲突状态，从而避免终态任务被重新启动。
