@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-const api = 'http://127.0.0.1:8000/api';
+const api = 'http://127.0.0.1:18000/api';
 
 function graphPayload(scenario: string, nodes: object[]) {
   const taskId = `e2e-${scenario}-${Date.now()}`;

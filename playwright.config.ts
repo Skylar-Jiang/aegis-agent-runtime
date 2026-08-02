@@ -1,12 +1,15 @@
 import { defineConfig } from '@playwright/test';
 
+const backendPort = 18000;
+const frontendPort = 15173;
+
 export default defineConfig({
   testDir: './tests/e2e',
   outputDir: './test-results',
   timeout: 30000,
   retries: 1,
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: `http://127.0.0.1:${frontendPort}`,
     headless: true,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
@@ -14,7 +17,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'py -3.11 -m uv run --project backend uvicorn ra_agent.main:app --host 127.0.0.1 --port 8000',
+      command: `py -3.11 -m uv run --project backend uvicorn ra_agent.main:app --host 127.0.0.1 --port ${backendPort}`,
       env: {
         RUNTIME_MODE: 'live-agent',
         DATABASE_URL: 'sqlite+aiosqlite:///./.runtime/playwright/ra_agent.db',
@@ -24,13 +27,16 @@ export default defineConfig({
         QUARANTINE_ROOT: '.runtime/playwright/quarantine',
         ENABLE_DEMO_FIXTURES: 'true',
       },
-      port: 8000,
-      reuseExistingServer: true,
+      port: backendPort,
+      reuseExistingServer: false,
     },
     {
-      command: 'corepack pnpm --dir frontend exec vite --host 127.0.0.1 --port 5173',
-      port: 5173,
-      reuseExistingServer: true,
+      command: `corepack pnpm --dir frontend exec vite --host 127.0.0.1 --port ${frontendPort}`,
+      env: {
+        VITE_API_PROXY_TARGET: `http://127.0.0.1:${backendPort}`,
+      },
+      port: frontendPort,
+      reuseExistingServer: false,
     },
   ],
 });
