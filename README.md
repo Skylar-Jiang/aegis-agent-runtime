@@ -2,7 +2,7 @@
 
 面向工具增强型智能体的风险自适应运行时安全架构。系统把工具调用改造为“风险分级—权限调度—受控执行—检查—提交/回滚—审计”的统一运行时链路。
 
-> `main` 已完成 V2 最终集成。最终验收基线为 Ruff 通过、Pyright 0 errors/0 warnings、Backend 889 passed/8 skipped、Frontend Vitest 14 passed、Playwright 11 passed，以及 Safety 225、Graph 18、Rollback 105 的正式数据重建。最终演示与证据见 [final integration demo](docs/final-integration-demo.md) 和 [browser evidence](docs/final-integration-assets/README.md)。
+> `main` 已完成 V2 最终集成。最终验收基线为 Ruff 通过、Pyright 0 errors/0 warnings、Backend 889 passed/8 skipped、Frontend Vitest 15 passed、Playwright 11 passed，以及 Safety 225、Graph 18、Rollback 105 的正式数据重建。最终演示与证据见 [final integration demo](docs/final-integration-demo.md) 和 [browser evidence](docs/final-integration-assets/README.md)。
 
 > `docs/phase3*`、`docs/v2-final/` 与 `docs/report-v2/` 保留为历史实施或写作材料，不是当前实现与验收的唯一口径；以本 README、正式测试/数据和最终演示证据为准。
 
