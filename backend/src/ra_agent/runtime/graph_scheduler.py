@@ -176,7 +176,47 @@ class RuntimeTaskGraphScheduler:
             raise RuntimeError("runtime scheduler does not support graph cancellation")
         await cast(_TaskCanceller, self._runtime_scheduler).cancel_task(state.graph.task_id)
         await self._record(state, AuditEventType.TASK_CANCELLED, "CANCELLED", "graph cancelled")
-        return self._result(state)
+        await self._rollback_cancelled_pending_effects(state)
+        return await self._result_with_audit(state)
+
+    async def _rollback_cancelled_pending_effects(self, state: _GraphState) -> None:
+        if self._effect_store is None or self._rollback_executor is None:
+            return
+        effects = await self._effect_store.list_by_task_id(state.graph.task_id)
+        pending = [effect for effect in effects if effect.status is EffectStatus.PENDING]
+        if pending:
+            plan = RollbackPlan(
+                plan_id=new_id("rollback-plan"),
+                task_id=state.graph.task_id,
+                trigger="graph_cancelled",
+                request_ids=sorted(effect.request_id for effect in pending),
+                effect_ids=sorted(effect.effect_id for effect in pending),
+                reason="graph cancelled before pending effects could commit",
+            )
+            await self._record(
+                state,
+                AuditEventType.ROLLBACK_STARTED,
+                "ROLLING_BACK",
+                "selective graph rollback started after cancellation",
+                details={"rollback_plan_id": plan.plan_id, "effect_count": len(pending)},
+            )
+            rollback = await self._rollback_executor.execute_rollback_plan(plan)
+            await self._record(
+                state,
+                AuditEventType.ROLLBACK_FINISHED,
+                "ROLLED_BACK" if rollback.status is ExecutionStatus.SUCCESS else "FAILED",
+                "selective graph rollback completed after cancellation",
+                details={"rollback_plan_id": plan.plan_id, "effect_count": len(pending)},
+            )
+        for effect in effects:
+            if effect.status is EffectStatus.COMMITTED:
+                await self._record(
+                    state,
+                    AuditEventType.EXECUTION_FINISHED,
+                    "PRESERVED",
+                    "independent graph effect preserved during selective rollback",
+                    details={"effect_id": effect.effect_id},
+                )
 
     async def _run_ready_nodes(self, state: _GraphState) -> None:
         nodes = self._nodes(state)

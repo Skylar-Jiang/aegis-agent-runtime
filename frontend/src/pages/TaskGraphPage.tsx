@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import {
+  cancelTaskGraph,
   getTaskApprovals,
   getTaskEffects,
   getTaskGraph,
@@ -68,11 +69,25 @@ export function TaskGraphPage() {
     setSearchParams({ task_id: selectedTaskId });
   }
 
+  async function cancelGraph() {
+    if (!graph) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await cancelTaskGraph(graph.graph_id);
+      await load(graph.task_id);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">TaskGraph Runtime</h1>
-        {graph && <StatusBadge status={graph.status} />}
+        <div className="flex items-center gap-2">{graph && <StatusBadge status={graph.status} />}{graph && ['RUNNING', 'WAITING_APPROVAL'].includes(graph.status) && <button className="rounded border border-rose-800 px-3 py-1.5 text-sm text-rose-200 disabled:opacity-50" disabled={loading} onClick={() => void cancelGraph()}>Cancel graph</button>}</div>
       </div>
       <div className="mb-5 flex flex-wrap gap-2">
         <input aria-label="Task ID" className="min-w-56 flex-1 rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200" placeholder="Task ID..." value={taskId} onChange={(event) => setTaskId(event.target.value)} />

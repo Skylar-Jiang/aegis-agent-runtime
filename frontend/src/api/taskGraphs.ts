@@ -1,4 +1,4 @@
-import { get } from './client';
+import { get, post } from './client';
 
 export interface TaskGraphSnapshot {
   graph_id: string;
@@ -46,4 +46,8 @@ export function getTaskEffects(taskId: string): Promise<EffectView[]> {
 
 export function getTaskApprovals(taskId: string): Promise<ApprovalView[]> {
   return get(`/tasks/${encodeURIComponent(taskId)}/approvals`);
+}
+
+export function cancelTaskGraph(graphId: string): Promise<TaskGraphSnapshot> {
+  return post(`/task-graphs/${encodeURIComponent(graphId)}/cancel`);
 }

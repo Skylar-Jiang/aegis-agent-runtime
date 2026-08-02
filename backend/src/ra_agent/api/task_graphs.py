@@ -44,6 +44,7 @@ class TaskGraphRun:
     background: asyncio.Task[None] | None = None
     error_code: str | None = None
     cancelled: bool = False
+    preserved_effect_ids: frozenset[str] = frozenset()
 
 
 def _runs(request: Request) -> dict[str, TaskGraphRun]:
@@ -167,11 +168,25 @@ async def submit_graph(graph: TaskGraph, request: Request) -> APIResponse[dict[s
 @graph_router.post("/{graph_id}/cancel")
 async def cancel_graph(graph_id: str, request: Request) -> APIResponse[dict[str, Any]]:
     run, _ = await _result_for_graph(request, graph_id)
+    effects_before = ()
+    services = request.app.state.services
+    if services.effect_store is not None:
+        effects_before = await services.effect_store.list_by_task_id(run.graph.task_id)
     try:
         result = await _scheduler(request).cancel_graph(graph_id)
     except RuntimeError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     run.cancelled = True
+    if services.effect_store is not None:
+        effects_after = await services.effect_store.list_by_task_id(run.graph.task_id)
+        committed_before = {
+            effect.effect_id for effect in effects_before if effect.status.value == "COMMITTED"
+        }
+        run.preserved_effect_ids = frozenset(
+            effect.effect_id
+            for effect in effects_after
+            if effect.effect_id in committed_before and effect.status.value == "COMMITTED"
+        )
     if run.background is not None and not run.background.done():
         await run.background
     return APIResponse(data=_snapshot(result, run.graph))
@@ -218,13 +233,20 @@ async def list_effects(
     if services.effect_store is None:
         return APIResponse(data=[])
     effects = await services.effect_store.list_by_task_id(task_id)
+    preserved_effect_ids = next(
+        run.preserved_effect_ids
+        for run in _runs(request).values()
+        if run.graph.task_id == task_id
+    )
     return APIResponse(
         data=[
             {
                 "effect_id": effect.effect_id,
                 "kind": effect.kind,
                 "target_ref": effect.target_ref,
-                "status": effect.status.value,
+                "status": "PRESERVED"
+                if effect.effect_id in preserved_effect_ids
+                else effect.status.value,
                 "checkpoint_id": effect.checkpoint_id,
                 "artifact_refs": effect.artifact_refs,
                 "created_at": effect.created_at,
