@@ -7,7 +7,12 @@ from pathlib import Path
 
 from ra_agent.agent import AgentRuntime, MockPlanner
 from ra_agent.agent.state import AgentRunStatus
-from ra_agent.contracts import ExecutionStatus, SourceType, TaskContract, ToolCallRequest
+from ra_agent.contracts import (
+    ExecutionStatus,
+    SourceType,
+    TaskContract,
+    ToolCallRequest,
+)
 from ra_agent.core.bootstrap import build_runtime_container, build_runtime_scheduler
 from ra_agent.core.config import RuntimeMode, Settings
 from ra_agent.database.migrate import upgrade_database
