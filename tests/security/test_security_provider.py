@@ -2,7 +2,6 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-
 from ra_agent.contracts import (
     PermissionStatus,
     PolicyDecision,

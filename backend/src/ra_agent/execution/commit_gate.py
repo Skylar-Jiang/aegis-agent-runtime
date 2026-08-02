@@ -22,6 +22,7 @@ from .checkpoint import (
     CheckpointStatus,
     FilesystemCheckpointManager,
 )
+from .effect_manager import EffectManager
 from .pending_store import (
     PendingOperation,
     PendingRecord,
@@ -70,10 +71,12 @@ class FilesystemCommitGate:
         path_resolver: SafePathResolver,
         pending_store: PendingStore,
         checkpoint_manager: FilesystemCheckpointManager,
+        effect_manager: EffectManager | None = None,
     ) -> None:
         self._path_resolver = path_resolver
         self._pending_store = pending_store
         self._checkpoint_manager = checkpoint_manager
+        self._effect_manager = effect_manager
         self._lock = asyncio.Lock()
 
     async def commit(
@@ -110,7 +113,19 @@ class FilesystemCommitGate:
                 pending.status is PendingStatus.COMMITTED
                 and checkpoint.status is CheckpointStatus.COMMITTED
             ):
+                if self._effect_manager is not None:
+                    await self._effect_manager.mark_committed(
+                        execution.request_id,
+                        checkpoint_id=checkpoint_id,
+                    )
                 return self._committed_result(execution)
+
+            if self._effect_manager is not None:
+                await self._effect_manager.ensure_pending(
+                    execution.request_id,
+                    checkpoint_id=checkpoint_id,
+                    target_ref=f"file:{pending.target_path}",
+                )
 
             if (
                 pending.status is not PendingStatus.PENDING
@@ -141,6 +156,11 @@ class FilesystemCommitGate:
 
             await self._pending_store.mark_committed(execution.request_id)
             await self._checkpoint_manager.mark_committed(checkpoint_id)
+            if self._effect_manager is not None:
+                await self._effect_manager.mark_committed(
+                    execution.request_id,
+                    checkpoint_id=checkpoint_id,
+                )
 
             return self._committed_result(execution)
 

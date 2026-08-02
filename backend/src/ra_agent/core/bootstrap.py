@@ -7,6 +7,8 @@ from sqlalchemy.engine import make_url
 from ra_agent.audit import InMemoryAuditRecorder
 from ra_agent.contracts import ToolSpec
 from ra_agent.execution import (
+    EffectManager,
+    FilesystemEffectStore,
     MockCheckpointManager,
     MockCommitGate,
     MockRollbackManager,
@@ -16,15 +18,21 @@ from ra_agent.execution.checkpoint import FilesystemCheckpointManager
 from ra_agent.execution.cleanup import RequestCleanupCoordinator
 from ra_agent.execution.commit_gate import FilesystemCommitGate
 from ra_agent.execution.download_manager import DownloadLifecycleManager
+from ra_agent.execution.execution_provider import (
+    ExecutionProviderServices,
+    ExecutionServiceProvider,
+)
 from ra_agent.execution.executor import RegistryToolExecutor
 from ra_agent.execution.pending_store import PendingStore
 from ra_agent.execution.process_runner import RestrictedProcessRunner
 from ra_agent.execution.quarantine import FilesystemQuarantineStore
 from ra_agent.execution.rollback import FilesystemRollbackManager
+from ra_agent.execution.selective_rollback import SelectiveRollbackExecutor
 from ra_agent.memory import FilesystemMemoryStore, MemoryLifecycleManager
 from ra_agent.runtime import InMemoryRequestExecutionRegistry, RuntimeScheduler
 from ra_agent.runtime.approval_flow import ApprovalFlow
 from ra_agent.runtime.fast_flow import FastExecutionFlow
+from ra_agent.runtime.graph_scheduler import RuntimeTaskGraphScheduler
 from ra_agent.runtime.sandbox_flow import SandboxFlow
 from ra_agent.security import (
     MockApprovalService,
@@ -37,14 +45,11 @@ from ra_agent.security import (
     RuleBasedIntentBoundaryGuard,
 )
 from ra_agent.security.deep_checker import RuleBasedDeepSafetyChecker
-from ra_agent.security.permission_gate import RuleBasedPermissionGate
-from ra_agent.security.policy_engine import RuleBasedPolicyEngine
 from ra_agent.security.pre_post_check import (
     RuleBasedPostExecutionChecker,
     RuleBasedPreExecutionChecker,
 )
-from ra_agent.security.risk_classifier import RuleBasedRiskClassifier
-from ra_agent.security.rule_engine import RuleEngine
+from ra_agent.security.security_provider import RiskPolicySecurityProvider
 from ra_agent.tools import DEFAULT_TOOL_SPECS, MockToolHandler, ToolRegistry
 from ra_agent.tools.download_guard import DownloadNetworkGuard
 from ra_agent.tools.implementations.delete_file import DeleteFileHandler
@@ -95,13 +100,15 @@ def build_runtime_container(settings: Settings) -> ServiceContainer:
 
     settings.workspace_root.mkdir(parents=True, exist_ok=True)
     _prepare_database_parent(settings.database_url)
-    rules = RuleEngine.from_directory(settings.security_config_dir, strict=True)
+    security_provider = RiskPolicySecurityProvider(settings.security_config_dir)
+    rules = security_provider.rules
+    if not rules.valid:
+        raise ValueError(rules.error or "security configuration is invalid")
     container = build_persistent_container(settings.database_url)
+    registry = _build_rules_registry()
     container = replace(
         container,
-        risk_classifier=RuleBasedRiskClassifier(rules, _tool_specs()),
-        policy_engine=RuleBasedPolicyEngine(rules),
-        permission_gate=RuleBasedPermissionGate(rules),
+        tool_registry=registry,
         deep_safety_checker=RuleBasedDeepSafetyChecker(
             rules,
             settings.workspace_root,
@@ -116,6 +123,7 @@ def build_runtime_container(settings: Settings) -> ServiceContainer:
         ),
         intent_boundary_guard=RuleBasedIntentBoundaryGuard(),
     )
+    container = security_provider.install(container)
     if settings.runtime_mode is RuntimeMode.RULES_ONLY:
         return container
 
@@ -137,11 +145,16 @@ def build_runtime_container(settings: Settings) -> ServiceContainer:
         settings.pending_root / "memory",
         max_value_bytes=rules.max_memory_characters,
     )
+    effect_store = FilesystemEffectStore(settings.pending_root.parent / "effects")
+    effect_manager = EffectManager(effect_store)
+    memory_manager = MemoryLifecycleManager(memory_store, effect_manager)
+    download_manager = DownloadLifecycleManager(quarantine_store, effect_manager)
     cleanup_coordinator = RequestCleanupCoordinator(
         pending_store=pending_store,
         rollback_manager=rollback_manager,
-        memory_manager=MemoryLifecycleManager(memory_store),
-        download_manager=DownloadLifecycleManager(quarantine_store),
+        memory_manager=memory_manager,
+        download_manager=download_manager,
+        effect_manager=effect_manager,
     )
     registry = _build_live_registry(
         resolver,
@@ -151,21 +164,45 @@ def build_runtime_container(settings: Settings) -> ServiceContainer:
         memory_store,
         settings.security_config_dir / "tool_policies.yaml",
     )
-    return replace(
+    tool_executor = RegistryToolExecutor(
+        registry,
+        pending_store,
+        memory_store=memory_store,
+        quarantine_store=quarantine_store,
+        cleanup_coordinator=cleanup_coordinator,
+        effect_manager=effect_manager,
+    )
+    commit_gate = FilesystemCommitGate(
+        resolver,
+        pending_store,
+        checkpoint_manager,
+        effect_manager,
+    )
+    selective_rollback = SelectiveRollbackExecutor(
+        effect_store=effect_store,
+        effect_manager=effect_manager,
+        checkpoint_manager=checkpoint_manager,
+        rollback_manager=rollback_manager,
+        memory_manager=memory_manager,
+        download_manager=download_manager,
+    )
+    return ExecutionServiceProvider(
+        ExecutionProviderServices(
+            tool_executor=tool_executor,
+            checkpoint_manager=checkpoint_manager,
+            commit_gate=commit_gate,
+            rollback_manager=rollback_manager,
+            cleanup_coordinator=cleanup_coordinator,
+            effect_store=effect_store,
+            effect_manager=effect_manager,
+            selective_rollback=selective_rollback,
+            memory_manager=memory_manager,
+            download_manager=download_manager,
+        )
+    ).install(replace(
         container,
         tool_registry=registry,
-        tool_executor=RegistryToolExecutor(
-            registry,
-            pending_store,
-            memory_store=memory_store,
-            quarantine_store=quarantine_store,
-            cleanup_coordinator=cleanup_coordinator,
-        ),
-        checkpoint_manager=checkpoint_manager,
-        commit_gate=FilesystemCommitGate(resolver, pending_store, checkpoint_manager),
-        rollback_manager=rollback_manager,
-        cleanup_coordinator=cleanup_coordinator,
-    )
+    ))
 
 
 def build_agent_runner(settings: Settings, container: ServiceContainer):
@@ -195,6 +232,13 @@ def build_agent_runner(settings: Settings, container: ServiceContainer):
 
 def _tool_specs() -> dict[str, ToolSpec]:
     return {spec.name: spec.model_copy(deep=True) for spec in DEFAULT_TOOL_SPECS}
+
+
+def _build_rules_registry() -> ToolRegistry:
+    registry = ToolRegistry()
+    for spec in DEFAULT_TOOL_SPECS:
+        registry.register(spec.model_copy(deep=True))
+    return registry
 
 
 def _prepare_database_parent(database_url: str) -> None:
@@ -281,4 +325,19 @@ def build_runtime_scheduler(container: ServiceContainer) -> RuntimeScheduler:
         approval_flow=approval_flow,
         fast_flow=fast_flow,
         intent_boundary_guard=container.intent_boundary_guard,
+    )
+
+
+def build_task_graph_scheduler(
+    container: ServiceContainer,
+    *,
+    runtime_scheduler: object | None = None,
+) -> RuntimeTaskGraphScheduler:
+    """Build the V2 graph coordinator over the same Runtime and effect services."""
+
+    return RuntimeTaskGraphScheduler(
+        runtime_scheduler=runtime_scheduler or build_runtime_scheduler(container),
+        effect_store=container.effect_store,
+        rollback_executor=container.selective_rollback_executor,
+        audit_recorder=container.audit_recorder,
     )

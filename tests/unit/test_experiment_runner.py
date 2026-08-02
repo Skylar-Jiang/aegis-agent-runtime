@@ -3,6 +3,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from ra_agent.contracts import ExperimentResult
+
 
 def test_experiment_runner_records_real_mode_metrics(tmp_path: Path) -> None:
     repository_root = Path(__file__).resolve().parents[2]
@@ -36,7 +38,14 @@ def test_experiment_runner_records_real_mode_metrics(tmp_path: Path) -> None:
         "FULL_GUARD",
         "ADAPTIVE_RUNTIME",
     }
-    assert all("tool_executed" in record for record in records)
+    assert all(ExperimentResult.model_validate(record) for record in records)
+    assert all("tool_executed_count" in record for record in records)
     assert all("check_count" in record for record in records)
-    assert all(record["temporary_artifact_count"] == 0 for record in records)
-    assert all(record["token_usage"].startswith("N/A") for record in records)
+    assert all("pending_effect_count" in record for record in records)
+    assert all("false_block_count" in record for record in records)
+    assert all(record["metrics"]["max_observed_concurrency"] == 1 for record in records)
+    assert all(
+        record["safety_outcome"]
+        in {"SAFE_ALLOWED", "UNSAFE_BLOCKED", "UNSAFE_ADMITTED", "FALSE_BLOCK", "PENDING_APPROVAL"}
+        for record in records
+    )

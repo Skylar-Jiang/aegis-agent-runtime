@@ -1,7 +1,6 @@
 from collections.abc import Callable
 
 import pytest
-
 from ra_agent.contracts import (
     PermissionStatus,
     PermissionType,

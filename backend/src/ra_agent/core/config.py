@@ -30,3 +30,4 @@ class Settings(BaseSettings):
     max_write_bytes: int = 1024 * 1024
     max_list_entries: int = 1000
     max_agent_turns: int = 8
+    enable_demo_fixtures: bool = False

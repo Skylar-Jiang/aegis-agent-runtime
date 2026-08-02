@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from ra_agent.execution.pending_store import (
     PendingConflictError,
     PendingIntegrityError,

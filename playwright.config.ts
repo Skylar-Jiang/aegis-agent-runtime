@@ -2,20 +2,33 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
+  outputDir: './test-results',
   timeout: 30000,
   retries: 1,
   use: {
     baseURL: 'http://127.0.0.1:5173',
     headless: true,
+    screenshot: 'only-on-failure',
+    trace: 'retain-on-failure',
+    video: 'retain-on-failure',
   },
   webServer: [
     {
-      command: 'cd backend && uv run uvicorn ra_agent.main:app --host 127.0.0.1 --port 8000',
+      command: 'py -3.11 -m uv run --project backend uvicorn ra_agent.main:app --host 127.0.0.1 --port 8000',
+      env: {
+        RUNTIME_MODE: 'live-agent',
+        DATABASE_URL: 'sqlite+aiosqlite:///./.runtime/playwright/ra_agent.db',
+        WORKSPACE_ROOT: '.runtime/playwright/workspace',
+        PENDING_ROOT: '.runtime/playwright/pending',
+        CHECKPOINT_ROOT: '.runtime/playwright/checkpoints',
+        QUARANTINE_ROOT: '.runtime/playwright/quarantine',
+        ENABLE_DEMO_FIXTURES: 'true',
+      },
       port: 8000,
       reuseExistingServer: true,
     },
     {
-      command: 'cd frontend && corepack pnpm dev -- --host 127.0.0.1',
+      command: 'corepack pnpm --dir frontend exec vite --host 127.0.0.1 --port 5173',
       port: 5173,
       reuseExistingServer: true,
     },

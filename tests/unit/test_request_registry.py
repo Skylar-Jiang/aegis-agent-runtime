@@ -1,7 +1,6 @@
 from datetime import UTC, datetime
 
 import pytest
-
 from ra_agent.contracts import (
     ExecutionStatus,
     SourceType,

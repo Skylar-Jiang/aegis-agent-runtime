@@ -1,7 +1,6 @@
 from datetime import UTC, datetime
 
 import pytest
-
 from ra_agent.contracts import SourceType, TaskContract, ToolCallRequest
 from ra_agent.security.intent_boundary import RuleBasedIntentBoundaryGuard
 

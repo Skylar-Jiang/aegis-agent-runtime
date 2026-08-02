@@ -5,6 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from ra_agent.audit import AuditRecorder
 from ra_agent.execution import CheckpointManager, CommitGate, RollbackManager, ToolExecutor
 from ra_agent.execution.cleanup import RequestCleanupCoordinator
+from ra_agent.execution.download_manager import DownloadLifecycleManager
+from ra_agent.execution.effect_manager import EffectManager
+from ra_agent.execution.effect_store import FilesystemEffectStore
+from ra_agent.execution.selective_rollback import SelectiveRollbackExecutor
+from ra_agent.memory import MemoryLifecycleManager
 from ra_agent.runtime.idempotency import RequestExecutionRegistry
 from ra_agent.security import (
     ApprovalService,
@@ -39,3 +44,8 @@ class ServiceContainer:
     database_engine: AsyncEngine | None = None
     intent_boundary_guard: IntentBoundaryGuard | None = None
     execution_monitor: PreExecutionChecker | None = None
+    effect_store: FilesystemEffectStore | None = None
+    effect_manager: EffectManager | None = None
+    memory_manager: MemoryLifecycleManager | None = None
+    download_manager: DownloadLifecycleManager | None = None
+    selective_rollback_executor: SelectiveRollbackExecutor | None = None

@@ -5,7 +5,6 @@ from hashlib import sha256
 from typing import Any
 
 import pytest
-
 from ra_agent.contracts import (
     ExecutionStatus,
     SourceType,

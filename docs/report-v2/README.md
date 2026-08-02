@@ -1,6 +1,6 @@
 # 比赛作品报告书骨架
 
-本目录只收录可核验的报告文字、图表说明和数据索引；图片放 `assets/`，真实实验原始数据放仓库 `experiments/results/raw/`，本目录只链接其 run ID。
+本目录只收录可核验的报告文字、图表说明和数据索引；图片放 `assets/`，正式 V2 原始数据放仓库 `experiments/v2/results/raw/`，本目录只链接其 run ID。`experiments/results/**` 是历史开发结果，不得作为最终主张的数据源。
 
 | 章节 | 文件 | 主责 | 必需证据 |
 | --- | --- | --- |
@@ -12,3 +12,5 @@
 | 结论与局限 | `06-conclusion-limitations.md` | 组长 | 可证明结论与未实现能力 |
 
 所有数字必须能追溯到 `02-experiment-data.md` 的 raw result；所有截图须标注场景、commit、生成日期，且不得包含密钥、敏感文件内容或隐藏推理。
+
+最终创新主张固定为：**Transactional Controlled Execution**、**Approval-aware TaskGraph Scheduling**、**Dependency-aware Selective Rollback**。每一项主张都必须在对应章节同时链接 implementation、test、正式 raw/derived run 与 Demo 截图；Risk/Policy/Approval/Audit 只作为支撑机制陈述。

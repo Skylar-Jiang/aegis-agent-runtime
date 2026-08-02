@@ -2,7 +2,6 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 import pytest
-
 from ra_agent.contracts import (
     ApprovalStatus,
     PermissionCheckResult,

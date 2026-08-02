@@ -6,7 +6,6 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
-
 from ra_agent.api.streams import _event_generator
 from ra_agent.core.container import ServiceContainer
 

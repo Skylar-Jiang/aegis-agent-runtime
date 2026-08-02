@@ -1,5 +1,23 @@
-import { post } from './client';
+import { get, post } from './client';
 import type { ApprovalDecision } from '../types/contracts';
+
+export interface ApprovalListItem {
+  approval_id: string;
+  task_id: string;
+  status: string;
+  tool_name: string;
+  reason: string;
+  step_id: string;
+  request_id: string;
+}
+
+export function listApprovals(taskId?: string, status?: string): Promise<ApprovalListItem[]> {
+  const params = new URLSearchParams();
+  if (taskId) params.set('task_id', taskId);
+  if (status) params.set('status', status);
+  const query = params.size ? `?${params.toString()}` : '';
+  return get(`/approvals${query}`);
+}
 
 export function grantApproval(
   approvalId: string,

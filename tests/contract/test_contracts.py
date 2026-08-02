@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
-
 from ra_agent.contracts import (
     CONTRACT_VERSION,
     ApprovalDecision,
@@ -14,8 +13,8 @@ from ra_agent.contracts import (
     AuditEvent,
     AuditEventType,
     DeepCheckResult,
-    ExperimentMode,
     ExecutionStatus,
+    ExperimentMode,
     MemoryStatus,
     PermissionCheckResult,
     PermissionDecision,
@@ -138,7 +137,7 @@ def test_contract_rejects_naive_datetime() -> None:
             objective="read a file",
             context_summary="The requested path is part of the task.",
             source_type=SourceType.AGENT,
-            requested_at=datetime.now(),
+            requested_at=datetime.now(),  # noqa: DTZ005 - intentional invalid contract input
         )
 
 
@@ -234,7 +233,7 @@ def test_utc_input_remains_utc_and_execution_rejects_naive_datetime() -> None:
             step_id=request.step_id,
             request_id=request.request_id,
             status=ExecutionStatus.SUCCESS,
-            started_at=datetime.now(),
+            started_at=datetime.now(),  # noqa: DTZ005 - intentional invalid contract input
         )
 
 

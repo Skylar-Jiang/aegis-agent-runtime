@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-
 from ra_agent.contracts import ExecutionStatus, SourceType, ToolCallRequest
 from ra_agent.execution.checkpoint import (
     CheckpointConflictError,

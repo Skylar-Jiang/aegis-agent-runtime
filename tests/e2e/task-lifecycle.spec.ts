@@ -1,59 +1,45 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Task lifecycle', () => {
-  test('home page loads and shows task creation form', async ({ page }) => {
+  test('workbench loads and shows the task composer', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('h1')).toContainText('Tasks');
-    await expect(page.getByPlaceholder('Enter task objective...')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Create Task' })).toBeVisible();
+    await expect(page.getByText('What should the runtime do?')).toBeVisible();
+    await expect(page.getByPlaceholder('Describe a task for the runtime…')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Send task' })).toBeVisible();
   });
 
   test('navigation works between pages', async ({ page }) => {
     await page.goto('/');
     await page.click('a[href="/approvals"]');
-    await expect(page.locator('h1')).toContainText('Approvals');
+    await expect(page.getByRole('heading', { name: 'Approvals' })).toBeVisible();
     await page.click('a[href="/audit"]');
-    await expect(page.locator('h1')).toContainText('Audit Log');
+    await expect(page.getByRole('heading', { name: 'Audit timeline' })).toBeVisible();
     await page.click('a[href="/"]');
-    await expect(page.locator('h1')).toContainText('Tasks');
+    await expect(page.getByText('What should the runtime do?')).toBeVisible();
   });
 
-  test('create task shows task detail with events', async ({ page }) => {
-    await page.goto('/');
-    await page.fill('[placeholder="Enter task objective..."]', 'e2e test task');
-    await page.click('button:has-text("Create Task")');
-
-    // Task ID should appear
-    await expect(page.locator('text=task-')).toBeVisible({ timeout: 5000 });
-    // Status badge should show
-    await expect(page.locator('text=ACTIVE')).toBeVisible({ timeout: 5000 });
-  });
-
-  test('approval page allows grant/deny with error handling', async ({ page }) => {
+  test('approval page loads the global pending-approval workspace without a manual ID field', async ({ page }) => {
     await page.goto('/approvals');
-    await page.fill('[placeholder="Approval ID..."]', 'nonexistent-id');
-    await page.click('button:has-text("Grant")');
-    // Should show error for unknown approval
-    await expect(page.locator('text=Error')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByPlaceholder('Approver identity...')).toBeVisible();
+    await expect(page.getByPlaceholder('Approval ID...')).toHaveCount(0);
   });
 
   test('audit page shows live connection status', async ({ page }) => {
     await page.goto('/audit');
-    await expect(page.locator('text=Offline')).toBeVisible();
+    await expect(page.getByText('Offline')).toBeVisible();
     await page.fill('[placeholder="Task ID..."]', 'task-test');
-    await expect(page.locator('h1')).toContainText('Audit Log');
+    await expect(page.getByRole('heading', { name: 'Audit timeline' })).toBeVisible();
   });
 
   test('experiments page loads and shows test cases', async ({ page }) => {
     await page.goto('/experiments');
-    await expect(page.locator('h1')).toContainText('Experiments');
-    await expect(page.locator('text=Test Cases')).toBeVisible();
-    await expect(page.locator('text=Experiment Results')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Experiment dashboard' })).toBeVisible();
   });
 
-  test('experiments page shows run instructions when empty', async ({ page }) => {
+  test('experiments page exposes the formal dashboards', async ({ page }) => {
     await page.goto('/experiments');
-    await expect(page.locator('text=No results yet')).toBeVisible();
-    await expect(page.locator('text=run_experiment.py')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Safety formal dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Graph formal dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Rollback formal dashboard' })).toBeVisible();
   });
 });

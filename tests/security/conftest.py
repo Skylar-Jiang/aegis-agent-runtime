@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-
 from ra_agent.contracts import SourceType, ToolCallRequest, ToolSpec
 from ra_agent.security.rule_engine import RuleEngine
 from ra_agent.tools import DEFAULT_TOOL_SPECS

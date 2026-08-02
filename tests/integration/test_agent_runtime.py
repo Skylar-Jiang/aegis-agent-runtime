@@ -1,7 +1,6 @@
 from datetime import UTC, datetime
 
 import pytest
-
 from ra_agent.agent import AgentRunStatus, AgentRuntime, MockPlanner, build_graph
 from ra_agent.agent.planner import PlannerDecision
 from ra_agent.contracts import (

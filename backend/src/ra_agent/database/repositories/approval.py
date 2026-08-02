@@ -39,6 +39,13 @@ class SqliteApprovalRepository:
             )
             return list(result)
 
+    async def list_requests(self) -> list[ApprovalRequestRow]:
+        async with self._session_factory() as session:
+            result = await session.scalars(
+                select(ApprovalRequestRow).order_by(ApprovalRequestRow.requested_at)
+            )
+            return list(result)
+
     # ── decision ─────────────────────────────────────────────
 
     async def save_decision(self, row: ApprovalDecisionRow) -> None:

@@ -5,12 +5,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
 from ra_agent.contracts import ApprovalRequest, ApprovalStatus
 from ra_agent.database.models import Base
 from ra_agent.database.repositories.approval import SqliteApprovalRepository
 from ra_agent.security.approval_service import PersistentApprovalService
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 
 async def _init_db(database_url: str = "sqlite+aiosqlite:///:memory:") -> async_sessionmaker:

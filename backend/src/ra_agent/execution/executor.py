@@ -26,6 +26,7 @@ from .cleanup import (
     RequestCleanupCoordinator,
     run_cleanup_shielded,
 )
+from .effect_manager import EffectManager
 from .pending_store import PendingStore
 from .quarantine import (
     FilesystemQuarantineStore,
@@ -111,12 +112,14 @@ class RegistryToolExecutor:
         memory_store: FilesystemMemoryStore | None = None,
         quarantine_store: FilesystemQuarantineStore | None = None,
         cleanup_coordinator: RequestCleanupCoordinator | None = None,
+        effect_manager: EffectManager | None = None,
     ) -> None:
         self._registry = registry
         self._pending_store = pending_store
         self._memory_store = memory_store
         self._quarantine_store = quarantine_store
         self._cleanup_coordinator = cleanup_coordinator
+        self._effect_manager = effect_manager
 
     async def execute(
         self,
@@ -225,7 +228,7 @@ class RegistryToolExecutor:
         finished_at = datetime.now(UTC)
 
         # Executor 是关联字段和执行时间的可信来源。
-        return result.model_copy(
+        trusted_result = result.model_copy(
             update={
                 "task_id": request.task_id,
                 "step_id": request.step_id,
@@ -237,6 +240,31 @@ class RegistryToolExecutor:
                 "finished_at": finished_at,
             }
         )
+
+        if (
+            trusted_result.status is ExecutionStatus.PENDING_COMMIT
+            and self._effect_manager is not None
+        ):
+            try:
+                await self._effect_manager.register_pending(request, trusted_result)
+            except asyncio.CancelledError as error:
+                await self._cleanup_after_failure_shielded(
+                    request,
+                    checkpoint_id=checkpoint_id,
+                    reason="effect registration cancelled",
+                    original_error=error,
+                )
+                raise
+            except Exception as error:
+                await self._cleanup_after_failure(
+                    request,
+                    checkpoint_id=checkpoint_id,
+                    reason="effect registration failed",
+                    original_error=error,
+                )
+                raise
+
+        return trusted_result
 
     async def _cleanup_after_failure_shielded(
         self,

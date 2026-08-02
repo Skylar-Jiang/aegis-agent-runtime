@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from ra_agent.execution.process_runner import (
     ProcessOutputLimitError,
     RestrictedProcessRunner,

@@ -4,7 +4,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from ra_agent.tools.path_resolver import SafePathResolver
 from ra_agent.tools.shell_policy import (
     ExecutableNotAllowedError,

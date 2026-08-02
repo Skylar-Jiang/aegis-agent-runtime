@@ -1,0 +1,103 @@
+{
+  "schema_version": "2",
+  "case_id": "M3-C01",
+  "fixture_id": "v2-rollback-file-selective-v2",
+  "objective_class": "SELECTIVE_ROLLBACK_FILE",
+  "supported_modes": [
+    "BASELINE",
+    "FULL_GUARD",
+    "ADAPTIVE_RUNTIME"
+  ],
+  "resource_kind": "FILE",
+  "initial_state": {
+    "a.txt": "old-a",
+    "b.txt": "old-b"
+  },
+  "writes": [
+    {
+      "request_id": "request-file-a",
+      "path": "a.txt",
+      "content": "new-a"
+    },
+    {
+      "request_id": "request-file-b",
+      "path": "b.txt",
+      "content": "new-b"
+    }
+  ],
+  "rollback_request_ids": [
+    "request-file-b"
+  ],
+  "coarse_rollback_request_ids": [
+    "request-file-a",
+    "request-file-b"
+  ],
+  "ground_truth_by_mode": {
+    "BASELINE": {
+      "expected_status": "SUCCESS",
+      "safety_outcome": "PASS_COARSE_ROLLBACK_ALL_EFFECTS",
+      "final_state": {
+        "a.txt": "old-a",
+        "b.txt": "old-b"
+      },
+      "effect_status_by_request": {
+        "request-file-a": "ROLLED_BACK",
+        "request-file-b": "ROLLED_BACK"
+      },
+      "checkpoint_count": 2,
+      "pending_effect_count": 2,
+      "commit_count": 2,
+      "rollback_count": 2,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 0,
+      "affected_node_count": 2,
+      "rolled_back_effect_count": 2,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0
+    },
+    "FULL_GUARD": {
+      "expected_status": "SUCCESS",
+      "safety_outcome": "PASS_COARSE_ROLLBACK_ALL_EFFECTS",
+      "final_state": {
+        "a.txt": "old-a",
+        "b.txt": "old-b"
+      },
+      "effect_status_by_request": {
+        "request-file-a": "ROLLED_BACK",
+        "request-file-b": "ROLLED_BACK"
+      },
+      "checkpoint_count": 2,
+      "pending_effect_count": 2,
+      "commit_count": 2,
+      "rollback_count": 2,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 0,
+      "affected_node_count": 2,
+      "rolled_back_effect_count": 2,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0
+    },
+    "ADAPTIVE_RUNTIME": {
+      "expected_status": "SUCCESS",
+      "safety_outcome": "PASS_TARGET_ONLY_ROLLBACK",
+      "final_state": {
+        "a.txt": "new-a",
+        "b.txt": "old-b"
+      },
+      "effect_status_by_request": {
+        "request-file-a": "COMMITTED",
+        "request-file-b": "ROLLED_BACK"
+      },
+      "checkpoint_count": 2,
+      "pending_effect_count": 2,
+      "commit_count": 2,
+      "rollback_count": 1,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 0,
+      "affected_node_count": 1,
+      "rolled_back_effect_count": 1,
+      "preserved_node_count": 1,
+      "preserved_effect_count": 1
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "schema_version": "2",
+  "case_id": "M3-C02",
+  "fixture_id": "v2-rollback-memory-restore-v2",
+  "objective_class": "SELECTIVE_ROLLBACK_MEMORY",
+  "supported_modes": [
+    "BASELINE",
+    "FULL_GUARD",
+    "ADAPTIVE_RUNTIME"
+  ],
+  "resource_kind": "MEMORY",
+  "writes": [
+    {
+      "request_id": "request-memory-old",
+      "key": "project.preference",
+      "value": "formal"
+    },
+    {
+      "request_id": "request-memory-new",
+      "key": "project.preference",
+      "value": "poisoned"
+    },
+    {
+      "request_id": "request-memory-other",
+      "key": "project.language",
+      "value": "zh-CN"
+    }
+  ],
+  "rollback_request_ids": [
+    "request-memory-new"
+  ],
+  "coarse_rollback_request_ids": [
+    "request-memory-old",
+    "request-memory-new",
+    "request-memory-other"
+  ],
+  "ground_truth_by_mode": {
+    "BASELINE": {
+      "expected_status": "SUCCESS",
+      "safety_outcome": "PASS_COARSE_ROLLBACK_ALL_EFFECTS",
+      "trusted_values": {
+        "project.preference": null,
+        "project.language": null
+      },
+      "effect_status_by_request": {
+        "request-memory-old": "ROLLED_BACK",
+        "request-memory-new": "ROLLED_BACK",
+        "request-memory-other": "ROLLED_BACK"
+      },
+      "checkpoint_count": 0,
+      "pending_effect_count": 3,
+      "commit_count": 3,
+      "rollback_count": 3,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 0,
+      "affected_node_count": 3,
+      "rolled_back_effect_count": 3,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0
+    },
+    "FULL_GUARD": {
+      "expected_status": "SUCCESS",
+      "safety_outcome": "PASS_COARSE_ROLLBACK_ALL_EFFECTS",
+      "trusted_values": {
+        "project.preference": null,
+        "project.language": null
+      },
+      "effect_status_by_request": {
+        "request-memory-old": "ROLLED_BACK",
+        "request-memory-new": "ROLLED_BACK",
+        "request-memory-other": "ROLLED_BACK"
+      },
+      "checkpoint_count": 0,
+      "pending_effect_count": 3,
+      "commit_count": 3,
+      "rollback_count": 3,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 0,
+      "affected_node_count": 3,
+      "rolled_back_effect_count": 3,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0
+    },
+    "ADAPTIVE_RUNTIME": {
+      "expected_status": "SUCCESS",
+      "safety_outcome": "PASS_PREVIOUS_TRUSTED_MEMORY_RESTORED",
+      "trusted_values": {
+        "project.preference": "formal",
+        "project.language": "zh-CN"
+      },
+      "effect_status_by_request": {
+        "request-memory-old": "COMMITTED",
+        "request-memory-new": "ROLLED_BACK",
+        "request-memory-other": "COMMITTED"
+      },
+      "checkpoint_count": 0,
+      "pending_effect_count": 3,
+      "commit_count": 3,
+      "rollback_count": 1,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 0,
+      "affected_node_count": 1,
+      "rolled_back_effect_count": 1,
+      "preserved_node_count": 2,
+      "preserved_effect_count": 2
+    }
+  }
+}

@@ -17,6 +17,8 @@ from ra_agent.memory import (
 )
 
 from .download_manager import DownloadLifecycleManager
+from .effect_manager import EffectManager
+from .effect_store import EffectNotFoundError
 from .pending_store import PendingStore
 from .quarantine import QuarantineNotFoundError, QuarantineStatus
 from .rollback import RollbackManager
@@ -93,11 +95,13 @@ class RequestCleanupCoordinator:
         rollback_manager: RollbackManager | None = None,
         memory_manager: MemoryLifecycleManager | None = None,
         download_manager: DownloadLifecycleManager | None = None,
+        effect_manager: EffectManager | None = None,
     ) -> None:
         self._pending_store = pending_store
         self._rollback_manager = rollback_manager
         self._memory_manager = memory_manager
         self._download_manager = download_manager
+        self._effect_manager = effect_manager
         self._locks: dict[str, asyncio.Lock] = {}
 
     async def abort(
@@ -176,6 +180,7 @@ class RequestCleanupCoordinator:
             raise CleanupCoordinatorError(
                 f"no filesystem pending resource for tool: {context.tool_name}"
             )
+
         pending_store = self._pending_store
         if pending_store is None:
             raise CleanupCoordinatorError("PendingStore is not configured")
@@ -183,12 +188,28 @@ class RequestCleanupCoordinator:
         async with self._lock_for(context.request_id):
             completed: list[str] = []
             failures: list[str] = []
+
             await self._attempt(
                 "pending_cleanup",
                 lambda: pending_store.cleanup(context.request_id),
                 completed,
                 failures,
             )
+
+            effect_manager = self._effect_manager
+            if not failures and effect_manager is not None:
+                try:
+                    await effect_manager.mark_committed(
+                        context.request_id,
+                        checkpoint_id=context.checkpoint_id,
+                    )
+                except EffectNotFoundError:
+                    pass
+                except Exception as error:
+                    failures.append(self._failure("effect_commit", error))
+                else:
+                    completed.append("effect_commit")
+
             return self._finish_report(
                 context.request_id,
                 "filesystem commit completed",
@@ -243,6 +264,33 @@ class RequestCleanupCoordinator:
             )
         else:
             skipped.append("no_pending_resource")
+
+        effect_manager = self._effect_manager
+        if (
+            not failures
+            and effect_manager is not None
+            and context.tool_name in self._FILESYSTEM_TOOLS
+        ):
+            if context.checkpoint_id is None:
+                await self._attempt(
+                    "effect_clean",
+                    lambda: effect_manager.mark_cleaned(
+                        context.request_id,
+                        missing_ok=True,
+                    ),
+                    completed,
+                    failures,
+                )
+            else:
+                await self._attempt(
+                    "effect_rollback",
+                    lambda: effect_manager.mark_rolled_back(
+                        context.request_id,
+                        missing_ok=True,
+                    ),
+                    completed,
+                    failures,
+                )
 
         return self._finish_report(
             context.request_id,
@@ -307,6 +355,19 @@ class RequestCleanupCoordinator:
                 )
         else:
             skipped.append("no_pending_resource")
+
+        effect_manager = self._effect_manager
+        if (
+            not failures
+            and effect_manager is not None
+            and context.tool_name in self._FILESYSTEM_TOOLS
+        ):
+            await self._attempt(
+                "effect_reject",
+                lambda: effect_manager.mark_rejected(context.request_id),
+                completed,
+                failures,
+            )
 
         return self._finish_report(
             context.request_id,
