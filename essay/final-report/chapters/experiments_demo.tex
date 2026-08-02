@@ -1,27 +1,59 @@
 \chapter{作品测试与分析}
 
-\section{正式实验设计与数据链路}
+\section{测试思路与评价原则}
 
-本作品的正式实验由 raw 记录和由其自动生成的 derived 汇总共同构成；不手工填写实验数字。Safety、Graph 与 Rollback 的固定数据规模见表~\ref{tab:formal-data}. Safety 在确定性受控规则下验证风险、策略、审批和审计机制，不依赖 LLM 裁决形成正式结论；Graph 使用固定时延、确定性受控环境验证工程行为，不作统计显著性主张。
+本作品的测试不把“能否运行一次”作为唯一标准，而是关注安全机制在完整任务过程中的行为是否符合预期。Agent 运行时涉及风险判断、人工审批、任务图推进、资源提交和状态恢复等多个环节，如果只检查某一个函数是否返回成功，无法说明这些环节在取消、拒绝或异常情况下是否仍能保持一致。因此，测试设计围绕三个问题展开：危险或越权动作能否在执行边界被识别和处置；审批等待时任务图能否既保持安全边界又允许独立工作继续；当任务取消或局部失败时，系统能否恢复受影响状态并保留独立成果。
+
+为使结果可复核，三组正式实验均使用固定的 fixtures、明确的预期结果和重复运行记录。Safety 实验关注风险、策略、审批与审计；Graph 实验关注依赖关系、审批等待和节点推进；Rollback 实验关注 Effect 范围、状态恢复和独立成果保留。每一组实验都不通过人工填写结果，而是根据运行记录自动汇总；对同一场景的多次运行可以检查重复次数、场景覆盖和结果的一致性。表~\ref{tab:formal-data} 概括三组实验的规模和验证对象。
 
 \begin{table}[H]
   \centering
-  \caption{三组正式实验数据规模与用途}
+  \caption{三组正式实验的规模与验证对象}
   \label{tab:formal-data}
   \begin{tabularx}{\linewidth}{l c c X}
     \toprule
-    实验组 & 固定规模 & 数据结构 & 验证对象 \\
+    实验组 & 记录数量 & 实验设置 & 主要验证内容 \\
     \midrule
-    Safety & 225 行 & 15 fixtures $\times$ 3 modes $\times$ 5 repetitions & 风险升级、策略阻断、审批与审计事实 \\
-    Graph & 18 行 & 2 fixtures $\times$ 3 modes $\times$ 3 repetitions & 审批等待与独立节点推进的调度行为 \\
-    Rollback & 105 行 & 7 cases $\times$ 3 modes $\times$ 5 repetitions & Effect 范围、恢复结果与独立成果保留 \\
+    Safety & 225 条 & 15 个安全场景、3 种模式、每种 5 次重复 & 风险升级、策略阻断、审批与审计事实 \\
+    Graph & 18 条 & 2 个图调度场景、3 种模式、每种 3 次重复 & 审批等待与独立节点推进的调度行为 \\
+    Rollback & 105 条 & 7 个回滚场景、3 种模式、每种 5 次重复 & Effect 范围、恢复结果与独立成果保留 \\
     \bottomrule
   \end{tabularx}
 \end{table}
 
-\section{Rollback 正式结果}
+这些实验服务于工程行为验证，而不是将小样本、固定环境下的结果解释为开放环境中的统计结论。特别是 Graph 实验采用固定时延和确定性受控环境，其意义在于验证审批状态与依赖关系是否按照设计发生变化，而不是比较真实大模型在不同时段的性能波动。
 
-Rollback 的 7 个 Case 覆盖文件选择性回滚、Memory 版本恢复、提交失败、用户修改冲突、幂等重试、跨任务范围拒绝与下载隔离回滚。每条记录保存 Case、Mode、repetition、运行信息、耗时、Ground Truth、Effect 计数和结果路径；重建程序同时检查 JSONL/CSV 一致性、7$\times$3$\times$5 矩阵和 derived 汇总。图~\ref{fig:rollback-coverage} 给出场景覆盖，表~\ref{tab:rollback-derived} 的数值直接来自 \path{experiments/v2/results/derived/rollback_summary_by_mode.csv}。
+\section{Safety 实验：验证风险处置是否到达执行边界}
+
+Safety 实验的背景是：Agent 面对的危险并不只是一条明显的恶意命令。提示注入可能把外部文本伪装成任务指令，路径访问可能越出允许范围，危险 Shell 可能破坏本地环境，未经许可的外发可能泄露敏感信息，未经核验的 Memory 写入则可能影响后续任务。因此，安全机制需要在工具真正执行之前完成风险识别与处置，而不是在造成影响后仅给出文字解释。
+
+实验设置覆盖十五个固定场景，包括危险 Shell、路径越界、回环下载、未授权外发、Memory 污染、提示注入、需要审批的敏感读取、拒绝删除、正常读取和正常写入等。每个场景都给出预期状态，例如高风险动作应当被阻断或进入审批，正常动作在满足规则后可以继续。三种模式用于比较没有完整运行时约束、采用完整保护以及采用自适应运行时策略时的行为差异；每种模式对每个场景重复五次，形成 225 条正式记录。
+
+选择这些场景的原因在于它们分别对应不同的风险入口。危险 Shell 和路径越界检验本地资源边界；下载和外发检验网络边界；提示注入和 Memory 污染检验不可信信息能否改变后续行为；审批场景检验用户决定是否真正绑定到目标操作；正常场景则检验安全机制不会把所有操作一律拒绝。这样，实验既关注“危险动作是否被拦住”，也关注“安全动作是否能在授权条件下继续”。
+
+实验结果以每个场景的状态匹配、风险升级、审批事实、人工动作和工具执行事实进行核验。完整保护和自适应运行时模式将风险判断、策略处置与审计记录放在同一链路中：需要审批的动作不会绕过等待状态，明确禁止的动作不会进入真实执行，安全动作则在满足条件后继续。对照模式的意义在于显示缺少相应运行时约束时会出现的差异，而不是把它与最终安全机制混为一谈。由于整个实验使用确定性规则和固定 fixtures，正式结论不依赖 LLM 对同一输入作出的偶然判断。
+
+Safety 实验说明，风险识别只有与执行边界、审批和审计记录连接起来，才能转化为可验证的安全行为。单独给出“风险较高”的提示并不能阻止工具继续调用；只有当系统能够改变节点状态、阻断请求或要求明确授权时，风险策略才真正参与了运行时控制。
+
+\section{Graph 实验：验证审批等待中的任务推进}
+
+Graph 实验关注一个常见矛盾：高风险节点需要等待用户审批，但整个任务不应因此无条件冻结。若系统只暂停高风险节点，却允许其依赖节点或资源冲突节点继续执行，审批就可能失去实际意义；若系统暂停全部节点，又会让原本安全、独立的工作无谓停滞。Approval-aware TaskGraph Scheduling 的目标是在两者之间建立清晰边界。
+
+实验设置包含“审批等待”和“并行依赖图”两个固定场景。在审批等待场景中，一个节点需要人工确认，另一个独立节点不依赖该动作；在并行依赖图场景中，节点之间存在明确的先后关系和可并行部分。每个场景在三种模式下重复三次，共形成 18 条正式记录。记录关注图完成时间、审批等待时间、等待期间完成的独立节点数量以及是否产生额外的并行节省时间等指标。
+
+设置审批等待场景，是为了检查等待状态是否真正成为边界：目标节点在获得 Grant 前不能继续，依赖它的后续节点不能跨越该边界；与此同时，与其无依赖且无资源冲突的节点可以按照规则完成。设置并行依赖图场景，则是为了检查系统是否能够正确区分“可以独立推进”和“必须等待前置条件”的节点，而不是单纯按提交顺序串行执行全部任务。
+
+实验记录表明，在采用审批感知调度的模式下，等待审批的节点会保持在相应状态，独立节点能够按规则推进；Grant 后图继续收敛，Deny 或 Cancel 后受影响路径停止并进入终态。固定时延环境使这些结果主要反映状态机与调度逻辑，而非网络或模型响应的随机波动。由此可以说明，审批不只是一个额外弹窗，而是能够参与图调度决策的运行时状态。
+
+Graph 实验同样明确了作品的边界：当前系统不支持同一节点内部的 speculative overlap，也不把这组固定环境下的重复运行解释为对大规模分布式调度能力的证明。实验验证的是“审批边界、依赖关系和独立推进能否保持一致”这一工程问题。
+
+\section{Rollback 实验：验证局部恢复与独立成果保留}
+
+Rollback 实验针对的背景是，Agent 任务往往包含多项资源操作。任务被取消、提交异常或用户发现结果不合适时，若系统只能把整个任务全部清空，就会误伤已经安全完成的独立成果；若系统什么都不恢复，又可能留下不应继续存在的文件、Memory 或下载对象。选择性回滚需要解决的正是“恢复到什么范围”为止的问题。
+
+实验包含七个 Case：文件选择性回滚、Memory 版本恢复、提交失败、用户修改冲突、幂等重试、跨任务范围拒绝和下载隔离回滚。文件场景检查系统能否只恢复目标文件；Memory 场景检查新版本撤销后此前可信版本能否重新可见；提交失败场景检查受控状态能否在失败后处理；用户修改冲突场景检查系统是否避免用旧 Checkpoint 覆盖用户后来写入的内容；跨任务范围拒绝场景检查错误范围是否能在真正修改资源前被拒绝；下载场景检查隔离对象能否按目标处理。
+
+每个 Case 在三种模式下重复五次，共形成 105 条正式记录。实验使用相同 fixtures、临时工作区和重复次数，并同时检查资源状态和 Effect 状态。也就是说，文件场景不仅检查最终文件内容，还检查对应 Effect 是否被正确标记；Memory 场景同时检查可信版本和撤销版本；下载场景同时检查隔离对象与 Effect；用户冲突场景同时检查用户内容是否被保留、残留是否被记录。这种双重核验避免了仅依据程序是否报错来判断“回滚成功”。
 
 \begin{figure}[H]
   \centering
@@ -30,14 +62,18 @@ Rollback 的 7 个 Case 覆盖文件选择性回滚、Memory 版本恢复、提�
   \label{fig:rollback-coverage}
 \end{figure}
 
+图~\ref{fig:rollback-coverage} 展示七个 Case 与验证能力之间的对应关系。不同 Case 不是重复测试同一条路径，而是分别覆盖目标范围、Memory 状态、异常恢复、用户保护、重复执行、任务隔离和下载隔离等不同问题。这样安排的原因是，选择性回滚只有在这些条件同时成立时，才可以被理解为真正的“按影响范围恢复”。
+
+表~\ref{tab:rollback-results} 给出三种模式的正式汇总结果。每种模式均包含 35 条记录。完整保护和自适应运行时模式的 Ground Truth 达标率为 100\%；自适应运行时模式的中位回滚耗时为 27 ms，平均保留 0.857 个独立 Effect。对照模式的达标率为 85.71\%，中位回滚耗时为 47 ms，平均保留 0.286 个独立 Effect。这里的结果不应被理解为不同模式的普适性能排名，而应结合实验设计理解：自适应模式依据显式范围处理受影响 Effect，因此在这些固定 Case 中减少了对无关成果的撤销。
+
 \begin{table}[H]
   \centering
-  \caption{Rollback 按 Mode 的 derived 汇总}
-  \label{tab:rollback-derived}
+  \caption{Rollback 正式实验按 Mode 的汇总结果}
+  \label{tab:rollback-results}
   \scriptsize
   \begin{tabular}{lrrrr}
     \toprule
-    Mode & 行数 & Ground Truth 达标率 & 中位回滚耗时/ms & 平均保留 Effect \\
+    Mode & 记录数 & Ground Truth 达标率 & 中位回滚耗时/ms & 平均保留 Effect \\
     \midrule
     BASELINE & 35 & 85.71\% & 47 & 0.286 \\
     FULL\_GUARD & 35 & 100.00\% & 40 & 0.286 \\
@@ -46,7 +82,7 @@ Rollback 的 7 个 Case 覆盖文件选择性回滚、Memory 版本恢复、提�
   \end{tabular}
 \end{table}
 
-图~\ref{fig:rollback-pass-rate} 展示与 derived 汇总一致的 Ground Truth 达标率。用户修改冲突的残留记录表示系统主动保护了用户后写入的内容，不能被误读为静默覆盖成功。跨任务范围拒绝在 Preflight 阶段完成，因而不会启动资源回滚。以上结果说明，在该受控工程环境中，显式范围机制能够回滚受影响 Effect 并保留独立的安全提交成果；它不外推为开放环境中的通用恢复保证。
+图~\ref{fig:rollback-pass-rate} 进一步呈现三种模式的 Ground Truth 达标率。对照模式的未达标记录集中在提交元数据失败后的恢复情形；用户修改冲突产生的残留并不表示系统静默失败，而表示系统识别到用户已经写入新内容，选择不以旧状态覆盖新内容。跨任务范围拒绝在 Preflight 阶段完成，因而不会进入资源回滚。上述结果说明，回滚结果的好坏不能只看“是否把资源改回去”，还要看系统是否避免误删独立成果、是否尊重用户后写入内容、是否在范围越界时停止操作。
 
 \begin{figure}[H]
   \centering
@@ -55,47 +91,28 @@ Rollback 的 7 个 Case 覆盖文件选择性回滚、Memory 版本恢复、提�
   \label{fig:rollback-pass-rate}
 \end{figure}
 
-\section{浏览器端闭环证据}
+Rollback 实验表明，Dependency-aware Selective Rollback 的价值不仅在于“能够回滚”，更在于“知道不该回滚什么”。在当前受控工程环境中，系统能够依据 Effect、Checkpoint、请求与任务关联处理受影响范围，并把独立成果的保留理由呈现为可追溯事实。它并不等同于对所有不可逆外部动作提供通用撤销能力，这一点也是作品始终保留的边界。
 
-最终浏览器验证在隔离的本地 Runtime 上完成，不连接真实云部署或真实 LLM。其 11 个 Playwright 用例覆盖 Approval 的 Grant/Deny、Cancel 后图收敛与拒绝 Resume、危险 Shell 拦截、Effect 脱敏投影和 Audit 事件。图~\ref{fig:browser-selective} 是同一运行时的真实选择性回滚场景：Cancel 前存在 \code{PENDING} 与已提交的独立 Effect；Cancel 后受影响 Memory Effect 为 \code{ROLLED\_BACK}，独立 Effect 显示为 \code{PRESERVED}，并具有相应 Audit 事件。该演示 fixture 默认关闭，仅在隔离的浏览器测试服务中显式启用，使用真实 Runtime、EffectStore、Checkpoint 和 SelectiveRollbackExecutor，而非静态前端数据。
+\section{浏览器场景与综合分析}
+
+除三组正式实验外，作品还通过真实浏览器场景检查用户可见的闭环是否与运行时状态一致。场景包括：高风险节点进入等待审批后，用户 Grant 使图继续推进；用户 Deny 后目标及依赖路径被阻断；存在待处理 Effect 时用户 Cancel，受影响 Effect 回滚而独立 Effect 被保留；危险 Shell 输入被风险策略阻断并出现在 Audit 中。浏览器场景不使用静态前端结果，而是连接隔离的本地 Runtime，由真实的 EffectStore、Checkpoint 和 SelectiveRollbackExecutor 产生状态。
+
+图~\ref{fig:browser-selective} 展示 Cancel 后的选择性回滚场景。界面中可以看到受影响的 Memory Effect 已变为 \code{ROLLED\_BACK}，独立的已提交 Effect 显示为 \code{PRESERVED}，并给出相应的安全生命周期原因。该场景把第二章中的机制说明转化为用户能够直接观察的结果：取消并不意味着无差别删除，而是以实际影响范围为依据处理状态。
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.96\linewidth]{selective-rollback-preserved.png}
-  \caption{本地浏览器场景：Cancel 后的回滚与独立 Effect 保留（2026-08-02）}
+  \caption{本地浏览器场景：Cancel 后的回滚与独立 Effect 保留}
   \label{fig:browser-selective}
 \end{figure}
 
-图~\ref{fig:browser-security} 记录了危险 Shell 输入被风险策略阻断并写入 Audit Timeline 的场景。界面只呈现脱敏状态、关联标识和安全理由，不显示密钥、原始不可信内容或隐藏推理。
+图~\ref{fig:browser-security} 展示危险 Shell 输入被阻断并写入 Audit 时间线的场景。页面仅呈现任务状态、事件类型和安全理由等脱敏信息，不显示密钥、原始不可信内容或隐藏推理。结合安全、调度和回滚实验可以看到，作品的三个核心机制并不是彼此孤立的：风险策略决定动作能否进入下一阶段，审批状态影响任务图推进，Effect 与 Checkpoint 决定取消后如何处理资源，Audit 则把整个过程连接为可回溯的记录。
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.96\linewidth]{security-blocked-audit.png}
-  \caption{本地浏览器场景：危险 Shell 阻断与 Audit 记录（2026-08-02）}
+  \caption{本地浏览器场景：危险 Shell 阻断与 Audit 记录}
   \label{fig:browser-security}
 \end{figure}
 
-\section{工程验收与复现}
-\label{sec:engineering-reproduction}
-
-最终工程 Gate 的结果为 Ruff 通过、Pyright 0 errors/0 warnings、Backend 889 passed/8 skipped、Vitest 14 passed 和 Playwright 11 passed。正式实验重建和工程验收均以仓库根目录 README 中的锁定依赖命令执行：Ruff、Pyright、完整 pytest、前端 lint/typecheck/Vitest/build、Playwright，以及 \path{scripts/verify_final_experiments.py}。重建命令从正式 raw 生成并核验 Safety 225、Graph 18、Rollback 105 的 derived 结果；不改写 run ID，也不手工修改实验数字。
-
-\begingroup\small
-\begin{verbatim}
-# Backend static checks and full test suite
-py -3.11 -m ruff check backend/src tests
-py -3.11 -m pyright --project backend/pyproject.toml
-py -3.11 -m pytest -q
-
-# Formal experiment reconstruction
-py -3.11 scripts/verify_final_experiments.py \
-  --report docs/final-integration-experiment-reconstruction.json
-
-# Frontend and browser E2E checks
-corepack pnpm --dir frontend lint
-corepack pnpm --dir frontend typecheck
-corepack pnpm --dir frontend test -- --run
-corepack pnpm --dir frontend build
-corepack pnpm --dir frontend exec playwright test -c ..\playwright.config.ts
-\end{verbatim}
-\endgroup
+三组正式实验与浏览器场景共同说明：Aegis Runtime 的安全性不只体现在某个页面的提示信息上，而体现在一次任务从风险判断、审批等待、节点推进、Effect 提交到取消回滚的连续行为中。系统最终验收通过；其结论范围限定在本作品使用的固定场景和受控运行环境内。
