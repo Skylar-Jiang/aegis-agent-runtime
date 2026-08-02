@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-
 from ra_agent.contracts import ExperimentMode
 
 from experiments.v2.runners.build_safety_materials import (  # pyright: ignore[reportMissingImports]

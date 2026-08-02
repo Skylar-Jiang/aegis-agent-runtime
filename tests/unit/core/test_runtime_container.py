@@ -6,9 +6,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-
 from ra_agent.audit import InMemoryAuditRecorder, PersistentAuditRecorder
-from ra_agent.contracts import ExecutionStatus, SourceType, TaskContract, ToolCallRequest
+from ra_agent.contracts import (
+    ExecutionStatus,
+    SourceType,
+    TaskContract,
+    ToolCallRequest,
+)
 from ra_agent.core.bootstrap import (
     build_agent_runner,
     build_runtime_container,
@@ -18,27 +22,27 @@ from ra_agent.core.bootstrap import (
 from ra_agent.core.config import RuntimeMode, Settings
 from ra_agent.database.migrate import upgrade_database
 from ra_agent.execution import MockToolExecutor
-from ra_agent.execution.effect_manager import EffectManager
-from ra_agent.execution.effect_store import FilesystemEffectStore
-from ra_agent.execution.selective_rollback import SelectiveRollbackExecutor
 from ra_agent.execution.checkpoint import FilesystemCheckpointManager
 from ra_agent.execution.commit_gate import FilesystemCommitGate
+from ra_agent.execution.effect_manager import EffectManager
+from ra_agent.execution.effect_store import FilesystemEffectStore
 from ra_agent.execution.executor import RegistryToolExecutor
 from ra_agent.execution.rollback import FilesystemRollbackManager
-from ra_agent.memory import FilesystemMemoryStore
-from ra_agent.tools.implementations.download_url import DownloadUrlHandler
-from ra_agent.tools.implementations.memory_tools import (
-    MemoryReadHandler,
-    MemoryWriteHandler,
-)
-from ra_agent.tools.implementations.run_shell import RestrictedShellHandler
+from ra_agent.execution.selective_rollback import SelectiveRollbackExecutor
 from ra_agent.main import create_app
+from ra_agent.memory import FilesystemMemoryStore
 from ra_agent.runtime import InMemoryRequestExecutionRegistry
 from ra_agent.runtime.graph_scheduler import RuntimeTaskGraphScheduler
 from ra_agent.security.deep_checker import RuleBasedDeepSafetyChecker
 from ra_agent.security.permission_gate import RuleBasedPermissionGate
 from ra_agent.security.policy_engine import RuleBasedPolicyEngine
 from ra_agent.security.risk_classifier import RuleBasedRiskClassifier
+from ra_agent.tools.implementations.download_url import DownloadUrlHandler
+from ra_agent.tools.implementations.memory_tools import (
+    MemoryReadHandler,
+    MemoryWriteHandler,
+)
+from ra_agent.tools.implementations.run_shell import RestrictedShellHandler
 
 
 def _settings(tmp_path: Path, mode: RuntimeMode) -> Settings:

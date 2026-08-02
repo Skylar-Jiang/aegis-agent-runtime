@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-
 from ra_agent.audit import InMemoryAuditRecorder
 from ra_agent.contracts import (
     ExecutionStatus,

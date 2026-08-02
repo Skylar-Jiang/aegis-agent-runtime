@@ -5,7 +5,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-
 from ra_agent.contracts import EffectRecord, EffectStatus
 from ra_agent.execution.effect_store import (
     EffectConflictError,

@@ -1,7 +1,6 @@
 from dataclasses import replace
 
 import pytest
-
 from ra_agent.core.container import ServiceContainer
 from ra_agent.core.providers import ProviderRegistry, ServiceProvider
 

@@ -8,7 +8,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-
 from ra_agent.contracts import (
     ApprovalRequest,
     EffectRecord,
@@ -22,8 +21,7 @@ from ra_agent.contracts import (
     ToolCallRequest,
     ToolExecutionResult,
 )
-from ra_agent.core.config import Settings
-from ra_agent.core.config import RuntimeMode
+from ra_agent.core.config import RuntimeMode, Settings
 from ra_agent.main import create_app
 
 
@@ -232,6 +230,40 @@ def test_global_approvals_include_task_identity_and_decision_response() -> None:
     ]
     assert granted.status_code == 200
     assert granted.json()["data"]["task_id"] == "graph-task"
+    assert scheduler.resumed == [("graph-api", "global-approval")]
+
+
+def test_denied_graph_approval_also_notifies_the_graph_scheduler() -> None:
+    app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
+    scheduler = RecordingGraphScheduler()
+    app.state.task_graph_scheduler = scheduler
+    graph = _graph()
+    now = datetime.now(UTC)
+
+    with TestClient(app) as client:
+        client.post("/api/task-graphs", json=graph.model_dump(mode="json"))
+        asyncio.run(
+            app.state.services.approval_service.create(
+                ApprovalRequest(
+                    approval_id="denied-approval",
+                    task_id=graph.task_id,
+                    step_id="delete-node",
+                    request_id="delete-request",
+                    tool_name="delete_file",
+                    request_fingerprint="fingerprint",
+                    reason="high risk graph node",
+                    requested_at=now,
+                    expires_at=now + timedelta(minutes=5),
+                )
+            )
+        )
+        denied = client.post(
+            "/api/approvals/denied-approval/deny?decided_by=reviewer"
+        )
+
+    assert denied.status_code == 200
+    assert denied.json()["data"]["task_id"] == "graph-task"
+    assert scheduler.resumed == [("graph-api", "denied-approval")]
 
 
 def test_graph_effect_projection_excludes_untrusted_effect_content() -> None:

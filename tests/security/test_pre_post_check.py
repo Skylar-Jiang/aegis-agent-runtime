@@ -4,7 +4,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-
 from ra_agent.contracts import (
     ExecutionStatus,
     PolicyDecision,

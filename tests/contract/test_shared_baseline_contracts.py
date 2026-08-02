@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta, timezone
 
-import ra_agent.contracts as contracts
+from ra_agent import contracts
 from ra_agent.contracts import ApprovalDecision, ApprovalRequest, ExecutionStatus
 
 

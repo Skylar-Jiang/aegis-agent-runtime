@@ -7,13 +7,16 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
-
-from ra_agent.contracts import ExecutionStatus, SourceType, ToolCallRequest, ToolExecutionResult
+from ra_agent.contracts import (
+    ExecutionStatus,
+    SourceType,
+    ToolCallRequest,
+    ToolExecutionResult,
+)
 from ra_agent.database.models import Base
 from ra_agent.database.persistent_registry import PersistentRequestExecutionRegistry
 from ra_agent.database.repositories.execution import SqliteExecutionClaimRepository
-
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 _engines: list[AsyncEngine] = []
 

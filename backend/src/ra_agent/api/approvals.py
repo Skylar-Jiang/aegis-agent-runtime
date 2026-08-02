@@ -6,7 +6,7 @@ from ra_agent.contracts import APIResponse, ApprovalDecision, ApprovalStatus
 from ra_agent.core.container import ServiceContainer
 
 from .deps import get_services
-from .task_graphs import is_known_graph_task, list_approval_views
+from .task_graphs import is_known_graph_task, list_approval_views, resume_graph_for_approval
 
 router = APIRouter(prefix="/api/approvals", tags=["approvals"])
 
@@ -30,6 +30,7 @@ async def list_approvals(
 @router.post("/{approval_id}/grant")
 async def grant(
     approval_id: str,
+    request: Request,
     services: Annotated[ServiceContainer, Depends(get_services)],
     decided_by: Annotated[str, Query(min_length=1, pattern=r".*\S.*")],
     reason: str = "approved",
@@ -42,12 +43,16 @@ async def grant(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    await resume_graph_for_approval(
+        request, task_id=decision.task_id, approval_id=approval_id
+    )
     return APIResponse(data=decision)
 
 
 @router.post("/{approval_id}/deny")
 async def deny(
     approval_id: str,
+    request: Request,
     services: Annotated[ServiceContainer, Depends(get_services)],
     decided_by: Annotated[str, Query(min_length=1, pattern=r".*\S.*")],
     reason: str = "denied",
@@ -60,4 +65,7 @@ async def deny(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    await resume_graph_for_approval(
+        request, task_id=decision.task_id, approval_id=approval_id
+    )
     return APIResponse(data=decision)

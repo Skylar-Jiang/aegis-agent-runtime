@@ -1,5 +1,4 @@
 import pytest
-
 from ra_agent.contracts import StepStatus
 from ra_agent.runtime.state_machine import InvalidStateTransition, transition
 

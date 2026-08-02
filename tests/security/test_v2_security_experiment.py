@@ -1,9 +1,8 @@
-import json
 import csv
+import json
 from pathlib import Path
 
 import pytest
-
 from ra_agent.contracts import ExperimentMode, ExperimentResult
 
 from experiments.v2.runners.run_safety_evaluation import (  # pyright: ignore[reportMissingImports]

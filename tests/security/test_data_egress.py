@@ -1,6 +1,5 @@
-from datetime import UTC, datetime
-
 import asyncio
+from datetime import UTC, datetime
 
 from ra_agent.contracts import SourceType, TaskContract, ToolCallRequest
 from ra_agent.security.data_egress import DataEgressGuard

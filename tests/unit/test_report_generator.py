@@ -8,6 +8,16 @@ def test_generate_report_empty_events() -> None:
     assert report["status"] == "no_events"
     assert report["event_summary"] == {}
     assert report["risk_summary"] == {}
+    assert report["control_summary"] == {
+        "risk": 0,
+        "policy": 0,
+        "approval": 0,
+        "checkpoint": 0,
+        "effect": 0,
+        "commit": 0,
+        "rollback": 0,
+        "audit": 0,
+    }
     assert report["timeline"] == []
 
 
@@ -47,6 +57,8 @@ def test_generate_report_with_events() -> None:
     assert report["event_summary"]["EXECUTION_STARTED"] == 1
     assert report["event_summary"]["EXECUTION_FINISHED"] == 1
     assert report["risk_summary"]["LOW"] == 2
+    assert report["control_summary"]["effect"] == 2
+    assert report["control_summary"]["audit"] == 3
     assert len(report["timeline"]) == 3
 
 

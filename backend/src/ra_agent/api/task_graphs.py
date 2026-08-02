@@ -43,6 +43,7 @@ class TaskGraphRun:
     created_at: datetime
     background: asyncio.Task[None] | None = None
     error_code: str | None = None
+    cancelled: bool = False
 
 
 def _runs(request: Request) -> dict[str, TaskGraphRun]:
@@ -61,6 +62,17 @@ def _scheduler(request: Request) -> _GraphScheduler:
     return request.app.state.task_graph_scheduler
 
 
+async def resume_graph_for_approval(
+    request: Request, *, task_id: str, approval_id: str
+) -> None:
+    """Continue the one in-process graph associated with an approval decision."""
+
+    matches = [run for run in _runs(request).values() if run.graph.task_id == task_id]
+    if len(matches) != 1 or matches[0].cancelled:
+        return
+    await _scheduler(request).resume_after_approval(matches[0].graph.graph_id, approval_id)
+
+
 async def _run_graph(run: TaskGraphRun, scheduler: _GraphScheduler) -> None:
     try:
         await scheduler.schedule_graph(run.graph)
@@ -73,7 +85,11 @@ def _graph_status(result: TaskGraphResult) -> str:
         return "WAITING_APPROVAL"
     if result.finished_at is None:
         return "RUNNING"
-    if result.blocked_nodes:
+    if result.blocked_nodes or any(
+        execution.status.value
+        in {"BLOCKED", "CANCELLED", "FAILED", "ROLLED_BACK", "TIMEOUT"}
+        for execution in result.node_results.values()
+    ):
         return "FAILED"
     return "COMPLETED"
 
@@ -155,6 +171,7 @@ async def cancel_graph(graph_id: str, request: Request) -> APIResponse[dict[str,
         result = await _scheduler(request).cancel_graph(graph_id)
     except RuntimeError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    run.cancelled = True
     if run.background is not None and not run.background.done():
         await run.background
     return APIResponse(data=_snapshot(result, run.graph))

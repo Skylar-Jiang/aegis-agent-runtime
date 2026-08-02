@@ -2,7 +2,6 @@ import asyncio
 from datetime import UTC, datetime
 
 import pytest
-
 from ra_agent.audit import InMemoryAuditRecorder
 from ra_agent.contracts import (
     EffectRecord,

@@ -2,7 +2,6 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
-
 from ra_agent.contracts import (
     CONTRACT_VERSION,
     EffectRecord,

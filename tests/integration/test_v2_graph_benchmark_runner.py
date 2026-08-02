@@ -27,6 +27,7 @@ def test_formal_graph_benchmark_runner_emits_contract_valid_runtime_measurements
             "1",
         ],
         cwd=repository_root,
+        check=False,
         capture_output=True,
         text=True,
     )

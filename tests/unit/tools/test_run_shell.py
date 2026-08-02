@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-
 from ra_agent.contracts import ExecutionStatus, SourceType, ToolCallRequest
 from ra_agent.execution.artifacts import validate_execution_artifacts
 from ra_agent.execution.process_runner import RestrictedProcessRunner

@@ -1,7 +1,12 @@
 import asyncio
 from datetime import UTC, datetime
 
-from ra_agent.contracts import ExecutionStatus, SourceType, ToolCallRequest, ToolExecutionResult
+from ra_agent.contracts import (
+    ExecutionStatus,
+    SourceType,
+    ToolCallRequest,
+    ToolExecutionResult,
+)
 from ra_agent.runtime.task_graph import TaskGraphNode, TaskGraphRunner
 
 

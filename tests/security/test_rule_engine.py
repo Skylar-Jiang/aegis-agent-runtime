@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from ra_agent.contracts import (
     PermissionStatus,
     PermissionType,

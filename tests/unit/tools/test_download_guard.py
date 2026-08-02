@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from ra_agent.tools.download_guard import (
     DownloadNetworkGuard,
     DownloadUrlError,

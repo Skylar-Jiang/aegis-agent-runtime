@@ -6,7 +6,6 @@ import time
 from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
-
 from ra_agent.agent.state import AgentRunStatus, AgentState
 from ra_agent.contracts import ApprovalRequest
 from ra_agent.core.config import Settings

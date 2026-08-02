@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-
 from ra_agent.contracts import ExecutionStatus, ToolCallRequest, ToolExecutionResult
 from ra_agent.execution.executor import RegistryToolExecutor
 from ra_agent.execution.pending_store import PendingStore

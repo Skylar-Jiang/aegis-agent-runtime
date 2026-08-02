@@ -8,7 +8,6 @@ from pathlib import Path
 
 from ra_agent.contracts import ExperimentResult
 
-
 MODES = ("BASELINE", "FULL_GUARD", "ADAPTIVE_RUNTIME")
 
 
@@ -53,6 +52,7 @@ def _run(
     return subprocess.run(
         command,
         cwd=repo_root,
+        check=False,
         capture_output=True,
         text=True,
         timeout=180,

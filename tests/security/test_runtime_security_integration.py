@@ -3,7 +3,6 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-
 from ra_agent.contracts import (
     ApprovalDecision,
     ExecutionStatus,

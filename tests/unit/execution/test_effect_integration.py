@@ -5,7 +5,6 @@ from hashlib import sha256
 from pathlib import Path
 
 import pytest
-
 from ra_agent.contracts import (
     DeepCheckResult,
     EffectStatus,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from ra_agent.core.bootstrap import build_mock_container
 from ra_agent.core.providers import ExecutionProvider, ProviderRegistry, ServiceProvider
 from ra_agent.execution.cleanup import RequestCleanupCoordinator

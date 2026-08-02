@@ -3,12 +3,11 @@
 import asyncio
 from pathlib import Path
 
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
 from ra_agent.audit.event_bus import PersistentAuditRecorder
 from ra_agent.contracts import AuditEventType
 from ra_agent.database.models import Base
 from ra_agent.database.repositories.audit import SqliteAuditRepository
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 
 def _make_recorder() -> PersistentAuditRecorder:
@@ -20,7 +19,6 @@ def _make_recorder() -> PersistentAuditRecorder:
 
 def _setup_tables() -> None:
     """Run inside an async context before tests that need tables."""
-    ...
 
 
 async def _init_db(database_url: str = "sqlite+aiosqlite:///:memory:") -> async_sessionmaker:

@@ -2,7 +2,6 @@ import csv
 import json
 
 import pytest
-
 from ra_agent.api import experiments_provider
 
 

@@ -112,7 +112,7 @@ def test_windows_batch_command_executes_quoted_spaces(tmp_path: Path) -> None:
     batch.write_text("@echo off\r\necho ARG=%~1\r\n", encoding="utf-8")
 
     command = subprocess_command(str(batch), ["value safe"], windows=True)
-    completed = subprocess.run(command, shell=False, capture_output=True, text=True)
+    completed = subprocess.run(command, shell=False, capture_output=True, text=True, check=False)
 
     assert completed.returncode == 0
     assert completed.stdout.strip() == "ARG=value safe"

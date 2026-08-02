@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from ra_agent.contracts import (
     ApprovalDecision,
     ApprovalStatus,
