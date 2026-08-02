@@ -2,9 +2,9 @@
 
 面向工具增强型智能体的风险自适应运行时安全架构。系统把工具调用改造为“风险分级—权限调度—受控执行—检查—提交/回滚—审计”的统一运行时链路。
 
-> Phase 3.5 已冻结：Live Runtime 具备 Pre/Post、受控提交/回滚、真实文件/Memory/下载/Shell 注册、TaskContract、数据外发干运行和最小任务图。验证记录见 [Phase 3.5 集成报告](docs/phase3.5/INTEGRATION-REPORT.md)。
+> `main` 已完成 V2 最终集成。最终验收基线为 Ruff 通过、Pyright 0 errors/0 warnings、Backend 889 passed/8 skipped、Frontend Vitest 14 passed、Playwright 11 passed，以及 Safety 225、Graph 18、Rollback 105 的正式数据重建。最终演示与证据见 [final integration demo](docs/final-integration-demo.md) 和 [browser evidence](docs/final-integration-assets/README.md)。
 
-> 比赛最终阶段的 V2 架构、共享 Contract、四人职责、实验字段和报告骨架见 [docs/v2-final](docs/v2-final/00-freeze.md)。该规范优先于历史 Phase 3 分工文档。
+> `docs/phase3*`、`docs/v2-final/` 与 `docs/report-v2/` 保留为历史实施或写作材料，不是当前实现与验收的唯一口径；以本 README、正式测试/数据和最终演示证据为准。
 
 ## 冻结架构
 
@@ -16,7 +16,7 @@ Agent Planner → ToolCallRequest + TaskContract → Runtime Scheduler
 
 `live-agent` 中缺失或越界的 TaskContract 会在执行器前 Fail Closed。`send_email_dry_run` 只产生 `PENDING_EGRESS`，不会创建网络连接或发送邮件；DataEgressGuard 会按 artifact lineage 再次校验接收方。
 
-后端使用 Python 3.11、uv、FastAPI、Pydantic v2、LangGraph 和 SQLite；前端骨架使用 Node.js 24.14.0、pnpm 10.12.4、React、TypeScript 和 Vite；任务 API 使用 REST，实时审计使用 SSE。
+后端使用 Python 3.11、uv、FastAPI、Pydantic v2、LangGraph 和 SQLite；前端使用 Node.js 24.14.0、pnpm 10.12.4、React、TypeScript 和 Vite；任务 API 使用 REST，实时审计使用 SSE。
 
 ## 目录
 
@@ -141,15 +141,8 @@ LOW 工具在 Pre/Post 后走 FAST_EXECUTE；受控写入、删除、下载和 M
 
 当前中断能力只覆盖 Runtime 持有的受控执行（至少 `run_shell`）；它不是对任意操作系统进程进行实时语义监控。只有调用方显式提供、且确实不依赖执行结果的独立监控器，MEDIUM checkpointed pending 执行才会与该检查并行；否则维持顺序检查。
 
-## 下一步分工
+## 文档状态
 
-Phase 3 的真实实现仍由成员完成；当前唯一执行入口如下：
-
-- [Phase 3 基线](docs/phase3/README.md)
-- [成员 A：Runtime](docs/phase3/02-member-a-runtime.md)
-- [成员 B：Security](docs/phase3/03-member-b-security.md)
-- [成员 C：Execution](docs/phase3/04-member-c-execution.md)
-- [成员 D：Experiments/UI](docs/phase3/05-member-d-experiments-ui.md)
-- [集成清单](docs/phase3/06-integration-checklist.md)
-
-旧 Phase 1/2 报告仅作历史资料，不是当前开发入口。
+- [最终 Demo 与本地复现](docs/final-integration-demo.md)、[浏览器证据](docs/final-integration-assets/README.md) 与 [部署边界](docs/final-integration-deployment.md) 描述当前最终集成；本项目未进行真实 Vercel 或 Railway 部署。
+- [Phase 3](docs/phase3/README.md)、[Phase 3.5](docs/phase3.5/INTEGRATION-REPORT.md) 和 [V2 freeze](docs/v2-final/00-freeze.md) 是可追溯的历史实施记录。
+- `essay/final-report/` 是当前作品书的 LaTeX 整合源；未进入该目录的队友草稿保持为输入材料，不替代正式正文。

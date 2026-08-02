@@ -1,17 +1,3 @@
-# 第 6 节：可视化与 Dashboard
+# 历史可视化收集提纲
 
-## 工作台截图
-
-<!-- TODO: 插入截图 -->
-
-## 实验对比图表
-
-<!-- TODO: 插入三模式对比的柱状图和折线图 -->
-
-## 审计时间线
-
-<!-- TODO: 插入审计事件时间线截图 -->
-
-## SSE 实时流验证
-
-<!-- TODO: 插入 Live 连接状态截图 -->
+本文件保留为分工期写作索引，不再承载最终作品书内容或可见占位。已核验的浏览器展示素材见 [final integration assets](../final-integration-assets/README.md)，其场景、提交与日期均由该目录维护；正式 LaTeX 正文接入以 `essay/final-report/` 为准。

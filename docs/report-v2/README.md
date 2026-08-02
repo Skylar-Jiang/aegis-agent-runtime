@@ -1,4 +1,6 @@
-# 比赛作品报告书骨架
+# 历史 Markdown 作品报告骨架
+
+> 本目录是分工期的 Markdown 写作材料，不是最终作品书正文。当前正式 LaTeX 整合源为 `essay/final-report/`；正式数字、主张边界和复现命令以根目录 `README.md` 与该 LaTeX 源为准。
 
 本目录只收录可核验的报告文字、图表说明和数据索引；图片放 `assets/`，正式 V2 原始数据放仓库 `experiments/v2/results/raw/`，本目录只链接其 run ID。`experiments/results/**` 是历史开发结果，不得作为最终主张的数据源。
 

@@ -1,6 +1,6 @@
 # 历史 Phase 2 Integration Validation Report
 
-> 此报告是 2026-07-20 的 Phase 2 验证快照；后续 Phase 3 工作范围和验收以 `docs/phase3/` 为准。
+> 此报告是 2026-07-20 的 Phase 2 验证快照，不是最终验收记录。当前最终口径为根目录 `README.md` 的“最终本地验收”、`docs/final-integration-demo.md`、`docs/final-integration-assets/README.md` 与 `scripts/verify_final_experiments.py` 的正式数据重建；不使用本文的 486 项测试或性能 smoke 作为最终主张。
 
 ## Scope
 

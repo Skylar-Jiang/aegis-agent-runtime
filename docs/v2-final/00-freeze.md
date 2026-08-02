@@ -1,6 +1,6 @@
-# V2 最终架构与接口冻结
+# V2 架构与接口冻结（历史开发基线）
 
-> 本文是比赛最终阶段的唯一架构与接口规范。它不改变当前实现；组长先将这里定义的加法 Contract 落地并通过 Contract tests，成员再从该基线分支开发。旧 `docs/phase3/` 保留为历史实施记录。
+> 本文记录最终集成前的 V2 开发冻结与分工，不是当前实现的唯一规范。最终实现、验收命令和正式数据以根目录 `README.md`、`docs/final-integration-demo.md`、`docs/final-integration-assets/README.md` 及 `scripts/verify_final_experiments.py` 为准；旧 `docs/phase3/` 与本文均保留为可追溯的实施记录。
 
 ## 1. 当前状态审计
 

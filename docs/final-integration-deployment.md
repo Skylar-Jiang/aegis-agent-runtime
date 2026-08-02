@@ -1,4 +1,6 @@
-# Final integration deployment and demo
+# Final integration deployment configuration and demo
+
+> 状态：本项目未执行真实 Vercel 或 Railway 部署。本文件保留已验证的本地构建、健康检查和部署配置边界，不能作为已上线或 live verified 的声明。
 
 The frontend is a Vercel SPA (`frontend/vercel.json` keeps refresh routes on `index.html`). Build it with `corepack pnpm --dir frontend build`. Set `VITE_API_BASE_URL` only when the API is a separate public origin; it must end in `/api`. Leave it empty for a same-origin reverse proxy.
 
