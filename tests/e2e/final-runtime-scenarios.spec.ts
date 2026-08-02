@@ -124,6 +124,27 @@ test.describe.serial('Final runtime browser scenarios', () => {
     await page.screenshot({ path: testInfo.outputPath('cancelled.png') });
   });
 
+  test('Cancel selectively rolls back a pending effect and preserves an independent effect', async ({ page }) => {
+    const created = await page.request.post(`${api}/demo/selective-rollback`);
+    expect(created.ok()).toBeTruthy();
+    const fixture = (await created.json()).data as { task_id: string; graph_id: string; approval_id: string };
+
+    await page.goto(`/runtime?task_id=${fixture.task_id}`);
+    await expect(page.getByText('COMMITTED').first()).toBeVisible();
+    await expect(page.getByText('PENDING').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel graph' }).click();
+    await expect(page.getByText('ROLLED_BACK').first()).toBeVisible();
+    await expect(page.getByText('PRESERVED').first()).toBeVisible();
+    await page.screenshot({ path: '../docs/final-integration-assets/selective-rollback-preserved.png' });
+
+    const resume = await page.request.post(`${api}/task-graphs/${fixture.graph_id}/resume`, { data: { approval_id: fixture.approval_id } });
+    expect(resume.status()).toBe(409);
+    await page.goto(`/audit?task_id=${fixture.task_id}`);
+    await expect(page.getByText('Task cancelled').first()).toBeVisible();
+    await expect(page.getByText('Rollback').first()).toBeVisible();
+    await expect(page.getByText('PRESERVED').first()).toBeVisible();
+  });
+
   test('dangerous shell input is escalated and blocked with graph audit facts', async ({ page }, testInfo) => {
     const { taskId, graph } = graphPayload('security', []);
     graph.nodes.push(request(taskId, 'dangerous-shell', 'run_shell', { command: 'rm -rf e2e-target.txt' }));

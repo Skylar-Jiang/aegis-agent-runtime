@@ -383,3 +383,51 @@ def test_graph_api_executes_a_real_runtime_node_and_emits_graph_audit(tmp_path: 
     assert snapshot["nodes"][0]["status"] == "COMMITTED"
     assert all("output" not in event["details"] for event in events)
     assert any(event["details"].get("graph_id") == "graph-api" for event in events)
+
+
+def test_demo_selective_rollback_uses_real_effects_and_preserves_independent_effect(
+    tmp_path: Path,
+) -> None:
+    settings = _live_settings(tmp_path)
+    app = create_app(settings)
+    app.state.enable_demo_fixtures = True
+
+    with TestClient(app) as client:
+        created = client.post("/api/demo/selective-rollback")
+
+        assert created.status_code == 200
+        task_id = created.json()["data"]["task_id"]
+        graph_id = created.json()["data"]["graph_id"]
+        for _ in range(50):
+            effects = client.get(f"/api/tasks/{task_id}/effects").json()["data"]
+            if {effect["status"] for effect in effects} == {"COMMITTED", "PENDING"}:
+                break
+            time.sleep(0.02)
+        cancelled = client.post(f"/api/task-graphs/{graph_id}/cancel")
+        resume = client.post(
+            f"/api/task-graphs/{graph_id}/resume",
+            json={"approval_id": created.json()["data"]["approval_id"]},
+        )
+        effects = client.get(f"/api/tasks/{task_id}/effects").json()["data"]
+        events = client.get(f"/api/tasks/{task_id}/events").json()["data"]["events"]
+
+    assert cancelled.status_code == 200
+    assert cancelled.json()["data"]["status"] == "FAILED"
+    assert resume.status_code == 409
+    assert {effect["status"] for effect in effects} == {"PRESERVED", "ROLLED_BACK"}
+    assert {event["event_type"] for event in events} >= {
+        "TASK_CANCELLED",
+        "ROLLBACK_STARTED",
+        "ROLLBACK_FINISHED",
+        "TASK_FINISHED",
+    }
+    assert any(event["status"] == "PRESERVED" for event in events)
+
+
+def test_demo_fixtures_are_unavailable_without_explicit_enablement() -> None:
+    app = create_app(Settings.model_validate({"runtime_mode": "offline"}))
+
+    with TestClient(app) as client:
+        response = client.post("/api/demo/selective-rollback")
+
+    assert response.status_code == 404

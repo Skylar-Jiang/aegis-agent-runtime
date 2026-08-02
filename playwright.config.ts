@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  outputDir: './docs/final-integration-assets',
+  outputDir: './test-results',
   timeout: 30000,
   retries: 1,
   use: {
@@ -22,6 +22,7 @@ export default defineConfig({
         PENDING_ROOT: '.runtime/playwright/pending',
         CHECKPOINT_ROOT: '.runtime/playwright/checkpoints',
         QUARANTINE_ROOT: '.runtime/playwright/quarantine',
+        ENABLE_DEMO_FIXTURES: 'true',
       },
       port: 8000,
       reuseExistingServer: true,

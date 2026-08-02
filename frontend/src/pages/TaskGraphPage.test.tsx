@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { BrowserRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getTaskApprovals, getTaskEffects, getTaskGraph } from '../api/taskGraphs';
+import { cancelTaskGraph, getTaskApprovals, getTaskEffects, getTaskGraph } from '../api/taskGraphs';
 import { TaskGraphPage } from './TaskGraphPage';
 
 vi.mock('../api/taskGraphs', () => ({
@@ -20,6 +20,9 @@ vi.mock('../api/taskGraphs', () => ({
   getTaskApprovals: vi.fn().mockResolvedValue([
     { approval_id: 'approval-1', task_id: 'task-1', status: 'PENDING', tool_name: 'delete_file' },
   ]),
+  cancelTaskGraph: vi.fn().mockResolvedValue({
+    graph_id: 'graph-1', task_id: 'task-1', status: 'FAILED', nodes: [],
+  }),
 }));
 
 afterEach(() => {
@@ -54,5 +57,15 @@ describe('TaskGraphPage', () => {
     expect(await screen.findByText('Unknown task graph')).toBeInTheDocument();
     expect(getTaskEffects).not.toHaveBeenCalled();
     expect(getTaskApprovals).not.toHaveBeenCalled();
+  });
+
+  it('cancels a waiting graph through the runtime API', async () => {
+    window.history.pushState({}, '', '/runtime?task_id=task-1');
+    render(<BrowserRouter><TaskGraphPage /></BrowserRouter>);
+
+    await screen.findByText('graph-1');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel graph' }));
+
+    await waitFor(() => expect(cancelTaskGraph).toHaveBeenCalledWith('graph-1'));
   });
 });
