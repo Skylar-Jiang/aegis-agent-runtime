@@ -1,0 +1,41 @@
+\chapter{总结}
+
+\section{总结}
+
+\Aegis{} 将 Agent 工具调用纳入风险分级、策略与权限判定、受控执行、检查、Commit/Rollback 和 Audit 的统一运行时链路。系统以 Transactional Controlled Execution、Approval-aware TaskGraph Scheduling 和 Dependency-aware Selective Rollback 为三项核心创新：前者管理副作用从 Pending 到可信状态的边界，第二项在审批等待中约束影响范围并允许安全独立节点推进，第三项在取消或失败时恢复受影响依赖闭包并保留独立的已安全提交成果。
+
+最终验收的工程证据覆盖后端、前端与浏览器流程：Ruff 通过，Pyright 为 0 errors、0 warnings，后端测试为 889 passed、8 skipped，前端 Vitest 为 14 passed，Playwright 为 11 passed。正式 Safety、Graph、Rollback 数据分别为 225、18、105 行，均可由原始数据和聚合结果重建。该结果支撑当前原型机制的可复现工程验证；其中 Graph 使用固定时延、确定性受控环境，不作为统计显著性的证据。
+
+\section{局限性}
+
+本系统是单进程、受控环境中的 Runtime 原型。当前原型未覆盖分布式工作流编排、服务重启恢复、完整 ACID 语义、通用 MCP/Skill 协议和同一节点 speculative execution。选择性回滚仅适用于已纳入 Effect、Checkpoint 和关联关系管理的可恢复状态；不可逆外部动作必须在释放前受到审批或提交边界约束。安全实验采用固定 fixtures 与确定性规则，重点验证机制行为与数据重建一致性，不能外推为开放环境中的普适安全保证。
+
+\section{未来工作}
+
+未来可将 TaskGraph、审批与 Effect 状态扩展为可恢复的持久化协调状态，并在保持 Fail-Closed 边界的前提下研究更大规模的多任务调度。对于网络请求、数据库写入和第三方 API，可继续明确其可逆性、补偿语义与提交条件；对当前未覆盖的分布式执行与同一节点检查重叠，也需要先建立可验证的安全合同，再讨论性能优化。
+
+\section{复现说明}
+
+项目代码、测试和正式实验数据位于公开仓库：\url{https://github.com/Skylar-Jiang/aegis-agent-runtime}。在完成依赖安装后，可在仓库根目录按以下命令执行最终验收：
+
+\begingroup\small
+\begin{verbatim}
+# Backend static checks and full test suite
+py -3.11 -m ruff check backend/src tests
+py -3.11 -m pyright --project backend/pyproject.toml
+py -3.11 -m pytest -q
+
+# Formal experiment reconstruction
+py -3.11 scripts/verify_final_experiments.py \
+  --report docs/final-integration-experiment-reconstruction.json
+
+# Frontend and browser E2E checks
+corepack pnpm --dir frontend lint
+corepack pnpm --dir frontend typecheck
+corepack pnpm --dir frontend test -- --run
+corepack pnpm --dir frontend build
+corepack pnpm --dir frontend exec playwright test -c ..\playwright.config.ts
+\end{verbatim}
+\endgroup
+
+上述命令使用锁定依赖和正式 raw/derived 数据，不连接真实 LLM，也不执行真实云部署。Playwright 使用隔离的本地运行时目录验证审批 Grant/Deny、取消后的收敛与拒绝 Resume、危险 Shell 拦截以及 Audit 投影；其中演示 fixture 仅在明确启用时可访问，默认配置保持关闭。
