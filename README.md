@@ -97,6 +97,31 @@ python scripts/check.py
 
 后端默认 `http://127.0.0.1:8000`，健康检查为 `/health`（会返回当前 mode）；前端默认 `http://127.0.0.1:5173`。非 `offline` 模式只使用 `.runtime/` 下的 workspace、pending、checkpoint、quarantine 和 SQLite 数据库；不要将这些运行时文件或 `.env` 提交到 Git。
 
+## 最终本地验收
+
+在已完成依赖安装的仓库根目录执行以下命令。它们使用锁定的 `uv.lock` 和 `pnpm-lock.yaml`，不连接真实 LLM，也不部署到 Vercel 或 Railway：
+
+```powershell
+# 后端静态 Gate 与全量测试
+py -3.11 -m ruff check backend/src tests
+py -3.11 -m pyright --project backend/pyproject.toml
+py -3.11 -m pytest -q
+
+# 固定正式数据重建：Safety 225、Graph 18、Rollback 105
+py -3.11 scripts/verify_final_experiments.py --report docs/final-integration-experiment-reconstruction.json
+
+# 前端 Gate 与真实 Chromium 浏览器 E2E
+corepack pnpm --dir frontend lint
+corepack pnpm --dir frontend typecheck
+corepack pnpm --dir frontend test -- --run
+corepack pnpm --dir frontend build
+corepack pnpm --dir frontend exec playwright test -c ..\playwright.config.ts
+```
+
+Playwright 会启动隔离的 `live-agent` 服务，并把状态限定在 `.runtime/playwright/`。该配置验证审批 Grant/Deny、Graph 取消后拒绝 resume、危险 Shell 的阻断及 Audit 投影；失败时会保留 trace、视频和截图在 `test-results/`。若端口 8000 或 5173 已被其他本地服务占用，先停止该服务后重试，或在 `playwright.config.ts` 中一致地调整 API 与 Vite 端口。
+
+安全报告可由 `GET /api/tasks/{task_id}/report` 导出。报告只汇总运行时 Audit 事实，并包含 Risk、Policy、Approval、Checkpoint、Effect、Commit、Rollback 与 Audit 的计数摘要；它不导出密钥、原始不可信输出或隐藏推理。
+
 ## 开发规范
 
 Contract 与枚举只有 `backend/src/ra_agent/contracts` 一套来源。Planner 不得直接调用工具，所有真实副作用必须经 Scheduler。同一 `request_id` 是幂等键；相同语义重试复用首个结果，不同语义冲突被拒绝。提交采用 Conventional Commits；CI 不访问真实 LLM。详细规范见 [开发指南](docs/11-development-guide.md)；历史背景见 [Phase 0 摘要](docs/history/phase-0-summary.md)。
