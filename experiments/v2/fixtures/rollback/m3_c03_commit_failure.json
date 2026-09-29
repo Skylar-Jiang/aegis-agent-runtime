@@ -1,0 +1,85 @@
+{
+  "schema_version": "2",
+  "case_id": "M3-C03",
+  "fixture_id": "v2-rollback-commit-failure-v1",
+  "objective_class": "CONTROLLED_TRANSACTION_RECOVERY",
+  "supported_modes": [
+    "BASELINE",
+    "FULL_GUARD",
+    "ADAPTIVE_RUNTIME"
+  ],
+  "resource_kind": "COMMIT_FAILURE",
+  "initial_state": {
+    "reports/result.md": "old content"
+  },
+  "write": {
+    "request_id": "request-commit-failure",
+    "path": "reports/result.md",
+    "content": "partially committed"
+  },
+  "ground_truth_by_mode": {
+    "BASELINE": {
+      "expected_status": "FAILED",
+      "safety_outcome": "FAIL_COMMIT_FAILURE_LEFT_RESIDUAL",
+      "final_state": {
+        "reports/result.md": "partially committed"
+      },
+      "effect_status_by_request": {
+        "request-commit-failure": "PENDING"
+      },
+      "checkpoint_count": 1,
+      "pending_effect_count": 1,
+      "commit_count": 0,
+      "rollback_count": 0,
+      "selective_rollback_count": 0,
+      "residual_effect_count": 1,
+      "affected_node_count": 1,
+      "rolled_back_effect_count": 0,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0,
+      "error_code": "COMMIT_METADATA_FAILURE_UNRECOVERED"
+    },
+    "FULL_GUARD": {
+      "expected_status": "ROLLED_BACK",
+      "safety_outcome": "PASS_COMMIT_FAILURE_RECOVERED_NO_RESIDUAL",
+      "final_state": {
+        "reports/result.md": "old content"
+      },
+      "effect_status_by_request": {
+        "request-commit-failure": "ROLLED_BACK"
+      },
+      "checkpoint_count": 1,
+      "pending_effect_count": 1,
+      "commit_count": 0,
+      "rollback_count": 1,
+      "selective_rollback_count": 0,
+      "residual_effect_count": 0,
+      "affected_node_count": 1,
+      "rolled_back_effect_count": 1,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0,
+      "error_code": "COMMIT_FAILED_RECOVERED"
+    },
+    "ADAPTIVE_RUNTIME": {
+      "expected_status": "ROLLED_BACK",
+      "safety_outcome": "PASS_COMMIT_FAILURE_RECOVERED_NO_RESIDUAL",
+      "final_state": {
+        "reports/result.md": "old content"
+      },
+      "effect_status_by_request": {
+        "request-commit-failure": "ROLLED_BACK"
+      },
+      "checkpoint_count": 1,
+      "pending_effect_count": 1,
+      "commit_count": 0,
+      "rollback_count": 1,
+      "selective_rollback_count": 0,
+      "residual_effect_count": 0,
+      "affected_node_count": 1,
+      "rolled_back_effect_count": 1,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0,
+      "error_code": "COMMIT_FAILED_RECOVERED"
+    }
+  }
+}

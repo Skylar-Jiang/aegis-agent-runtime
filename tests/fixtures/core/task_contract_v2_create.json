@@ -1,0 +1,20 @@
+{
+  "session_id": "session-fixture",
+  "task_id": "task-fixture",
+  "user_id": "user-fixture",
+  "goals": ["Create a report"],
+  "completion_criteria": ["reports/result.md exists"],
+  "allowed": [
+    {
+      "tool": "create_file",
+      "action": "create_file",
+      "resource": "reports/**",
+      "effect": "WRITE"
+    }
+  ],
+  "denied": [],
+  "limits": {"max_affected_objects": 10},
+  "confirmation": {"required_actions": [], "required_effect_classes": []},
+  "policy_version": "default:1",
+  "tool_manifest_digest": "fixture-tools-v1"
+}

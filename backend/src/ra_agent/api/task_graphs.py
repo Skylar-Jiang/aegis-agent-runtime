@@ -1,0 +1,416 @@
+"""In-process V2 TaskGraph API over the RuntimeTaskGraphScheduler."""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaitable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Annotated, Any, Protocol, cast
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from ra_agent.contracts import (
+    APIResponse,
+    ApprovalRequest,
+    ApprovalStatus,
+    TaskGraph,
+    TaskGraphResult,
+    ToolCallRequest,
+)
+from ra_agent.core.container import ServiceContainer
+from ra_agent.runtime.effect_targets import infer_effect_targets
+
+from .deps import get_services
+
+graph_router = APIRouter(prefix="/api/task-graphs", tags=["task-graphs"])
+task_graph_router = APIRouter(prefix="/api/tasks", tags=["task-graphs"])
+
+
+class _GraphScheduler(Protocol):
+    async def prepare_graph(self, graph: TaskGraph) -> TaskGraphResult: ...
+
+    async def schedule_graph(self, graph: TaskGraph) -> TaskGraphResult: ...
+
+    async def snapshot(self, graph_id: str) -> TaskGraphResult: ...
+
+    async def cancel_graph(self, graph_id: str) -> TaskGraphResult: ...
+
+    async def resume_after_approval(self, graph_id: str, approval_id: str) -> TaskGraphResult: ...
+
+    def recovery_failures(self, graph_id: str) -> dict[str, str]: ...
+
+    async def retry_failed_recovery(self, graph_id: str) -> TaskGraphResult: ...
+
+
+@dataclass(slots=True)
+class TaskGraphRun:
+    graph: TaskGraph
+    created_at: datetime
+    background: asyncio.Task[None] | None = None
+    error_code: str | None = None
+    cancelled: bool = False
+    preserved_effect_ids: frozenset[str] = frozenset()
+    demo_recovery_root_node_id: str | None = None
+    recovery_statuses: dict[str, str] = field(default_factory=dict)
+    recovery_view: dict[str, object] | None = None
+
+
+def _runs(request: Request) -> dict[str, TaskGraphRun]:
+    runs = getattr(request.app.state, "task_graph_runs", None)
+    if runs is None:
+        runs = {}
+        request.app.state.task_graph_runs = runs
+    return runs
+
+
+def is_known_graph_task(request: Request, task_id: str) -> bool:
+    return any(run.graph.task_id == task_id for run in _runs(request).values())
+
+
+def _scheduler(request: Request) -> _GraphScheduler:
+    return request.app.state.task_graph_scheduler
+
+
+async def resume_graph_for_approval(request: Request, *, task_id: str, approval_id: str) -> None:
+    """Continue the one in-process graph associated with an approval decision."""
+
+    matches = [run for run in _runs(request).values() if run.graph.task_id == task_id]
+    if len(matches) != 1 or matches[0].cancelled:
+        return
+    await _scheduler(request).resume_after_approval(matches[0].graph.graph_id, approval_id)
+
+
+async def _run_graph(run: TaskGraphRun, scheduler: _GraphScheduler) -> None:
+    try:
+        await scheduler.schedule_graph(run.graph)
+    except Exception as error:
+        run.error_code = type(error).__name__
+
+
+def _graph_status(result: TaskGraphResult) -> str:
+    if any(reason == "WAITING_APPROVAL" for reason in result.blocked_nodes.values()):
+        return "WAITING_APPROVAL"
+    if result.finished_at is None:
+        return "RUNNING"
+    if result.blocked_nodes or any(
+        execution.status.value in {"BLOCKED", "CANCELLED", "FAILED", "ROLLED_BACK", "TIMEOUT"}
+        for execution in result.node_results.values()
+    ):
+        return "FAILED"
+    return "COMPLETED"
+
+
+def _snapshot(
+    result: TaskGraphResult,
+    graph: TaskGraph,
+    *,
+    recovery_failures: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    nodes: list[dict[str, Any]] = []
+    for node in graph.nodes:
+        execution = result.node_results.get(node.node_id)
+        blocked_reason = result.blocked_nodes.get(node.node_id)
+        nodes.append(
+            {
+                "node_id": node.node_id,
+                "dependencies": node.dependencies,
+                "request_id": node.request.request_id,
+                "step_id": node.request.step_id,
+                "status": (
+                    execution.status.value
+                    if execution
+                    else "WAITING_APPROVAL"
+                    if blocked_reason == "WAITING_APPROVAL"
+                    else "BLOCKED"
+                    if blocked_reason
+                    else "PENDING"
+                ),
+                "checkpoint_id": execution.checkpoint_id if execution else None,
+                "error_code": execution.error_code if execution else blocked_reason,
+                "blocked_reason": blocked_reason,
+                "started_at": execution.started_at if execution else None,
+                "finished_at": execution.finished_at if execution else None,
+                "tool_name": node.request.tool_name,
+                "effect_targets": result.inferred_effect_targets.get(node.node_id, []),
+                "conflict": result.inferred_conflicts.get(node.node_id),
+            }
+        )
+    return {
+        "kind": "task_graph",
+        "graph_id": result.graph_id,
+        "task_id": result.task_id,
+        "status": _graph_status(result),
+        "nodes": nodes,
+        "started_at": result.started_at,
+        "finished_at": result.finished_at,
+        "recovery_failures": recovery_failures or {},
+    }
+
+
+def _recovery_failures(scheduler: _GraphScheduler, graph_id: str) -> dict[str, str]:
+    inspect = getattr(scheduler, "recovery_failures", None)
+    return cast(dict[str, str], inspect(graph_id)) if callable(inspect) else {}
+
+
+def _agent_snapshot(task: dict[str, Any]) -> dict[str, Any] | None:
+    state = task.get("agent_state")
+    if state is None:
+        state = {}
+    if not isinstance(state, dict):
+        return None
+    raw_requests = state.get("planned_requests", [])
+    raw_results = state.get("results", [])
+    if not isinstance(raw_requests, list) or not isinstance(raw_results, list):
+        return None
+    results = {
+        item.get("request_id"): item
+        for item in raw_results
+        if isinstance(item, dict) and isinstance(item.get("request_id"), str)
+    }
+    nodes: list[dict[str, Any]] = []
+    previous_step: str | None = None
+    for raw in raw_requests:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            tool_request = ToolCallRequest.model_validate(raw)
+        except ValueError:
+            continue
+        result = results.get(tool_request.request_id)
+        nodes.append(
+            {
+                "node_id": tool_request.step_id,
+                "dependencies": [previous_step] if previous_step is not None else [],
+                "request_id": tool_request.request_id,
+                "step_id": tool_request.step_id,
+                "status": result.get("status", "PLANNED") if result else "PLANNED",
+                "checkpoint_id": result.get("checkpoint_id") if result else None,
+                "error_code": result.get("error_code") if result else None,
+                "blocked_reason": result.get("error") if result else None,
+                "started_at": result.get("started_at") if result else None,
+                "finished_at": result.get("finished_at") if result else None,
+                "tool_name": tool_request.tool_name,
+                "effect_targets": [
+                    target.render() for target in infer_effect_targets(tool_request)
+                ],
+                "conflict": None,
+            }
+        )
+        previous_step = tool_request.step_id
+    return {
+        "kind": "agent",
+        "graph_id": f"agent-{task['task_id']}",
+        "task_id": task["task_id"],
+        "status": task["status"],
+        "nodes": nodes,
+        "started_at": task["created_at"],
+        "finished_at": (
+            task["updated_at"]
+            if task["status"] in {"COMPLETED", "BLOCKED", "FAILED", "CANCELLED", "INTERRUPTED"}
+            else None
+        ),
+    }
+
+
+async def _result_for_graph(
+    request: Request, graph_id: str
+) -> tuple[TaskGraphRun, TaskGraphResult]:
+    run = _runs(request).get(graph_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Unknown task graph")
+    try:
+        return run, await _scheduler(request).snapshot(graph_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Unknown task graph") from error
+
+
+@graph_router.post("")
+async def submit_graph(graph: TaskGraph, request: Request) -> APIResponse[dict[str, Any]]:
+    runs = _runs(request)
+    if graph.graph_id in runs:
+        raise HTTPException(status_code=409, detail="Task graph already exists")
+    scheduler = _scheduler(request)
+    prepare_graph = getattr(scheduler, "prepare_graph", None)
+    if callable(prepare_graph):
+        try:
+            await cast(Awaitable[TaskGraphResult], prepare_graph(graph))
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+    run = TaskGraphRun(graph=graph, created_at=datetime.now(UTC))
+    runs[graph.graph_id] = run
+    run.background = asyncio.create_task(_run_graph(run, scheduler))
+    return APIResponse(
+        data={
+            "graph_id": graph.graph_id,
+            "task_id": graph.task_id,
+            "status": "RUNNING",
+            "created_at": run.created_at,
+        }
+    )
+
+
+@graph_router.post("/{graph_id}/cancel")
+async def cancel_graph(graph_id: str, request: Request) -> APIResponse[dict[str, Any]]:
+    run, _ = await _result_for_graph(request, graph_id)
+    effects_before = ()
+    services = request.app.state.services
+    if services.effect_store is not None:
+        effects_before = await services.effect_store.list_by_task_id(run.graph.task_id)
+    try:
+        result = await _scheduler(request).cancel_graph(graph_id)
+    except RuntimeError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    run.cancelled = True
+    if services.effect_store is not None:
+        effects_after = await services.effect_store.list_by_task_id(run.graph.task_id)
+        committed_before = {
+            effect.effect_id for effect in effects_before if effect.status.value == "COMMITTED"
+        }
+        run.preserved_effect_ids = frozenset(
+            effect.effect_id
+            for effect in effects_after
+            if effect.effect_id in committed_before and effect.status.value == "COMMITTED"
+        )
+    if run.background is not None and not run.background.done():
+        await run.background
+    return APIResponse(
+        data=_snapshot(
+            result,
+            run.graph,
+            recovery_failures=_recovery_failures(_scheduler(request), graph_id),
+        )
+    )
+
+
+@graph_router.post("/{graph_id}/resume")
+async def resume_graph(
+    graph_id: str,
+    payload: dict[str, str],
+    request: Request,
+) -> APIResponse[dict[str, Any]]:
+    approval_id = payload.get("approval_id")
+    if not approval_id:
+        raise HTTPException(status_code=422, detail="approval_id is required")
+    run, _ = await _result_for_graph(request, graph_id)
+    try:
+        result = await _scheduler(request).resume_after_approval(graph_id, approval_id)
+    except (RuntimeError, ValueError) as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return APIResponse(
+        data=_snapshot(
+            result,
+            run.graph,
+            recovery_failures=_recovery_failures(_scheduler(request), graph_id),
+        )
+    )
+
+
+@graph_router.post("/{graph_id}/retry-recovery")
+async def retry_graph_recovery(graph_id: str, request: Request) -> APIResponse[dict[str, Any]]:
+    run, _ = await _result_for_graph(request, graph_id)
+    scheduler = _scheduler(request)
+    if not _recovery_failures(scheduler, graph_id):
+        raise HTTPException(status_code=409, detail="Graph has no unresolved recovery failure")
+    try:
+        result = await scheduler.retry_failed_recovery(graph_id)
+    except RuntimeError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return APIResponse(
+        data=_snapshot(
+            result,
+            run.graph,
+            recovery_failures=_recovery_failures(scheduler, graph_id),
+        )
+    )
+
+
+@task_graph_router.get("/{task_id}/graph")
+async def get_graph(task_id: str, request: Request) -> APIResponse[dict[str, Any]]:
+    matching = [run for run in _runs(request).values() if run.graph.task_id == task_id]
+    if len(matching) != 1:
+        task = await request.app.state.task_store.get(task_id)
+        snapshot = _agent_snapshot(task) if task is not None else None
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="Unknown task graph")
+        return APIResponse(data=snapshot)
+    run = matching[0]
+    try:
+        result = await _scheduler(request).snapshot(run.graph.graph_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Unknown task graph") from error
+    return APIResponse(
+        data=_snapshot(
+            result,
+            run.graph,
+            recovery_failures=_recovery_failures(_scheduler(request), run.graph.graph_id),
+        )
+    )
+
+
+@task_graph_router.get("/{task_id}/effects")
+async def list_effects(
+    task_id: str,
+    request: Request,
+    services: Annotated[ServiceContainer, Depends(get_services)],
+) -> APIResponse[list[dict[str, Any]]]:
+    is_graph = is_known_graph_task(request, task_id)
+    if not is_graph and await request.app.state.task_store.get(task_id) is None:
+        raise HTTPException(status_code=404, detail="Unknown task")
+    if services.effect_store is None:
+        return APIResponse(data=[])
+    effects = await services.effect_store.list_by_task_id(task_id)
+    run = next((run for run in _runs(request).values() if run.graph.task_id == task_id), None)
+    preserved_effect_ids = run.preserved_effect_ids if run is not None else frozenset()
+    return APIResponse(
+        data=[
+            {
+                "effect_id": effect.effect_id,
+                "kind": effect.kind,
+                "target_ref": effect.target_ref,
+                "status": (run.recovery_statuses if run is not None else {}).get(
+                    effect.effect_id,
+                    "PRESERVED"
+                    if effect.effect_id in preserved_effect_ids
+                    else effect.status.value,
+                ),
+                "checkpoint_id": effect.checkpoint_id,
+                "artifact_refs": effect.artifact_refs,
+                "parent_effect_ids": effect.parent_effect_ids,
+                "created_at": effect.created_at,
+            }
+            for effect in effects
+        ]
+    )
+
+
+async def approval_view(
+    services: ServiceContainer,
+    approval: ApprovalRequest,
+) -> dict[str, str]:
+    decision = await services.approval_service.get_decision(approval.approval_id)
+    status = decision.status if decision is not None else approval.status
+    return {
+        "approval_id": approval.approval_id,
+        "task_id": approval.task_id,
+        "status": status.value,
+        "tool_name": approval.tool_name,
+        "reason": approval.reason,
+        "step_id": approval.step_id,
+        "request_id": approval.request_id,
+    }
+
+
+async def list_approval_views(
+    services: ServiceContainer,
+    *,
+    task_id: str | None = None,
+    status: ApprovalStatus | None = None,
+) -> list[dict[str, str]]:
+    approvals = (
+        await services.approval_service.list_for_task(task_id)
+        if task_id is not None
+        else await services.approval_service.list_all()
+    )
+    views = [await approval_view(services, approval) for approval in approvals]
+    return [view for view in views if status is None or view["status"] == status.value]

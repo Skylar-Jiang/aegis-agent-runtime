@@ -1,0 +1,47 @@
+{
+  "user_grants": [
+    {
+      "subject": "user-fixture",
+      "skill": "*",
+      "tool": "create_file",
+      "action": "create_file",
+      "resource": "reports/**",
+      "effect": "ALLOW",
+      "scope": "GLOBAL",
+      "expires_at": null,
+      "source": "user",
+      "limits": {"max_affected_objects": 100},
+      "scope_ref": null
+    }
+  ],
+  "skill_grants": [
+    {
+      "subject": "*",
+      "skill": "report-writer",
+      "tool": "create_file",
+      "action": "create_file",
+      "resource": "reports/**",
+      "effect": "ALLOW",
+      "scope": "GLOBAL",
+      "expires_at": null,
+      "source": "skill",
+      "limits": {"max_affected_objects": 20},
+      "scope_ref": null
+    }
+  ],
+  "system_grants": [
+    {
+      "subject": "*",
+      "skill": "*",
+      "tool": "create_file",
+      "action": "create_file",
+      "resource": "reports/**",
+      "effect": "ALLOW",
+      "scope": "GLOBAL",
+      "expires_at": null,
+      "source": "system",
+      "limits": {"max_affected_objects": 30},
+      "scope_ref": null
+    }
+  ]
+}

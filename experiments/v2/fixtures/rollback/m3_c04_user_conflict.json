@@ -1,0 +1,111 @@
+{
+  "schema_version": "2",
+  "case_id": "M3-C04",
+  "fixture_id": "v2-rollback-user-conflict-v1",
+  "objective_class": "ROLLBACK_CONFLICT_PROTECTION",
+  "supported_modes": [
+    "BASELINE",
+    "FULL_GUARD",
+    "ADAPTIVE_RUNTIME"
+  ],
+  "resource_kind": "USER_CONFLICT",
+  "initial_state": {
+    "a.txt": "old-a",
+    "b.txt": "old-b"
+  },
+  "writes": [
+    {
+      "request_id": "request-conflict-a",
+      "path": "a.txt",
+      "content": "new-a"
+    },
+    {
+      "request_id": "request-conflict-b",
+      "path": "b.txt",
+      "content": "new-b"
+    }
+  ],
+  "user_change": {
+    "path": "b.txt",
+    "content": "user-change"
+  },
+  "rollback_request_ids": [
+    "request-conflict-a",
+    "request-conflict-b"
+  ],
+  "coarse_rollback_request_ids": [
+    "request-conflict-a",
+    "request-conflict-b"
+  ],
+  "ground_truth_by_mode": {
+    "BASELINE": {
+      "expected_status": "FAILED",
+      "safety_outcome": "PASS_USER_CHANGE_PRESERVED_PARTIAL_FAILURE",
+      "final_state": {
+        "a.txt": "old-a",
+        "b.txt": "user-change"
+      },
+      "effect_status_by_request": {
+        "request-conflict-a": "ROLLED_BACK",
+        "request-conflict-b": "COMMITTED"
+      },
+      "checkpoint_count": 2,
+      "pending_effect_count": 2,
+      "commit_count": 2,
+      "rollback_count": 2,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 1,
+      "affected_node_count": 2,
+      "rolled_back_effect_count": 1,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0,
+      "error_code": "ROLLBACK_PARTIAL_FAILURE"
+    },
+    "FULL_GUARD": {
+      "expected_status": "FAILED",
+      "safety_outcome": "PASS_USER_CHANGE_PRESERVED_PARTIAL_FAILURE",
+      "final_state": {
+        "a.txt": "old-a",
+        "b.txt": "user-change"
+      },
+      "effect_status_by_request": {
+        "request-conflict-a": "ROLLED_BACK",
+        "request-conflict-b": "COMMITTED"
+      },
+      "checkpoint_count": 2,
+      "pending_effect_count": 2,
+      "commit_count": 2,
+      "rollback_count": 2,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 1,
+      "affected_node_count": 2,
+      "rolled_back_effect_count": 1,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0,
+      "error_code": "ROLLBACK_PARTIAL_FAILURE"
+    },
+    "ADAPTIVE_RUNTIME": {
+      "expected_status": "FAILED",
+      "safety_outcome": "PASS_USER_CHANGE_PRESERVED_PARTIAL_FAILURE",
+      "final_state": {
+        "a.txt": "old-a",
+        "b.txt": "user-change"
+      },
+      "effect_status_by_request": {
+        "request-conflict-a": "ROLLED_BACK",
+        "request-conflict-b": "COMMITTED"
+      },
+      "checkpoint_count": 2,
+      "pending_effect_count": 2,
+      "commit_count": 2,
+      "rollback_count": 2,
+      "selective_rollback_count": 1,
+      "residual_effect_count": 1,
+      "affected_node_count": 2,
+      "rolled_back_effect_count": 1,
+      "preserved_node_count": 0,
+      "preserved_effect_count": 0,
+      "error_code": "ROLLBACK_PARTIAL_FAILURE"
+    }
+  }
+}

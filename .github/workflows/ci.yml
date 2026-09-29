@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+      - run: uv sync --project backend --group dev --frozen
+      - run: uv run --project backend ruff check backend/src tests
+      - run: uv run --project backend pyright --project backend/pyproject.toml
+      - run: uv run --project backend pytest tests --cov=ra_agent --durations=20
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.4
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.14.0"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - run: pnpm lint
+        working-directory: frontend
+      - run: pnpm typecheck
+        working-directory: frontend
+      - run: pnpm exec vitest run
+        working-directory: frontend
+      - run: pnpm build
+        working-directory: frontend
+
+  core-browser-sm2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.4
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.14.0"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: uv sync --project backend --group dev --frozen
+      - run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: frontend
+      - run: >-
+          uv run --project backend python scripts/smoke_core.py --channel chromium
+          --script scripts/verify_core_browser.mjs
+          --script scripts/verify_frontend_additions.mjs
+          --script scripts/verify_core_controls.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-sm2-browser-evidence
+          path: |
+            .runtime/review-fixes/browser-*/
+            .runtime/review-fixes/frontend-additions-*/
+            .runtime/review-fixes/controls/
+            .runtime/core-smoke/*/backend.log
+            .runtime/core-smoke/*/frontend.log
+          if-no-files-found: warn

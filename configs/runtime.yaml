@@ -1,0 +1,14 @@
+version: 1
+workspace_root: .runtime/workspace
+pending_root: .runtime/pending
+checkpoint_root: .runtime/checkpoints
+quarantine_root: .runtime/quarantine
+event_transport: sse
+idempotency_required: true
+parallel_check:
+  enabled_for: [MEDIUM]
+  commit_requires_execution_success: true
+  commit_requires_deep_check_pass: true
+limits:
+  default_timeout_seconds: 30
+  max_event_details_bytes: 16384
