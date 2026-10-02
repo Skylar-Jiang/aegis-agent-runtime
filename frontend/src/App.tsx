@@ -16,6 +16,7 @@ import { TaskGraphPage } from './pages/TaskGraphPage'
 import { ConversationsPage } from './pages/ConversationsPage'
 import { SecuritySettingsPage } from './pages/SecuritySettingsPage'
 import { CoreWorkbench } from './features/core/CoreWorkbench'
+import { IntentPage } from './pages/IntentPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 5000 } },
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/approvals" element={<ApprovalsPage />} />
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/experiments" element={<ExperimentsPage />} />
+            <Route path="/intent" element={<IntentPage />} />
             <Route path="/runtime" element={<TaskGraphPage />} />
             <Route path="/core" element={<CoreWorkbench />} />
           </Route>
