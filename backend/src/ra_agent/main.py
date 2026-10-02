@@ -22,6 +22,7 @@ from ra_agent.api import (
 )
 from ra_agent.api.body_limits import CoreBodyLimitMiddleware
 from ra_agent.api.core_views import router as core_views_router
+from ra_agent.api.intent_demo import router as intent_demo_router
 from ra_agent.confirmations import ConfirmationService
 from ra_agent.contracts import APIResponse, ContractService
 from ra_agent.core.bootstrap import (
@@ -150,6 +151,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(graph_router)
     app.include_router(approvals_router)
     app.include_router(demo_router)
+    app.include_router(intent_demo_router)
     app.include_router(reports_router)
     app.include_router(streams_router)
     app.include_router(experiments_router)

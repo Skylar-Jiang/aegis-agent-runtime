@@ -3,7 +3,8 @@
 审计日期：2026-10-02。仓库：Skylar-Jiang/aegis-agent-runtime。
 审计起点：`d60f443996a6e8e11927ba8fe018eeea0813ecd3`，远端
 `aegis-intent-dev`；独立 checkout `D:\aegis-intent-member4`，feature 分支
-`codex/member4-telecom-demo`。本报告写作前没有修改生产代码。
+`feature/member4-telecom-intent-demo`（用户要求去掉 codex 前缀，保留同一起点与提交）。
+本报告写作前没有修改生产代码。
 
 ## 审计方法和材料边界
 

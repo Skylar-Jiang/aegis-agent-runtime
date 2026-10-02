@@ -4,7 +4,8 @@
 
 - Fixed scenario: 面向通信运维知识库的设备配置分析与风险报告生成智能体.
 - Work only on a feature branch created from `aegis-intent-dev`; current branch is
-  `codex/member4-telecom-demo`. Never commit to, merge into, or force push a shared branch.
+  `feature/member4-telecom-intent-demo` (renamed at the user's request). Never commit to,
+  merge into, or force push a shared branch.
 - Member 4 owns synthetic fixtures, isolated simulated effects, Intent display,
   replay/reset scripts and end-to-end consistency checks.
 - Do not change member 1/3 contract extraction, detector algorithms, policy models,
