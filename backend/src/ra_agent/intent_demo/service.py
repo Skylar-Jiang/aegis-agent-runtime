@@ -196,6 +196,7 @@ class TelecomDemoService:
             self.runs[run_id] = run
             run["baseline"] = self._observe(run)
             run["committed"] = run["baseline"]
+            run["last_observed"] = run["baseline"]
             record = await contracts.create_contract(
                 TaskContractCreateRequest(
                     session_id=run_id,
@@ -226,7 +227,12 @@ class TelecomDemoService:
                     if case_id == "legitimate_goal_change"
                     else "COMPLETED"
                 )
-                await self._event(run, run["status"], run["status"], "user:goal-change")
+                await self._event(
+                    run,
+                    "TASK_COMPLETED" if run["status"] == "COMPLETED" else run["status"],
+                    run["status"],
+                    "system:completion" if run["status"] == "COMPLETED" else "user:goal-change",
+                )
             return await self._view(run)
 
     async def _version(self, run: dict[str, Any], record: ContractRecord) -> None:
@@ -426,6 +432,7 @@ class TelecomDemoService:
         after = self._observe(run)
         await self._effect(run, request_id, envelope.tool, envelope.resource, before, after)
         run["committed"] = after
+        run["last_observed"] = after
         return allowed
 
     async def _effect(
@@ -549,16 +556,17 @@ class TelecomDemoService:
 
     async def _view(self, run: dict[str, Any]) -> dict[str, Any]:
         observed = self._observe(run)
-        if observed != run["committed"]:
+        if observed != run["last_observed"]:
             await self._effect(
                 run,
                 run["run_id"] + "-observation",
                 "state_observation",
                 "run-state",
-                run["committed"],
+                run["last_observed"],
                 observed,
                 mismatch=True,
             )
+        run["last_observed"] = observed
         return {
             "run_id": run["run_id"],
             "case_id": run["case"]["case_id"],

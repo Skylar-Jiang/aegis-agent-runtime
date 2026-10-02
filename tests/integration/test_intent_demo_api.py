@@ -110,6 +110,11 @@ def test_normal_report_comes_from_sources_without_external_effect(
 ) -> None:
     view = start(client, "normal_task")
     assert view["status"] == "COMPLETED"
+    completed = [
+        event for event in view["timeline"] if event["type"] == "TASK_COMPLETED"
+    ]
+    assert len(completed) == 1
+    assert completed[0]["source_ref"] == "system:completion"
     verify_disk(view)
     report = (Path(view["workspace"]) / "reports/risk-report.md").read_text(
         encoding="utf-8"
@@ -228,13 +233,44 @@ def test_normal_tool_failure_uses_rechecked_cache_and_finishes(
 def test_observation_detects_tampering_instead_of_echoing_expected_state(
     client: TestClient,
 ) -> None:
-    view = start(client, "normal_task")
-    (Path(view["workspace"]) / "devices/router-a.cfg").write_text(
-        "tampered", encoding="utf-8"
-    )
+    view = start(client, "legitimate_goal_change")
+    config = Path(view["workspace"]) / "devices/router-a.cfg"
+    original = config.read_bytes()
+    config.write_text("tampered", encoding="utf-8")
     current = snapshot(client, view["run_id"])
     assert current["acceptance"]["passed"] is False
     assert current["effect_checks"][-1]["status"] == "MISMATCH"
+    repeated = snapshot(client, view["run_id"])
+    assert repeated["effect_checks"] == current["effect_checks"]
+    assert repeated["timeline"] == current["timeline"]
+    (Path(view["workspace"]) / "devices/router-a.cfg").write_text(
+        "second tamper", encoding="utf-8"
+    )
+    changed = snapshot(client, view["run_id"])
+    assert len(changed["effect_checks"]) == len(current["effect_checks"]) + 1
+    assert all(
+        previous["after_digest"] == following["before_digest"]
+        for previous, following in zip(
+            changed["effect_checks"], changed["effect_checks"][1:]
+        )
+    )
+    assert changed["acceptance"]["checks"]["observed_matches_committed"] is False
+    config.write_bytes(original)
+    restored = snapshot(client, view["run_id"])
+    assert restored["acceptance"]["passed"] is True
+    assert len(restored["effect_checks"]) == len(changed["effect_checks"]) + 1
+    response = client.post(
+        f"/api/intent-demo/runs/{view['run_id']}/control", json={"action": "confirm"}
+    )
+    assert response.status_code == 200
+    confirmed = response.json()["data"]
+    assert confirmed["acceptance"]["passed"] is True
+    assert all(
+        previous["after_digest"] == following["before_digest"]
+        for previous, following in zip(
+            confirmed["effect_checks"], confirmed["effect_checks"][1:]
+        )
+    )
 
 
 def test_reset_invalidates_runs_and_reseeds_fresh_files(client: TestClient) -> None:
