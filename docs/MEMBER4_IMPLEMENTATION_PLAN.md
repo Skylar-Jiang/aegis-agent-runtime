@@ -1,5 +1,10 @@
 # Member 4 实施与界面计划
 
+本文件保留已完成的 Member 4 实施方案，供团队理解现有演示，不是全局开发规则。
+自 2026-10-05 起 `aegis-intent-dev` 为四人共同开发基线；本 feature 已在 PR 前
+merge 最新上游 `56992aa`。通过 PR 提交至 `aegis-intent-dev`，不直接 push/self-merge
+共享基线。现行交付与 fixture/mock 边界见 `DEMO_4_ACCEPTANCE.md`。
+
 目的：帮助通信运维演示操作者运行合成任务，观察动作来源与检测证据，核实处置
 是否在副作用前生效。主要操作是选择 Case 并运行，次要操作是可信目标变更确认、
 执行重新复核的纠偏、拒绝/终止、reset。

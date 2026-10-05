@@ -2,9 +2,13 @@
 
 审计日期：2026-10-02。仓库：Skylar-Jiang/aegis-agent-runtime。
 审计起点：`d60f443996a6e8e11927ba8fe018eeea0813ecd3`，远端
-`aegis-intent-dev`；独立 checkout `D:\aegis-intent-member4`，feature 分支
-`feature/member4-telecom-intent-demo`（用户要求去掉 codex 前缀，保留同一起点与提交）。
+`aegis-intent-dev`；独立 checkout，feature 分支 `feature/member4-telecom-intent-demo`。
 本报告写作前没有修改生产代码。
+
+本报告保留最初基于 `d60f443` 的审计事实，不是同步后重新审计的结论。自
+2026-10-05 起 `aegis-intent-dev` 为四人共同开发基线；当前 feature 已在 PR 前
+merge 最新上游 `56992aa`，无冲突。当前协作方式为通过 PR 提交至 `aegis-intent-dev`，
+不直接 push/self-merge 共享基线；现行交付状态见 `DEMO_4_ACCEPTANCE.md`。
 
 ## 审计方法和材料边界
 
@@ -74,7 +78,9 @@ reset 清理整个 demo 状态和计数，但不接触用户工作区或 Runtime
 
 ## 实施顺序与成功标准
 
-1. 审计文档和 AGENTS → 原始基线检查有可追溯结果，生产代码无修改。
+以下为已完成的 Member 4 开发阶段记录，不是约束其他成员的全局规则。
+
+1. 审计文档和专属 AGENTS（2026-10-05 已删除）→ 原始基线检查有可追溯结果，生产代码无修改。
 2. schema、fixture、后端 adapter → pytest 检查三攻击/两对照、暂停后拒绝执行、
    真实文件/Memory/端点 effect、reset 和失效请求。
 3. React Intent 页面 → 接现有后端 API；加载/错误/运行/暂停/恢复都有真实状态；
@@ -83,7 +89,7 @@ reset 清理整个 demo 状态和计数，但不接触用户工作区或 Runtime
    EffectCheck；启动/reset/replay/干净环境可复现，形成 DEMO_4_ACCEPTANCE.md。
 
 每阶段独立提交；提交前执行后端相关测试、前后端类型检查、前端测试与构建。
-最终推送独立 feature 分支，不自行合并 PR。
+最终推送独立 feature 分支，通过 PR 提交至 `aegis-intent-dev`，不直接 push/self-merge 共享基线。
 
 ## 验证结果
 

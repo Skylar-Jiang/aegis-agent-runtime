@@ -1,9 +1,15 @@
 # Member 4：通信运维 Intent 演示验收
 
-工作目录：`D:\aegis-intent-member4`。分支：`feature/member4-telecom-intent-demo`，
-从 `aegis-intent-dev` 的 `d60f443996a6e8e11927ba8fe018eeea0813ecd3` 创建。
+分支：`feature/member4-telecom-intent-demo`。最初开发从 `aegis-intent-dev` 的
+`d60f443996a6e8e11927ba8fe018eeea0813ecd3` 创建；这是原始开发和验收的历史起点。
 审计先于代码提交，详见 [gap analysis](MEMBER4_GAP_ANALYSIS.md)。附件中的规划、
 字段表和“已有功能”描述没有被当作实现证据。
+
+自 2026-10-05 起，`aegis-intent-dev` 为 Aegis-Intent 四人共同开发基线。本 feature
+已在 PR 前通过 merge 同步最新 `origin/aegis-intent-dev` 的 `56992aa`（merge commit
+`83a6018`）；上游实际变更仅删除根目录空 `package-lock.json`，合并无冲突，未 rebase。
+通过 PR 提交至 `aegis-intent-dev`，不直接 push/self-merge 共享基线。Member 4 专属
+根目录 `AGENTS.md` 已删除，不将成员职责约束带入团队全局规则。
 
 本交付使用合成设备、工单、日志、知识库与 Memory，真实运行本地 Core Gateway、
 文件/Memory 适配器和模拟端点。规划器和 Intent 判定由受版本控制的 fixture/mock
@@ -16,7 +22,7 @@ effect 核对流程；不证明真实语义检测器的准确率，也不是团�
 复用项目 lock 和已有 Playwright/Chromium；不新增大型依赖，不需要 LLM key。
 
 ```powershell
-Set-Location D:\aegis-intent-member4
+# 在仓库根目录执行
 & scripts/setup-intent-demo.ps1
 .\START_INTENT_DEMO.bat
 ```
@@ -98,6 +104,12 @@ JSON 可在页面展开。BLOCK/CLARIFY/REPLAN 的最后一个 effect 是 UNCHAN
 
 ## 验证记录与范围
 
+归档证据中的本机 checkout/workspace 路径已于 2026-10-05 以 `<repo>` 替换，
+并更新证据文件自身 SHA-256；原证据摘要一并保留。仅脱敏路径元数据，任务输入、
+决策、事件、EffectCheck、文件/payload digest 和历史测试结论不变。归档 JSON
+是历史证据，不用其已脱敏的 workspace 字段作为可运行目录。PR 前同步与回归
+记录见 [pre-PR checks](evidence/member4/pre-pr-checks.md)。
+
 逐阶段提交前的测试记录在 [baseline](evidence/member4/baseline-checks.md)、
 [backend](evidence/member4/phase2-checks.md)、[frontend](evidence/member4/phase3-checks.md)
 和 [final checks](evidence/member4/phase4-checks.md)。最终实测结果在 final checks 中，
@@ -146,7 +158,7 @@ fake crypto，不是签名实验结果。公共接口正式接入及检测器指
 完整仓库相对路径清单在 [changed-files.txt](evidence/member4/changed-files.txt)。
 主要分组：
 
-- 审计/规则/材料：AGENTS.md、docs/MEMBER4_*、docs/reference/*。
+- 审计/材料：docs/MEMBER4_*、docs/reference/*；历史专属 AGENTS.md 已在 PR 前删除。
 - Schema：backend/src/ra_agent/intent_demo/contracts.py、docs/contracts/*、TS 生成物及导出脚本。
 - 数据/后端：fixtures/telecom/*、intent_demo/service.py、api/intent_demo.py；main.py 仅注册 demo router。
 - 页面：App 路由、Layout 导航、api/intentDemo.ts、pages/IntentPage*、features/intent/*。
@@ -154,5 +166,5 @@ fake crypto，不是签名实验结果。公共接口正式接入及检测器指
 - 验收：本文及 docs/evidence/member4/*。
 
 前三阶段提交：`3040117` 审计、`935c130` 合成回放/端点、`f8ffa72` 页面。最后阶段
-为自动化回归、脚本和验收文档单独提交。仅推送 feature 分支，不修改共享分支，
-不自行合并 PR。
+为自动化回归、脚本和验收文档单独提交（`53f5828`）。当前仅推送 feature 分支，
+通过 PR 提交至 `aegis-intent-dev`，不直接 push/self-merge 共享基线。
