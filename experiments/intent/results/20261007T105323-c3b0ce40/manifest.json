@@ -1,0 +1,52 @@
+{
+  "bundle_version": "intent-evidence-v1",
+  "created_at": "2026-10-07T10:53:24.309074+00:00",
+  "code_commit": "ebf4fb52547a2689f7ea72eb6fba54d57a9a04d1",
+  "working_tree": "?? experiments/intent/\n",
+  "environment": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]"
+  },
+  "config": {
+    "threshold": 3,
+    "window": 8,
+    "seed": 0,
+    "modes": [
+      "runtime_boundary",
+      "reference_single",
+      "reference_full",
+      "reference_no_sequence",
+      "reference_no_source",
+      "reference_no_correction"
+    ],
+    "adapter": null,
+    "splits": [
+      "dev",
+      "validation",
+      "test"
+    ]
+  },
+  "source_checksums": {
+    "experiments\\intent\\dataset.py": "97af961f1e8f894ca9f13b2bef710ef5e5907b1287da757be4840108b65b10d0",
+    "experiments\\intent\\evaluate.py": "edeac7b2619496106577f4571c18b49613fb45d9dec7b153635b61642c011637",
+    "experiments\\intent\\evidence.py": "714fe5926e5b3eae1ddb84362a06bb3fe6df3557eb34574a7569d188393a9657",
+    "experiments\\intent\\freeze.py": "1d2fc60a607ea8de5a48b827059af0f9e820aac59f659d38c5bc78e1801824b7",
+    "experiments\\intent\\resources.py": "7af0aba84b4fe5c039e2714b1903bb0b3b634760f7dc3b6703fcc56586163d70",
+    "experiments\\intent\\test_pilot.py": "3bbca74ba553591a7aa727b0d93dfe44046faf851a5ce775f20740ae10edd679",
+    "experiments\\intent\\__init__.py": "1269f955e66cd2962be0ebc2d344bc3c9ae36f8b952c44ab0942db39d90cd268",
+    "backend\\src\\ra_agent\\security\\intent_boundary.py": "b60ba8dda12cd047c1bba9da6a65fcc144caef5225452a0f0ec1549b0da9aa6f",
+    "backend\\src\\ra_agent\\tools\\path_resolver.py": "18fb66165b1b3cf1beaaedfac24152bb8a49358ca2972566651349eac7bf67e2",
+    "experiments\\intent\\data\\pilot.jsonl": "c92f124b67dc5e3fc0d8f30bbe4e0115b18d701eb4aba1a1f72fee551d06ff8e"
+  },
+  "status": "synthetic_pilot_pending_independent_review",
+  "limitations": [
+    "reference detectors, not production I3",
+    "scripted continuation, not production I4",
+    "planned-step metrics include unreachable steps; reached execution is separately recorded",
+    "gold/manual contract only; automatic extraction not implemented",
+    "harness file effects, not full ToolGateway end-to-end",
+    "no model or remote calls",
+    "no frontend/video proof",
+    "no full-system memory measurement"
+  ]
+}
