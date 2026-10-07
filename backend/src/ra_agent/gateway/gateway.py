@@ -32,6 +32,7 @@ from ra_agent.contracts.core_v1 import (
 from ra_agent.core.ids import new_id
 from ra_agent.core.offload import offload
 from ra_agent.execution._cancellation import complete_before_cancelling
+from ra_agent.intent import DecisionResult, IntentDecisionType, IntentEnforcer
 from ra_agent.permissions import PermissionResolver
 
 from .authority import PermissionAuthority
@@ -71,12 +72,16 @@ class ToolGateway:
         | None = None,
         admission_guard: Callable[[], AbstractAsyncContextManager[None]] | None = None,
         task_limit_provider: Callable[[ToolCallEnvelope], Awaitable[dict[str, Any]]] | None = None,
+        intent_enforcer: IntentEnforcer | None = None,
+        intent_effect_recorder: Callable[..., Awaitable[Any]] | None = None,
     ) -> None:
         self._store = store if store is not None else CoreStateStore()
         self.request_validator = request_validator
         self.permission_provider = permission_provider
         self.admission_guard = admission_guard
         self.task_limit_provider = task_limit_provider
+        self.intent_enforcer = intent_enforcer
+        self.intent_effect_recorder = intent_effect_recorder
         self.contracts = contracts
         self.resolver = resolver
         self.event_store = event_store or InMemoryEventStore()
@@ -140,6 +145,7 @@ class ToolGateway:
                         or (
                             state.get("evaluation_revision") == state["revision"]
                             and self.permission_provider is None
+                            and self.intent_enforcer is None
                         )
                     )
                 ):
@@ -350,6 +356,20 @@ class ToolGateway:
                 confirmation_id=confirmation_id,
             )
 
+        intent_result = await self._evaluate_intent(
+            envelope,
+            active,
+            effective,
+            confirmation_satisfied=confirmation_satisfied,
+            confirmation_id=confirmation_id,
+            record_events=record_events,
+            record_result=record_result,
+        )
+        if intent_result is not None:
+            if isinstance(intent_result, GatewayEvaluationResult):
+                return intent_result
+            confirmation_satisfied, confirmation_id = intent_result
+
         if effective.requires_confirmation:
             if not confirmation_satisfied:
                 existing = await self.confirmations.get_for_request(envelope.request_id)
@@ -393,6 +413,173 @@ class ToolGateway:
             GatewayDecisionType.ALLOW,
             GatewayReasonCode.ALLOWED,
             confirmation_id=confirmation_id,
+        )
+
+    async def _evaluate_intent(
+        self,
+        envelope: ToolCallEnvelope,
+        active: ContractRecord,
+        effective: EffectivePermission,
+        *,
+        confirmation_satisfied: bool,
+        confirmation_id: str | None,
+        record_events: bool,
+        record_result: Callable[..., Awaitable[GatewayEvaluationResult]],
+    ) -> GatewayEvaluationResult | tuple[bool, str | None] | None:
+        if self.intent_enforcer is None:
+            return None
+        recent_event_records = await self.event_store.list_task_events(envelope.task_id)
+        recent_events: list[dict[str, object]] = [
+            {
+                "type": item.get("type"),
+                "state": item.get("state"),
+                "actor": item.get("actor"),
+                "source_ref": item.get("source_ref"),
+                "request_id": item.get("request_id"),
+                "occurred_at": item.get("occurred_at"),
+                "reason_code": item.get("reason_code"),
+                }
+                for item in recent_event_records[-16:]
+            ]
+        decision = await self.intent_enforcer.evaluate(
+            envelope,
+            trusted_state={
+                "contract_id": active.ref.contract_id,
+                "contract_version": active.ref.version,
+                "contract_digest": active.ref.digest,
+                "policy_version": active.contract.policy_version,
+            },
+            recent_events=recent_events,
+        )
+        if decision is None:
+            return None
+
+        # A detector result is useful only inside its validity window. Expired output
+        # is treated as unavailable rather than silently reused.
+        if decision.expires_at <= datetime.now(UTC):
+            decision = DecisionResult(
+                decision_id=decision.decision_id,
+                decision=IntentDecisionType.BLOCK,
+                risk_score=1.0,
+                trigger_dimensions=[*decision.trigger_dimensions, "decision_expired"],
+                evidence_refs=decision.evidence_refs,
+                reason_code="INTENT_CHECK_UNAVAILABLE",
+                policy_version=decision.policy_version,
+                detector_version=decision.detector_version,
+                expires_at=datetime.now(UTC),
+            )
+
+        decision_digest = await self._record_object(
+            envelope,
+            object_type="DecisionResult",
+            payload=decision.model_dump(mode="json"),
+        )
+        refs = self._dedupe_refs(
+            *decision.evidence_refs,
+            decision_digest,
+        )
+
+        def save_intent_decision(transaction: CoreStateTransaction) -> None:
+            state = transaction.get("requests", envelope.request_id)
+            if state is None:
+                raise GatewayError("Permission context is unavailable for request_id")
+            state["intent_decision"] = decision.model_dump(mode="json")
+            state["intent_decision_digest"] = decision_digest
+            transaction.put("requests", envelope.request_id, state)
+
+        await self._store.run(save_intent_decision)
+
+        if record_events:
+            await self._append_event(
+                envelope,
+                event_type=(
+                    "INTENT_CHECK_PASSED"
+                    if decision.decision is IntentDecisionType.CONTINUE
+                    else (
+                        "INTENT_SAFE_TERMINATED"
+                        if decision.decision is IntentDecisionType.SAFE_TERMINATE
+                        else "INTENT_CHECK_TRIGGERED"
+                    )
+                ),
+                state=decision.decision.value,
+                actor="intent-detector",
+                source_ref=f"intent-decision:{decision.decision_id}",
+                decision=None,
+                reason_code=None,
+                object_digest=decision_digest,
+                result_digest=None,
+                evidence_refs=self._event_refs(envelope, decision_digest) + refs,
+            )
+
+        version_overrides = {
+            "intent_policy": decision.policy_version,
+            "intent_detector": decision.detector_version,
+        }
+        if decision.decision is IntentDecisionType.CONTINUE:
+            return None
+
+        if decision.decision is IntentDecisionType.REQUEST_CONFIRMATION:
+            existing = await self.confirmations.get_for_request(envelope.request_id)
+            if existing is not None and existing.status is ConfirmationStatus.CONFIRMED:
+                confirmation_id = existing.confirmation_id
+                await self._validated_confirmation(envelope, active, confirmation_id)
+                return True, confirmation_id
+            if existing is not None and existing.status is ConfirmationStatus.REJECTED:
+                return await record_result(
+                    envelope,
+                    effective,
+                    GatewayDecisionType.DENY,
+                    GatewayReasonCode.USER_DENY,
+                    confirmation_id=existing.confirmation_id,
+                    extra_evidence_refs=refs,
+                    version_overrides=version_overrides,
+                )
+            if confirmation_satisfied and confirmation_id is not None:
+                await self._validated_confirmation(envelope, active, confirmation_id)
+                return True, confirmation_id
+            record = await self.confirmations.request_confirmation(
+                request_id=envelope.request_id,
+                task_id=envelope.task_id,
+                contract_ref=active.ref,
+                policy_version=active.contract.policy_version,
+            )
+            return await record_result(
+                envelope,
+                effective,
+                GatewayDecisionType.REQUIRE_CONFIRMATION,
+                GatewayReasonCode.INTENT_CONFIRMATION_REQUIRED,
+                confirmation_id=record.confirmation_id,
+                extra_evidence_refs=refs,
+                version_overrides=version_overrides,
+            )
+
+        if decision.decision is IntentDecisionType.REPLAN:
+            return await record_result(
+                envelope,
+                effective,
+                GatewayDecisionType.REQUIRE_REPLAN,
+                GatewayReasonCode.INTENT_REPLAN_REQUIRED,
+                confirmation_id=confirmation_id,
+                extra_evidence_refs=refs,
+                version_overrides=version_overrides,
+            )
+
+        reason_code = {
+            "INTENT_CHECK_TIMEOUT": GatewayReasonCode.INTENT_CHECK_TIMEOUT,
+            "INTENT_CHECK_UNAVAILABLE": GatewayReasonCode.INTENT_CHECK_UNAVAILABLE,
+            "INTENT_CONTRACT_VERSION_MISMATCH": (
+                GatewayReasonCode.INTENT_CONTRACT_VERSION_MISMATCH
+            ),
+            "INTENT_SAFE_TERMINATE": GatewayReasonCode.INTENT_SAFE_TERMINATE,
+        }.get(decision.reason_code, GatewayReasonCode.INTENT_DRIFT)
+        return await record_result(
+            envelope,
+            effective,
+            GatewayDecisionType.DENY,
+            reason_code,
+            confirmation_id=confirmation_id,
+            extra_evidence_refs=refs,
+            version_overrides=version_overrides,
         )
 
     async def _validated_confirmation(
@@ -660,6 +847,16 @@ class ToolGateway:
                     "result": result,
                 },
             )
+            await self._record_intent_effect(
+                snapshot.envelope,
+                status="APPLIED",
+                after_digest=result_digest,
+                side_effect_ref=(
+                    result.get("side_effect_ref")
+                    if isinstance(result, dict)
+                    else None
+                ),
+            )
             await self._append_event(
                 snapshot.envelope,
                 event_type="EXECUTION_FINISHED",
@@ -698,6 +895,12 @@ class ToolGateway:
 
             unknown = await self._store.run(preserve_outcome)
             if unknown:
+                await self._record_intent_effect(
+                    snapshot.envelope,
+                    status="UNKNOWN",
+                    after_digest=None,
+                    side_effect_ref=None,
+                )
                 await self._append_event(
                     snapshot.envelope,
                     event_type="EXECUTION_FAILED",
@@ -711,6 +914,38 @@ class ToolGateway:
                     evidence_refs=self._event_refs(snapshot.envelope, tool_digest),
                 )
             raise
+
+    async def _record_intent_effect(
+        self,
+        envelope: ToolCallEnvelope,
+        *,
+        status: str,
+        after_digest: str | None,
+        side_effect_ref: str | None,
+    ) -> None:
+        """Best-effort effect evidence hook for the Intent branch.
+
+        Effect recording must never turn an already completed external action into
+        an UNKNOWN gateway result.  The Core event/audit path remains authoritative
+        if the optional branch recorder is unavailable.
+        """
+        if self.intent_effect_recorder is None:
+            return
+        try:
+            state = await self._store.get("requests", envelope.request_id)
+            if state is None or state.get("intent_decision") is None:
+                return
+            await self.intent_effect_recorder(
+                request_id=envelope.request_id,
+                tool=envelope.tool,
+                normalized_target=envelope.resource,
+                before_digest=None,
+                after_digest=after_digest,
+                side_effect_ref=side_effect_ref,
+                status=status,
+            )
+        except Exception:
+            return
 
     async def replan(
         self,
@@ -810,6 +1045,8 @@ class ToolGateway:
         permission_revision: int | None = None,
         record_events: bool = True,
         authority_versions: dict[str, int | str] | None = None,
+        extra_evidence_refs: list[str] | None = None,
+        version_overrides: dict[str, int | str] | None = None,
     ) -> GatewayEvaluationResult:
         contract = await self.contracts.get_contract_version(
             envelope.contract_ref.contract_id,
@@ -826,10 +1063,16 @@ class ToolGateway:
         if authority_versions:
             versions["contract_policy"] = versions.get("policy", "unavailable")
             versions.update(authority_versions)
+        if version_overrides:
+            versions.update(version_overrides)
+        evidence_refs = self._dedupe_refs(
+            envelope.contract_ref.digest,
+            *(extra_evidence_refs or []),
+        )
         decision = GatewayDecision(
             decision=decision_type,
             reason_code=reason_code,
-            evidence_refs=[envelope.contract_ref.digest],
+            evidence_refs=evidence_refs,
             versions=versions,
             confirmation_id=confirmation_id,
         )
@@ -853,7 +1096,10 @@ class ToolGateway:
                     **decision.model_dump(mode="json"),
                 },
             )
-            refs = self._event_refs(envelope, tool_digest, decision_digest)
+            refs = self._dedupe_refs(
+                *self._event_refs(envelope, tool_digest, decision_digest),
+                *(extra_evidence_refs or []),
+            )
             if permission_evaluated:
                 await self._append_event(
                     envelope,
@@ -918,14 +1164,18 @@ class ToolGateway:
         )
 
     @staticmethod
-    def _event_refs(envelope: ToolCallEnvelope, *digests: str | None) -> list[str]:
+    def _dedupe_refs(*refs: str | None) -> list[str]:
         return list(
             dict.fromkeys(
-                [
-                    envelope.contract_ref.digest,
-                    *(digest for digest in digests if digest is not None),
-                ]
+                ref for ref in refs if ref is not None
             )
+        )
+
+    @staticmethod
+    def _event_refs(envelope: ToolCallEnvelope, *digests: str | None) -> list[str]:
+        return ToolGateway._dedupe_refs(
+            envelope.contract_ref.digest,
+            *digests,
         )
 
     async def _append_event(

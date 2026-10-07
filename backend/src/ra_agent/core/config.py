@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     conversation_recent_messages: int = Field(default=12, gt=0)
     conversation_summary_characters: int = Field(default=4000, gt=0)
     enable_demo_fixtures: bool = False
+    intent_baseline_enabled: bool = True
+    intent_detection_timeout_seconds: float = Field(default=1.0, gt=0)
 
     # Core v1 cryptographic evidence stack. Paths are deployment configuration,
     # never accepted from tool calls or Agent-generated payloads.

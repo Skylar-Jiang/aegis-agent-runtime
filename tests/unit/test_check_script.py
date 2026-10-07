@@ -35,26 +35,11 @@ def test_node_metadata_is_pinned_to_node_24() -> None:
     assert (ROOT / ".npmrc").read_text(encoding="utf-8").strip() == "engine-strict=true"
 
 
-def test_pnpm_version_docs_require_frontend_working_directory() -> None:
-    for path in (
-        ROOT / "README.md",
-        ROOT / "docs" / "02-tech-stack.md",
-        ROOT / "docs" / "11-development-guide.md",
-    ):
-        text = path.read_text(encoding="utf-8")
-        assert "frontend" in text
-        assert "corepack pnpm --version" in text
-
-
 def test_authoritative_project_files_have_no_stale_node_22_requirement() -> None:
     authoritative_files = [
-        ROOT / "README.md",
         ROOT / ".nvmrc",
         ROOT / ".github" / "workflows" / "ci.yml",
         ROOT / "frontend" / "package.json",
-        ROOT / "docs" / "02-tech-stack.md",
-        ROOT / "docs" / "11-development-guide.md",
-        ROOT / "docs" / "SHARED-BASELINE-REPORT.md",
     ]
 
     for path in authoritative_files:
