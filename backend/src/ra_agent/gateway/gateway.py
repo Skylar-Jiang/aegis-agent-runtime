@@ -29,10 +29,12 @@ from ra_agent.contracts.core_v1 import (
     TaskContractUpdateRequest,
     ToolCallEnvelope,
 )
+from ra_agent.contracts.intent import IntentAssessment
 from ra_agent.core.ids import new_id
 from ra_agent.core.offload import offload
 from ra_agent.execution._cancellation import complete_before_cancelling
 from ra_agent.permissions import PermissionResolver
+from ra_agent.security.intent import inspect_intent
 
 from .authority import PermissionAuthority
 from .fakes import DryRunToolExecutor, FakeSignatureProvider, InMemoryEventStore
@@ -71,12 +73,14 @@ class ToolGateway:
         | None = None,
         admission_guard: Callable[[], AbstractAsyncContextManager[None]] | None = None,
         task_limit_provider: Callable[[ToolCallEnvelope], Awaitable[dict[str, Any]]] | None = None,
+        intent_guard: Any | None = None,
     ) -> None:
         self._store = store if store is not None else CoreStateStore()
         self.request_validator = request_validator
         self.permission_provider = permission_provider
         self.admission_guard = admission_guard
         self.task_limit_provider = task_limit_provider
+        self.intent_guard = intent_guard
         self.contracts = contracts
         self.resolver = resolver
         self.event_store = event_store or InMemoryEventStore()
@@ -125,6 +129,11 @@ class ToolGateway:
         envelope = envelope.model_copy(deep=True)
         if self.request_validator is not None:
             self.request_validator(envelope)
+        stopped = await self._store.get("intent_tasks", envelope.task_id)
+        if stopped and stopped.get("status") == "STOPPED":
+            raise GatewayError(
+                "INTENT_STOPPED: task was safely stopped; trusted recovery confirmation required"
+            )
         fingerprint = self._fingerprint(envelope)
 
         def register(transaction: CoreStateTransaction) -> GatewayEvaluationResult | None:
@@ -140,6 +149,7 @@ class ToolGateway:
                         or (
                             state.get("evaluation_revision") == state["revision"]
                             and self.permission_provider is None
+                            and self.intent_guard is None
                         )
                     )
                 ):
@@ -203,6 +213,11 @@ class ToolGateway:
         confirmation_id: str | None,
         record_events: bool = True,
     ) -> GatewayEvaluationResult:
+        intent_state = await self._store.get("intent_tasks", envelope.task_id)
+        if intent_state and intent_state.get("status") == "STOPPED":
+            raise GatewayError(
+                "INTENT_STOPPED: task was safely stopped; create a new approved task"
+            )
         authority = None
         authority_versions: dict[str, int | str] = {}
         if self.permission_provider is not None:
@@ -349,6 +364,34 @@ class ToolGateway:
                 effective.conflict_code,
                 confirmation_id=confirmation_id,
             )
+
+        intent = None
+        if self.intent_guard is not None:
+            try:
+                intent = await inspect_intent(self.intent_guard, envelope, active.contract)
+            except Exception as exc:
+                intent = IntentAssessment(
+                    risk_score=1,
+                    trigger_dimensions=["intent_check_unavailable"],
+                    evidence_refs=[envelope.contract_ref.digest],
+                    policy_version="unavailable",
+                    contract_version=active.contract.version,
+                    contract_digest=active.ref.digest,
+                    step_index=0,
+                    disposition="SAFE_STOP",
+                    enabled=True,
+                    reason=f"detector unavailable: {type(exc).__name__}",
+                )
+            if intent.enabled:
+                record_result = partial(record_result, intent=intent)
+                if intent.disposition == "SAFE_STOP":
+                    return await record_result(
+                        envelope,
+                        effective,
+                        GatewayDecisionType.DENY,
+                        GatewayReasonCode.INTENT_DEVIATION,
+                        confirmation_id=confirmation_id,
+                    )
 
         if effective.requires_confirmation:
             if not confirmation_satisfied:
@@ -810,6 +853,7 @@ class ToolGateway:
         permission_revision: int | None = None,
         record_events: bool = True,
         authority_versions: dict[str, int | str] | None = None,
+        intent: IntentAssessment | None = None,
     ) -> GatewayEvaluationResult:
         contract = await self.contracts.get_contract_version(
             envelope.contract_ref.contract_id,
@@ -826,6 +870,8 @@ class ToolGateway:
         if authority_versions:
             versions["contract_policy"] = versions.get("policy", "unavailable")
             versions.update(authority_versions)
+        if intent is not None:
+            versions.update(intent_policy=intent.policy_version, detector=intent.detector_version)
         decision = GatewayDecision(
             decision=decision_type,
             reason_code=reason_code,
@@ -836,6 +882,7 @@ class ToolGateway:
         result = GatewayEvaluationResult(
             decision=decision,
             effective_permission=effective,
+            intent=intent,
         )
 
         if record_events:
@@ -851,9 +898,38 @@ class ToolGateway:
                     "task_id": envelope.task_id,
                     "request_id": envelope.request_id,
                     **decision.model_dump(mode="json"),
+                    **({"intent": intent.model_dump(mode="json")} if intent is not None else {}),
                 },
             )
             refs = self._event_refs(envelope, tool_digest, decision_digest)
+            if intent is not None:
+                await self._append_event(
+                    envelope,
+                    event_type="INTENT_EVALUATED",
+                    state=intent.disposition,
+                    actor="intent-detector",
+                    source_ref=f"intent:{envelope.request_id}",
+                    decision=decision_type,
+                    reason_code=reason_code,
+                    object_digest=tool_digest,
+                    result_digest=decision_digest,
+                    evidence_refs=refs,
+                    intent=intent,
+                )
+                if intent.disposition == "SAFE_STOP":
+                    await self._append_event(
+                        envelope,
+                        event_type="TASK_SAFE_STOPPED",
+                        state="CANCELLED",
+                        actor="tool-gateway",
+                        source_ref=f"intent:{envelope.request_id}",
+                        decision=GatewayDecisionType.DENY,
+                        reason_code=GatewayReasonCode.INTENT_STOPPED,
+                        object_digest=tool_digest,
+                        result_digest=decision_digest,
+                        evidence_refs=refs,
+                        intent=intent,
+                    )
             if permission_evaluated:
                 await self._append_event(
                     envelope,
@@ -896,6 +972,15 @@ class ToolGateway:
             state["evaluation_revision"] = permission_revision
             state["confirmation_id"] = confirmation_id
             transaction.put("requests", envelope.request_id, state)
+            if intent is not None and intent.disposition == "SAFE_STOP":
+                stopped = transaction.get("intent_tasks", envelope.task_id) or {}
+                stopped.update(
+                    status="STOPPED", request_id=envelope.request_id, reason=intent.reason
+                )
+                transaction.put("intent_tasks", envelope.task_id, stopped)
+                lifecycle = transaction.get("task_lifecycle", envelope.task_id) or {}
+                lifecycle.update(status="CANCELLED", intent_reason=intent.reason)
+                transaction.put("task_lifecycle", envelope.task_id, lifecycle)
 
         await self._store.run(save_evaluation)
         return result
@@ -941,6 +1026,7 @@ class ToolGateway:
         object_digest: str | None,
         result_digest: str | None,
         evidence_refs: list[str],
+        intent: IntentAssessment | None = None,
     ) -> dict[str, Any]:
         get_last_event_id = getattr(self.event_store, "get_last_event_id", None)
         if get_last_event_id is not None:
@@ -964,5 +1050,6 @@ class ToolGateway:
                 "request_id": envelope.request_id,
                 "reason_code": reason_code.value if reason_code is not None else None,
                 "evidence_refs": evidence_refs,
+                **({"intent": intent.model_dump(mode="json")} if intent is not None else {}),
             }
         )

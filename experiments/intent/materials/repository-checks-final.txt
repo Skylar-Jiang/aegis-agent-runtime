@@ -1,0 +1,391 @@
+All checks passed!
+0 errors, 0 warnings, 0 informations
+WARNING: there is a new pyright version available (v1.1.411 -> v1.1.414).
+Please install the new version or set PYRIGHT_PYTHON_FORCE_VERSION to `latest`
+
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-8.4.2, pluggy-1.6.0
+rootdir: C:\Users\Alghy\Desktop\Aegis��\aegis-agent-runtime
+configfile: pytest.ini
+plugins: anyio-4.14.1, langsmith-0.10.1, asyncio-1.4.0, cov-7.1.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1265 items
+
+tests\contract\test_contracts.py ............                            [  0%]
+tests\contract\test_core_crypto_interfaces.py .........                  [  1%]
+tests\contract\test_core_event_artifacts.py ..                           [  1%]
+tests\contract\test_core_v1_contracts.py ....                            [  2%]
+tests\contract\test_enums.py ...                                         [  2%]
+tests\contract\test_shared_baseline_contracts.py ..                      [  2%]
+tests\contract\test_v04_contracts.py ......                              [  3%]
+tests\e2e\test_demo_scenarios.py ......                                  [  3%]
+tests\e2e\test_live_runtime.py .........                                 [  4%]
+tests\integration\test_agent_runtime.py ................                 [  5%]
+tests\integration\test_approval_api_boundary.py ....                     [  5%]
+tests\integration\test_core_authority_reload.py ..                       [  5%]
+tests\integration\test_core_crypto_event_integration.py ................ [  7%]
+.                                                                        [  7%]
+tests\integration\test_core_crypto_runtime.py ....                       [  7%]
+tests\integration\test_core_event_error_mapping.py ....                  [  7%]
+tests\integration\test_core_http_hardening.py ........                   [  8%]
+tests\integration\test_core_pr2_api.py ...                               [  8%]
+tests\integration\test_core_remaining_controls.py ..........             [  9%]
+tests\integration\test_core_runtime_bridge.py .................          [ 10%]
+tests\integration\test_core_scan_regressions.py ..............           [ 12%]
+tests\integration\test_core_task_history.py .                            [ 12%]
+tests\integration\test_core_v1_api.py ....                               [ 12%]
+tests\integration\test_core_views_regressions.py ...                     [ 12%]
+tests\integration\test_final_workflow_runner.py .                        [ 12%]
+tests\integration\test_health.py .                                       [ 12%]
+tests\integration\test_intent_recovery.py ......                         [ 13%]
+tests\integration\test_mock_runtime.py ....                              [ 13%]
+tests\integration\test_runtime_approval.py ............                  [ 14%]
+tests\integration\test_runtime_file_lifecycle.py ................        [ 15%]
+tests\integration\test_runtime_low_and_block.py ........................ [ 17%]
+..                                                                       [ 17%]
+tests\integration\test_runtime_sandbox.py ...........................    [ 20%]
+tests\integration\test_task_graph_api.py ..............                  [ 21%]
+tests\integration\test_task_runner_api.py ........                       [ 21%]
+tests\integration\test_v2_graph_benchmark_runner.py .                    [ 21%]
+tests\integration\test_v2_graph_runtime.py ....                          [ 22%]
+tests\integration\test_v5_capability_evidence_runner.py .                [ 22%]
+tests\integration\test_v6_real_agent_runner.py .                         [ 22%]
+tests\integration\test_workbench_api.py .......                          [ 22%]
+tests\rollback\test_selective_rollback_integration.py .....              [ 23%]
+tests\rollback\test_v2_rollback_benchmark.py ...                         [ 23%]
+tests\security\test_adaptive_approval.py .....                           [ 23%]
+tests\security\test_data_egress.py ..                                    [ 24%]
+tests\security\test_deep_checker.py ...........................          [ 26%]
+tests\security\test_intent_boundary.py ...                               [ 26%]
+tests\security\test_policy_and_permissions.py .............              [ 27%]
+tests\security\test_pre_post_check.py ..........................         [ 29%]
+tests\security\test_risk_classifier.py ..................                [ 30%]
+tests\security\test_rule_engine.py .....                                 [ 31%]
+tests\security\test_runtime_security_integration.py ..                   [ 31%]
+tests\security\test_security_provider.py ..                              [ 31%]
+tests\security\test_v2_safety_fixture.py ....                            [ 31%]
+tests\security\test_v2_security_experiment.py ..                         [ 32%]
+tests\security\test_v2_security_materials.py .                           [ 32%]
+tests\unit\agent\test_deepseek_planner.py ...........                    [ 33%]
+tests\unit\agent\test_final_answer_protocol.py ..                        [ 33%]
+tests\unit\api\test_complete_audit_history.py .........                  [ 33%]
+tests\unit\api\test_experiments_provider.py ...                          [ 34%]
+tests\unit\api\test_streams.py ..                                        [ 34%]
+tests\unit\core\test_core_adapter_limits.py ..                           [ 34%]
+tests\unit\core\test_core_contract_service.py .                          [ 34%]
+tests\unit\core\test_core_permission_resolver.py .....                   [ 34%]
+tests\unit\core\test_core_pr2_gateway.py .....                           [ 35%]
+tests\unit\core\test_core_tool_gateway.py ....                           [ 35%]
+tests\unit\core\test_gateway_hardening.py ...........................    [ 37%]
+tests\unit\core\test_intent_gateway.py .........                         [ 38%]
+tests\unit\core\test_intent_policy.py ....                               [ 38%]
+tests\unit\core\test_runtime_container.py ............                   [ 39%]
+tests\unit\core\test_v2_provider_registry.py .                           [ 39%]
+tests\unit\crypto\test_cli.py ...                                        [ 40%]
+tests\unit\crypto\test_core_audit_integrity.py ........................  [ 41%]
+tests\unit\crypto\test_evidence_capacity.py ...............              [ 43%]
+tests\unit\crypto\test_primitives.py ...................                 [ 44%]
+tests\unit\database\test_persistent_approval.py ...................      [ 46%]
+tests\unit\database\test_persistent_audit.py .......                     [ 46%]
+tests\unit\database\test_persistent_registry.py ............             [ 47%]
+tests\unit\database\test_task_store.py ..                                [ 47%]
+tests\unit\database\test_workbench_concurrency.py ....                   [ 48%]
+tests\unit\events\test_core_event_pages.py .....                         [ 48%]
+tests\unit\events\test_event_store.py ........................           [ 50%]
+tests\unit\events\test_sqlite_event_store.py ........................... [ 52%]
+...                                                                      [ 52%]
+tests\unit\execution\test_artifacts.py ................................. [ 55%]
+.......                                                                  [ 55%]
+tests\unit\execution\test_cleanup_cancellation.py ....                   [ 56%]
+tests\unit\execution\test_cleanup_coordinator.py ..........              [ 57%]
+tests\unit\execution\test_download_manager.py .......                    [ 57%]
+tests\unit\execution\test_effect_integration.py ......                   [ 58%]
+tests\unit\execution\test_effect_manager.py ....................         [ 59%]
+tests\unit\execution\test_effect_store.py .................s             [ 61%]
+tests\unit\execution\test_execution_provider.py ......                   [ 61%]
+tests\unit\execution\test_filesystem_checkpoint_manager.py ............. [ 62%]
+.........                                                                [ 63%]
+tests\unit\execution\test_filesystem_commit_gate.py .................... [ 64%]
+s...s                                                                    [ 65%]
+tests\unit\execution\test_filesystem_rollback_manager.py ............... [ 66%]
+..............s...                                                       [ 67%]
+tests\unit\execution\test_pending_store.py ............................. [ 70%]
+.............                                                            [ 71%]
+tests\unit\execution\test_quarantine_store.py .........                  [ 71%]
+tests\unit\execution\test_registry_tool_executor.py .................... [ 73%]
+............                                                             [ 74%]
+tests\unit\execution\test_restricted_process_runner.py .....             [ 74%]
+tests\unit\execution\test_selective_rollback.py ........                 [ 75%]
+tests\unit\execution\test_temp_files.py .                                [ 75%]
+tests\unit\execution\test_v5_dependency_recovery.py ....                 [ 75%]
+tests\unit\memory\test_memory_handlers.py ............                   [ 76%]
+tests\unit\memory\test_memory_manager.py ................                [ 78%]
+tests\unit\memory\test_memory_store.py ....................              [ 79%]
+tests\unit\runtime\test_effect_targets.py ...                            [ 79%]
+tests\unit\runtime\test_task_graph.py ..                                 [ 80%]
+tests\unit\runtime\test_v2_graph_scheduler.py ..................         [ 81%]
+tests\unit\runtime\test_v2_scheduler_interfaces.py .                     [ 81%]
+tests\unit\runtime\test_v5_effect_aware_graph.py ...                     [ 81%]
+tests\unit\test_audit.py ....                                            [ 82%]
+tests\unit\test_check_script.py .........................                [ 84%]
+tests\unit\test_ci_workflow.py ..                                        [ 84%]
+tests\unit\test_config.py .                                              [ 84%]
+tests\unit\test_correlation.py .......................                   [ 86%]
+tests\unit\test_distribution_package.py ....                             [ 86%]
+tests\unit\test_experiment_runner.py .                                   [ 86%]
+tests\unit\test_report_generator.py ...                                  [ 86%]
+tests\unit\test_request_registry.py ..                                   [ 86%]
+tests\unit\test_settings.py .                                            [ 87%]
+tests\unit\test_shared_dependencies.py .......                           [ 87%]
+tests\unit\test_state_machine.py ....                                    [ 87%]
+tests\unit\tools\test_download_guard.py ..........................       [ 89%]
+tests\unit\tools\test_download_url.py ..........                         [ 90%]
+tests\unit\tools\test_file_handlers.py .............s...........         [ 92%]
+tests\unit\tools\test_mutating_file_handlers.py ...................      [ 94%]
+tests\unit\tools\test_path_resolver.py ................................s [ 96%]
+s.s...........                                                           [ 97%]
+tests\unit\tools\test_run_shell.py ..                                    [ 98%]
+tests\unit\tools\test_shell_policy.py ......................             [ 99%]
+tests\unit\tools\test_tool_schemas.py ..                                 [100%]
+
+============================== warnings summary ===============================
+backend\.venv\Lib\site-packages\fastapi\testclient.py:1
+  C:\Users\Alghy\Desktop\Aegis��\aegis-agent-runtime\backend\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.11.9-final-0 _______________
+
+Name                                                         Stmts   Miss  Cover
+--------------------------------------------------------------------------------
+backend\src\ra_agent\__init__.py                                 1      0   100%
+backend\src\ra_agent\agent\__init__.py                           6      0   100%
+backend\src\ra_agent\agent\graph.py                              4      0   100%
+backend\src\ra_agent\agent\llm_client.py                        42     10    76%
+backend\src\ra_agent\agent\planner.py                          124     23    81%
+backend\src\ra_agent\agent\runtime.py                          137     16    88%
+backend\src\ra_agent\agent\state.py                             21      0   100%
+backend\src\ra_agent\api\__init__.py                            10      0   100%
+backend\src\ra_agent\api\approvals.py                           35      3    91%
+backend\src\ra_agent\api\body_limits.py                         43      3    93%
+backend\src\ra_agent\api\core_intent.py                        124      8    94%
+backend\src\ra_agent\api\core_lifecycle.py                      34      1    97%
+backend\src\ra_agent\api\core_v1.py                            207     23    89%
+backend\src\ra_agent\api\core_views.py                          74      4    95%
+backend\src\ra_agent\api\demo.py                               142     19    87%
+backend\src\ra_agent\api\deps.py                                 7      0   100%
+backend\src\ra_agent\api\experiments.py                          1      0   100%
+backend\src\ra_agent\api\experiments_provider.py                64     11    83%
+backend\src\ra_agent\api\reports.py                             14      0   100%
+backend\src\ra_agent\api\streams.py                             78     21    73%
+backend\src\ra_agent\api\task_graphs.py                        186     28    85%
+backend\src\ra_agent\api\tasks.py                              222     31    86%
+backend\src\ra_agent\api\workbench.py                          109     16    85%
+backend\src\ra_agent\audit\__init__.py                           7      0   100%
+backend\src\ra_agent\audit\__main__.py                          41      4    90%
+backend\src\ra_agent\audit\checkpoints.py                       74      9    88%
+backend\src\ra_agent\audit\event_bus.py                         47      0   100%
+backend\src\ra_agent\audit\evidence.py                         140     22    84%
+backend\src\ra_agent\audit\exporter.py                          90     10    89%
+backend\src\ra_agent\audit\integrity.py                        122      8    93%
+backend\src\ra_agent\audit\logger.py                             8      0   100%
+backend\src\ra_agent\audit\reader.py                            29      2    93%
+backend\src\ra_agent\audit\report_generator.py                  24      0   100%
+backend\src\ra_agent\audit\repository.py                         3      0   100%
+backend\src\ra_agent\audit\verifier.py                          72      9    88%
+backend\src\ra_agent\confirmations\__init__.py                   2      0   100%
+backend\src\ra_agent\confirmations\service.py                   54      4    93%
+backend\src\ra_agent\contracts\__init__.py                      17      0   100%
+backend\src\ra_agent\contracts\approvals.py                     37      3    92%
+backend\src\ra_agent\contracts\audit.py                         18      0   100%
+backend\src\ra_agent\contracts\boundary.py                      27      0   100%
+backend\src\ra_agent\contracts\common.py                        16      0   100%
+backend\src\ra_agent\contracts\core_service.py                 101      9    91%
+backend\src\ra_agent\contracts\core_v1.py                      216      3    99%
+backend\src\ra_agent\contracts\effects.py                       83      8    90%
+backend\src\ra_agent\contracts\enums.py                        115      0   100%
+backend\src\ra_agent\contracts\execution.py                     48      0   100%
+backend\src\ra_agent\contracts\experiments.py                   66      1    98%
+backend\src\ra_agent\contracts\graph.py                         66      7    89%
+backend\src\ra_agent\contracts\intent.py                        15      0   100%
+backend\src\ra_agent\contracts\risk.py                          23      0   100%
+backend\src\ra_agent\contracts\tasks.py                         22      0   100%
+backend\src\ra_agent\contracts\tools.py                         29      0   100%
+backend\src\ra_agent\contracts\workbench.py                     43      0   100%
+backend\src\ra_agent\core\__init__.py                            2      0   100%
+backend\src\ra_agent\core\bootstrap.py                         115      3    97%
+backend\src\ra_agent\core\config.py                             44      0   100%
+backend\src\ra_agent\core\container.py                          38      0   100%
+backend\src\ra_agent\core\errors.py                              1      1     0%
+backend\src\ra_agent\core\ids.py                                 3      0   100%
+backend\src\ra_agent\core\logging.py                             3      3     0%
+backend\src\ra_agent\core\offload.py                            12      0   100%
+backend\src\ra_agent\core\providers.py                          29      1    97%
+backend\src\ra_agent\crypto\__init__.py                          4      0   100%
+backend\src\ra_agent\crypto\canonical.py                        29      0   100%
+backend\src\ra_agent\crypto\envelope.py                         49      1    98%
+backend\src\ra_agent\crypto\openssl.py                         113     17    85%
+backend\src\ra_agent\crypto\runtime.py                          52      5    90%
+backend\src\ra_agent\database\__init__.py                        5      0   100%
+backend\src\ra_agent\database\container.py                      18      0   100%
+backend\src\ra_agent\database\migrate.py                         9      0   100%
+backend\src\ra_agent\database\models.py                         98      0   100%
+backend\src\ra_agent\database\persistent_registry.py            75      9    88%
+backend\src\ra_agent\database\repositories\__init__.py           4      0   100%
+backend\src\ra_agent\database\repositories\approval.py          47      4    91%
+backend\src\ra_agent\database\repositories\audit.py             26      0   100%
+backend\src\ra_agent\database\repositories\execution.py         40      3    92%
+backend\src\ra_agent\database\session.py                         9      2    78%
+backend\src\ra_agent\database\task_store.py                     72      7    90%
+backend\src\ra_agent\database\workbench_store.py               189     33    83%
+backend\src\ra_agent\events\__init__.py                          4      0   100%
+backend\src\ra_agent\events\models.py                           39      0   100%
+backend\src\ra_agent\events\sqlite_store.py                    221     13    94%
+backend\src\ra_agent\events\store.py                           157     10    94%
+backend\src\ra_agent\execution\__init__.py                       8      0   100%
+backend\src\ra_agent\execution\_cancellation.py                 25      3    88%
+backend\src\ra_agent\execution\_temp_files.py                   12      2    83%
+backend\src\ra_agent\execution\artifacts.py                    284     44    85%
+backend\src\ra_agent\execution\checkpoint.py                   491    113    77%
+backend\src\ra_agent\execution\cleanup.py                      214     37    83%
+backend\src\ra_agent\execution\commit_gate.py                  229     34    85%
+backend\src\ra_agent\execution\download_manager.py             117     29    75%
+backend\src\ra_agent\execution\effect_manager.py               148     17    89%
+backend\src\ra_agent\execution\effect_store.py                 236     44    81%
+backend\src\ra_agent\execution\execution_provider.py            40      0   100%
+backend\src\ra_agent\execution\executor.py                     262     48    82%
+backend\src\ra_agent\execution\pending_store.py                312     48    85%
+backend\src\ra_agent\execution\process_runner.py               150     21    86%
+backend\src\ra_agent\execution\quarantine.py                   430     78    82%
+backend\src\ra_agent\execution\recovery.py                      33      1    97%
+backend\src\ra_agent\execution\rollback.py                     375     80    79%
+backend\src\ra_agent\execution\sandbox.py                        3      3     0%
+backend\src\ra_agent\execution\selective_rollback.py           302     65    78%
+backend\src\ra_agent\gateway\__init__.py                         5      0   100%
+backend\src\ra_agent\gateway\adapters.py                       158     49    69%
+backend\src\ra_agent\gateway\admission.py                       60      5    92%
+backend\src\ra_agent\gateway\audit_view.py                      52      5    90%
+backend\src\ra_agent\gateway\authority.py                        6      0   100%
+backend\src\ra_agent\gateway\fakes.py                           50      0   100%
+backend\src\ra_agent\gateway\gateway.py                        382     28    93%
+backend\src\ra_agent\gateway\interfaces.py                       7      0   100%
+backend\src\ra_agent\gateway\quotas.py                          98     11    89%
+backend\src\ra_agent\gateway\runtime_bridge.py                 179     10    94%
+backend\src\ra_agent\gateway\state.py                           97      0   100%
+backend\src\ra_agent\gateway\trusted_policy.py                 106     19    82%
+backend\src\ra_agent\main.py                                    98      1    99%
+backend\src\ra_agent\memory\__init__.py                          6      0   100%
+backend\src\ra_agent\memory\guard.py                             2      0   100%
+backend\src\ra_agent\memory\manager.py                         118     23    81%
+backend\src\ra_agent\memory\models.py                           21      0   100%
+backend\src\ra_agent\memory\repository.py                        5      0   100%
+backend\src\ra_agent\memory\store.py                           423     83    80%
+backend\src\ra_agent\permissions\__init__.py                     2      0   100%
+backend\src\ra_agent\permissions\resolver.py                    98      7    93%
+backend\src\ra_agent\runtime\__init__.py                         9      0   100%
+backend\src\ra_agent\runtime\approval_flow.py                  129     21    84%
+backend\src\ra_agent\runtime\correlation.py                     46      0   100%
+backend\src\ra_agent\runtime\dependency_manager.py               3      3     0%
+backend\src\ra_agent\runtime\effect_targets.py                  94     10    89%
+backend\src\ra_agent\runtime\fast_flow.py                       68     15    78%
+backend\src\ra_agent\runtime\graph_scheduler.py                447     46    90%
+backend\src\ra_agent\runtime\idempotency.py                     75      7    91%
+backend\src\ra_agent\runtime\interfaces.py                       6      0   100%
+backend\src\ra_agent\runtime\orchestrator.py                     2      2     0%
+backend\src\ra_agent\runtime\permissions.py                     29      0   100%
+backend\src\ra_agent\runtime\sandbox_flow.py                   271     30    89%
+backend\src\ra_agent\runtime\scheduler.py                      185     30    84%
+backend\src\ra_agent\runtime\state_machine.py                    8      0   100%
+backend\src\ra_agent\runtime\task_graph.py                      58      6    90%
+backend\src\ra_agent\security\__init__.py                       10      0   100%
+backend\src\ra_agent\security\adaptive_approval.py              64      8    88%
+backend\src\ra_agent\security\approval_service.py              155     11    93%
+backend\src\ra_agent\security\data_egress.py                    18      4    78%
+backend\src\ra_agent\security\deep_checker.py                  365     67    82%
+backend\src\ra_agent\security\intent.py                         95      3    97%
+backend\src\ra_agent\security\intent_boundary.py                40      3    92%
+backend\src\ra_agent\security\intent_policy.py                  19      3    84%
+backend\src\ra_agent\security\permission_gate.py                42      3    93%
+backend\src\ra_agent\security\policy_engine.py                  32      0   100%
+backend\src\ra_agent\security\pre_post_check.py                429     82    81%
+backend\src\ra_agent\security\risk_classifier.py               149      7    95%
+backend\src\ra_agent\security\rule_engine.py                   246     31    87%
+backend\src\ra_agent\security\security_provider.py              19      0   100%
+backend\src\ra_agent\tools\__init__.py                           4      0   100%
+backend\src\ra_agent\tools\arguments.py                         25      0   100%
+backend\src\ra_agent\tools\download_guard.py                    94     24    74%
+backend\src\ra_agent\tools\implementations\__init__.py           0      0   100%
+backend\src\ra_agent\tools\implementations\create_file.py        8      0   100%
+backend\src\ra_agent\tools\implementations\delete_file.py       47      6    87%
+backend\src\ra_agent\tools\implementations\download_url.py     198     40    80%
+backend\src\ra_agent\tools\implementations\egress.py             8      0   100%
+backend\src\ra_agent\tools\implementations\list_dir.py          60      3    95%
+backend\src\ra_agent\tools\implementations\memory_tools.py      73     16    78%
+backend\src\ra_agent\tools\implementations\read_file.py         33      0   100%
+backend\src\ra_agent\tools\implementations\run_shell.py         21      1    95%
+backend\src\ra_agent\tools\implementations\write_file.py        63      7    89%
+backend\src\ra_agent\tools\path_resolver.py                    177     11    94%
+backend\src\ra_agent\tools\registry.py                          51      3    94%
+backend\src\ra_agent\tools\shell_policy.py                     287     57    80%
+backend\src\ra_agent\tools\specs.py                              4      0   100%
+--------------------------------------------------------------------------------
+TOTAL                                                        14757   1896    87%
+=========== 1257 passed, 8 skipped, 1 warning in 173.62s (0:02:53) ============
+
+> aegis-runtime-base-frontend@0.4.0 lint C:\Users\Alghy\Desktop\Aegis大创\aegis-agent-runtime\frontend
+> eslint .
+
+
+> aegis-runtime-base-frontend@0.4.0 typecheck C:\Users\Alghy\Desktop\Aegis大创\aegis-agent-runtime\frontend
+> tsc -b --pretty false
+
+
+ RUN  v3.2.7 C:/Users/Alghy/Desktop/Aegis大创/aegis-agent-runtime/frontend
+
+ ✓ coreMockPlugin.test.ts (2 tests) 76ms
+ ✓ src/indexHtml.test.ts (1 test) 2ms
+ ✓ src/lib/taskEvents.test.ts (5 tests) 6ms
+ ✓ src/features/core/realGateway.test.ts (3 tests) 8ms
+ ✓ src/api/tasks.test.ts (1 test) 6ms
+ ✓ src/api/reviewRegressions.test.ts (6 tests) 42ms
+ ✓ src/features/core/IntentPanel.test.tsx (2 tests) 83ms
+ ✓ src/pages/AuditPage.test.tsx (1 test) 118ms
+ ✓ src/pages/ApprovalsPage.test.tsx (2 tests) 138ms
+ ✓ src/pages/TasksPage.test.tsx (1 test) 186ms
+ ✓ src/pages/ConversationsPage.test.tsx (1 test) 190ms
+ ✓ src/pages/ExperimentsPage.test.tsx (5 tests) 316ms
+ ✓ src/App.test.tsx (4 tests) 251ms
+ ✓ src/features/core/CoreWorkbench.test.tsx (12 tests) 468ms
+ ✓ src/reviewRegressions.test.tsx (9 tests) 492ms
+ ✓ src/features/core/RealWorkflow.test.tsx (17 tests) 2121ms
+   ✓ loads more than 1000 events in bounded pages, merges overlaps and polls only the tail  461ms
+ ✓ src/pages/TaskGraphPage.test.tsx (11 tests) 2967ms
+   ✓ TaskGraphPage > ignores every projection from a slow previous URL task and reports failed polling  1252ms
+   ✓ TaskGraphPage > keeps controls interactive while an automatic graph refresh is pending  1294ms
+
+ Test Files  17 passed (17)
+      Tests  83 passed (83)
+   Start at  20:50:48
+   Duration  5.29s (transform 1.33s, setup 3.70s, collect 6.85s, tests 7.47s, environment 17.19s, prepare 3.22s)
+
+
+> aegis-runtime-base-frontend@0.4.0 build C:\Users\Alghy\Desktop\Aegis大创\aegis-agent-runtime\frontend
+> tsc -b && vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 119 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.56 kB │ gzip:   0.33 kB
+dist/assets/index-Bw9Xalci.css   43.16 kB │ gzip:   9.59 kB
+dist/assets/index-DNrqRLAv.js   403.89 kB │ gzip: 125.35 kB
+✓ built in 952ms
++ C:\Users\Alghy\Desktop\Aegis��\aegis-agent-runtime\backend\.venv\Scripts\python.exe -m ruff check backend/src tests
++ C:\Users\Alghy\Desktop\Aegis��\aegis-agent-runtime\backend\.venv\Scripts\python.exe -m pyright --project backend/pyproject.toml
++ C:\Users\Alghy\Desktop\Aegis��\aegis-agent-runtime\backend\.venv\Scripts\python.exe -m pytest tests --cov=ra_agent
++ corepack pnpm lint
++ corepack pnpm typecheck
++ corepack pnpm exec vitest run
++ corepack pnpm build

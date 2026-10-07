@@ -1,0 +1,83 @@
+........................................................................ [  5%]
+........................................................................ [ 11%]
+........................................................................ [ 17%]
+........................................................................ [ 22%]
+........................................................................ [ 28%]
+........................................................................ [ 34%]
+........................................................................ [ 40%]
+........................................................................ [ 45%]
+........................................................................ [ 51%]
+........................................................................ [ 57%]
+..............................................s......................... [ 62%]
+.......................s...s.............................s.............. [ 68%]
+........................................................................ [ 74%]
+........................................................................ [ 80%]
+..........................FF............................................ [ 85%]
+........................................................................ [ 91%]
+...s..............................................................ss.s.. [ 97%]
+...................................                                      [100%]
+================================== FAILURES ===================================
+__________ test_pnpm_version_docs_require_frontend_working_directory __________
+
+    def test_pnpm_version_docs_require_frontend_working_directory() -> None:
+        for path in (
+            ROOT / "README.md",
+            ROOT / "docs" / "02-tech-stack.md",
+            ROOT / "docs" / "11-development-guide.md",
+        ):
+            text = path.read_text(encoding="utf-8")
+            assert "frontend" in text
+>           assert "corepack pnpm --version" in text
+E           AssertionError: assert 'corepack pnpm --version' in '# Aegis-Intent\n\n## AI Agent ��ͼƫ�Ƽ���밲ȫ��������ʱ\n\nAegis-Intent �ǻ��� Aegis Runtime �ܹ���չ��\n���� AI Agent �İ�ȫ��ǿ����ʱϵͳ��\n\n��� A...board\n\n\n---\n\n## Development\n\n```bash\npython scripts/start_core.py\n\nFrontend:\ncd frontend\ncorepack pnpm dev'
+
+tests\unit\test_check_script.py:46: AssertionError
+_____ test_authoritative_project_files_have_no_stale_node_22_requirement ______
+
+    def test_authoritative_project_files_have_no_stale_node_22_requirement() -> None:
+        authoritative_files = [
+            ROOT / "README.md",
+            ROOT / ".nvmrc",
+            ROOT / ".github" / "workflows" / "ci.yml",
+            ROOT / "frontend" / "package.json",
+            ROOT / "docs" / "02-tech-stack.md",
+            ROOT / "docs" / "11-development-guide.md",
+            ROOT / "docs" / "SHARED-BASELINE-REPORT.md",
+        ]
+    
+        for path in authoritative_files:
+>           text = path.read_text(encoding="utf-8").lower()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_check_script.py:61: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+..\..\..\AppData\Local\Programs\Python\Python311\Lib\pathlib.py:1058: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('C:/Users/Alghy/Desktop/Aegis��/aegis-agent-runtime/docs/02-tech-stack.md')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\Alghy\\Desktop\\Aegis��\\aegis-agent-runtime\\docs\\02-tech-stack.md'
+
+..\..\..\AppData\Local\Programs\Python\Python311\Lib\pathlib.py:1044: FileNotFoundError
+============================== warnings summary ===============================
+backend\.venv\Lib\site-packages\fastapi\testclient.py:1
+  C:\Users\Alghy\Desktop\Aegis��\aegis-agent-runtime\backend\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/unit/test_check_script.py::test_pnpm_version_docs_require_frontend_working_directory
+FAILED tests/unit/test_check_script.py::test_authoritative_project_files_have_no_stale_node_22_requirement
+2 failed, 1249 passed, 8 skipped, 1 warning in 137.50s (0:02:17)

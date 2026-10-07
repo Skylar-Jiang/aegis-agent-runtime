@@ -1,0 +1,671 @@
+{
+  "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+  "checkpoint": {
+    "checkpoint_id": "intent-single-hard_boundary-2-0",
+    "from_seq": 1,
+    "to_seq": 12,
+    "chain_head": "5a10b968f7e7af9ee199091b1db0a325e35afdb8096fa9487812d26ff3016390",
+    "created_at": "2026-10-07T12:30:31.148597Z",
+    "signer": "local-core-audit-v1"
+  },
+  "signed_checkpoint": {
+    "object_type": "AuditCheckpoint",
+    "schema_version": "1.0",
+    "algorithm": "SM2-SM3",
+    "key_id": "local-core-audit-v1",
+    "payload_digest": "72f9b04b06eafdd9056eb5dba913b8fc3b7b67744ca0b59484d7ec6248001e90",
+    "signature": "MEUCIHUi0X1Tnly1wfAXd54v0KrEsiKcK1of+jhbsX5szjERAiEA30unYLAOk0dIwr6i1fWSDGyPJmYvxWO/4t6coM0ums4="
+  },
+  "schema_version": "1.0",
+  "entries": [
+    {
+      "event": {
+        "schema_version": "1.0",
+        "event_id": "event-edbaec61-ec69-41ed-af9e-05a06a648a0f",
+        "sequence": 1,
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "parent_event_id": null,
+        "type": "CONTRACT_CREATED",
+        "actor": "local-regression-operator",
+        "source_ref": "contract:contract-d529cb13-eaff-4e52-aea0-50ed0f028f18:v1",
+        "object_digest": "2af2595ee396a27bc0318727dcd254387500c0e4f5bd84278167687426cbe927",
+        "state": "DRAFT",
+        "decision": null,
+        "result_digest": null,
+        "occurred_at": "2026-10-07T12:30:30.280497Z",
+        "request_id": "contract-contract-d529cb13-eaff-4e52-aea0-50ed0f028f18-v1",
+        "reason_code": null,
+        "evidence_refs": [
+          "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "2af2595ee396a27bc0318727dcd254387500c0e4f5bd84278167687426cbe927"
+        ],
+        "intent": null,
+        "prepared_effect_id": null,
+        "effect_descriptor_digest": null,
+        "result_commitment": null,
+        "commit_epoch": null,
+        "execution_receipt_id": null,
+        "compliance_proof_ref": null
+      },
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "event_digest": "6dfe27a93b902be92e8cc20b830c548b4df803e6b58b5ce90660c60fea535ac4",
+      "chain_hash": "4ad2d1741b419395f58dc6d9a063a4c6c0f6a524bc578f069098db091a133687"
+    },
+    {
+      "event": {
+        "schema_version": "1.0",
+        "event_id": "event-abe6f002-76b9-4228-b125-5737db7da348",
+        "sequence": 2,
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "parent_event_id": "event-edbaec61-ec69-41ed-af9e-05a06a648a0f",
+        "type": "CONTRACT_CONFIRMED",
+        "actor": "local-regression-operator",
+        "source_ref": "contract:contract-d529cb13-eaff-4e52-aea0-50ed0f028f18:v1",
+        "object_digest": "2af2595ee396a27bc0318727dcd254387500c0e4f5bd84278167687426cbe927",
+        "state": "CONFIRMED",
+        "decision": null,
+        "result_digest": null,
+        "occurred_at": "2026-10-07T12:30:30.343250Z",
+        "request_id": "contract-contract-d529cb13-eaff-4e52-aea0-50ed0f028f18-v1",
+        "reason_code": null,
+        "evidence_refs": [
+          "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "2af2595ee396a27bc0318727dcd254387500c0e4f5bd84278167687426cbe927"
+        ],
+        "intent": null,
+        "prepared_effect_id": null,
+        "effect_descriptor_digest": null,
+        "result_commitment": null,
+        "commit_epoch": null,
+        "execution_receipt_id": null,
+        "compliance_proof_ref": null
+      },
+      "prev_hash": "4ad2d1741b419395f58dc6d9a063a4c6c0f6a524bc578f069098db091a133687",
+      "event_digest": "ff7b622996e2dcc72b10bd94d9b38f38631d0b7976aa3a1df0db671dc5598cb0",
+      "chain_hash": "f4f881a91bf021f91bebfb99b8d438a287c07a134213150962fa1f4ba70bb159"
+    },
+    {
+      "event": {
+        "schema_version": "1.0",
+        "event_id": "event-355629a0-0e19-4122-8a87-1561e5c91980",
+        "sequence": 3,
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "parent_event_id": "event-abe6f002-76b9-4228-b125-5737db7da348",
+        "type": "INTENT_EVALUATED",
+        "actor": "intent-detector",
+        "source_ref": "intent:intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "object_digest": "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+        "state": "CONTINUE",
+        "decision": "ALLOW",
+        "result_digest": "38845629cd7def0c3c9daa6dae097fbb4b42e2e16bac72986dc0dd191ac9019a",
+        "occurred_at": "2026-10-07T12:30:30.524320Z",
+        "request_id": "intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "reason_code": "ALLOWED",
+        "evidence_refs": [
+          "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+          "38845629cd7def0c3c9daa6dae097fbb4b42e2e16bac72986dc0dd191ac9019a"
+        ],
+        "intent": {
+          "schema_version": "intent-rule-v1",
+          "risk_score": 0.0,
+          "trigger_dimensions": [],
+          "evidence_refs": [],
+          "policy_version": "intent-single:1",
+          "detector_version": "bounded-report-rule:1",
+          "contract_version": 1,
+          "contract_digest": "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "step_index": 0,
+          "disposition": "CONTINUE",
+          "reason": "within approved report criteria",
+          "enabled": true
+        },
+        "prepared_effect_id": null,
+        "effect_descriptor_digest": null,
+        "result_commitment": null,
+        "commit_epoch": null,
+        "execution_receipt_id": null,
+        "compliance_proof_ref": null
+      },
+      "prev_hash": "f4f881a91bf021f91bebfb99b8d438a287c07a134213150962fa1f4ba70bb159",
+      "event_digest": "176bba8f8645d890091226cc2d60556cdcfc9107e54dd74c0dc562d9b1d9b488",
+      "chain_hash": "598075d7c9de61b1d07675b0b942b323d41d7e1fbaf085815cf1a4c30482a527"
+    },
+    {
+      "event": {
+        "schema_version": "1.0",
+        "event_id": "event-994fb5cd-a250-4e32-9a00-4d650eab2f21",
+        "sequence": 4,
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "parent_event_id": "event-355629a0-0e19-4122-8a87-1561e5c91980",
+        "type": "PERMISSION_EVALUATED",
+        "actor": "permission-resolver",
+        "source_ref": "gateway:intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "object_digest": "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+        "state": "PERMISSION_ALLOWED",
+        "decision": "ALLOW",
+        "result_digest": "38845629cd7def0c3c9daa6dae097fbb4b42e2e16bac72986dc0dd191ac9019a",
+        "occurred_at": "2026-10-07T12:30:30.529623Z",
+        "request_id": "intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "reason_code": "ALLOWED",
+        "evidence_refs": [
+          "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+          "38845629cd7def0c3c9daa6dae097fbb4b42e2e16bac72986dc0dd191ac9019a"
+        ],
+        "intent": null,
+        "prepared_effect_id": null,
+        "effect_descriptor_digest": null,
+        "result_commitment": null,
+        "commit_epoch": null,
+        "execution_receipt_id": null,
+        "compliance_proof_ref": null
+      },
+      "prev_hash": "598075d7c9de61b1d07675b0b942b323d41d7e1fbaf085815cf1a4c30482a527",
+      "event_digest": "8ed407e944a3b1309c0b413df155c1a24685234a5494a671179ae8c418e86f87",
+      "chain_hash": "173c296cfaf9a75b4c2d060aafa79024a2c8780942b92bd3bd7943deb4fc3f9d"
+    },
+    {
+      "event": {
+        "schema_version": "1.0",
+        "event_id": "event-dd6e6182-71f8-4a78-8937-4ea15a150af5",
+        "sequence": 5,
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "parent_event_id": "event-994fb5cd-a250-4e32-9a00-4d650eab2f21",
+        "type": "GATEWAY_ALLOWED",
+        "actor": "tool-gateway",
+        "source_ref": "gateway:intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "object_digest": "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+        "state": "GATEWAY_ALLOWED",
+        "decision": "ALLOW",
+        "result_digest": "38845629cd7def0c3c9daa6dae097fbb4b42e2e16bac72986dc0dd191ac9019a",
+        "occurred_at": "2026-10-07T12:30:30.533936Z",
+        "request_id": "intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "reason_code": "ALLOWED",
+        "evidence_refs": [
+          "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+          "38845629cd7def0c3c9daa6dae097fbb4b42e2e16bac72986dc0dd191ac9019a"
+        ],
+        "intent": null,
+        "prepared_effect_id": null,
+        "effect_descriptor_digest": null,
+        "result_commitment": null,
+        "commit_epoch": null,
+        "execution_receipt_id": null,
+        "compliance_proof_ref": null
+      },
+      "prev_hash": "173c296cfaf9a75b4c2d060aafa79024a2c8780942b92bd3bd7943deb4fc3f9d",
+      "event_digest": "32c332a796bd15a89f481654e783b2eb282fdd74b20c62d62cc01a161ce2134e",
+      "chain_hash": "6a4b7e4711c2bb90c6c229fd698d0c1b9d98d046fa6cff7ef53f298f0176fa57"
+    },
+    {
+      "event": {
+        "schema_version": "1.0",
+        "event_id": "event-b129afbf-59af-49bc-8fa8-5e2c131c57aa",
+        "sequence": 6,
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "parent_event_id": "event-dd6e6182-71f8-4a78-8937-4ea15a150af5",
+        "type": "INTENT_EVALUATED",
+        "actor": "intent-detector",
+        "source_ref": "intent:intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "object_digest": "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+        "state": "CONTINUE",
+        "decision": "ALLOW",
+        "result_digest": "38845629cd7def0c3c9daa6dae097fbb4b42e2e16bac72986dc0dd191ac9019a",
+        "occurred_at": "2026-10-07T12:30:30.622484Z",
+        "request_id": "intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "reason_code": "ALLOWED",
+        "evidence_refs": [
+          "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+          "38845629cd7def0c3c9daa6dae097fbb4b42e2e16bac72986dc0dd191ac9019a"
+        ],
+        "intent": {
+          "schema_version": "intent-rule-v1",
+          "risk_score": 0.0,
+          "trigger_dimensions": [],
+          "evidence_refs": [],
+          "policy_version": "intent-single:1",
+          "detector_version": "bounded-report-rule:1",
+          "contract_version": 1,
+          "contract_digest": "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "step_index": 0,
+          "disposition": "CONTINUE",
+          "reason": "within approved report criteria",
+          "enabled": true
+        },
+        "prepared_effect_id": null,
+        "effect_descriptor_digest": null,
+        "result_commitment": null,
+        "commit_epoch": null,
+        "execution_receipt_id": null,
+        "compliance_proof_ref": null
+      },
+      "prev_hash": "6a4b7e4711c2bb90c6c229fd698d0c1b9d98d046fa6cff7ef53f298f0176fa57",
+      "event_digest": "01f7e1677a5822385bbf6848b0624f854edd98d58134c9b0c417b869ac50cb8b",
+      "chain_hash": "d333b5ccda0307fcc9de8a31983ff6eee3c34ede01fcb48672cc720ade1876b5"
+    },
+    {
+      "event": {
+        "schema_version": "1.0",
+        "event_id": "event-8e16429d-bf45-47c0-8712-b38a3403c721",
+        "sequence": 7,
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "parent_event_id": "event-b129afbf-59af-49bc-8fa8-5e2c131c57aa",
+        "type": "PERMISSION_EVALUATED",
+        "actor": "permission-resolver",
+        "source_ref": "gateway:intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "object_digest": "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+        "state": "PERMISSION_ALLOWED",
+        "decision": "ALLOW",
+        "result_digest": "38845629cd7def0c3c9daa6dae097fbb4b42e2e16bac72986dc0dd191ac9019a",
+        "occurred_at": "2026-10-07T12:30:30.627504Z",
+        "request_id": "intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "reason_code": "ALLOWED",
+        "evidence_refs": [
+          "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+          "38845629cd7def0c3c9daa6dae097fbb4b42e2e16bac72986dc0dd191ac9019a"
+        ],
+        "intent": null,
+        "prepared_effect_id": null,
+        "effect_descriptor_digest": null,
+        "result_commitment": null,
+        "commit_epoch": null,
+        "execution_receipt_id": null,
+        "compliance_proof_ref": null
+      },
+      "prev_hash": "d333b5ccda0307fcc9de8a31983ff6eee3c34ede01fcb48672cc720ade1876b5",
+      "event_digest": "b39dabc88f5a3b80259bb56739613cb5e7755c86f23b6162c0c7299a727620d5",
+      "chain_hash": "d65e4e5d93c6f440231bcc306b1da6fba30f98662e7d0c88152954f142f1bfed"
+    },
+    {
+      "event": {
+        "schema_version": "1.0",
+        "event_id": "event-eec41fca-b53c-4961-95f1-e8d21696fd88",
+        "sequence": 8,
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "parent_event_id": "event-8e16429d-bf45-47c0-8712-b38a3403c721",
+        "type": "GATEWAY_ALLOWED",
+        "actor": "tool-gateway",
+        "source_ref": "gateway:intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "object_digest": "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+        "state": "GATEWAY_ALLOWED",
+        "decision": "ALLOW",
+        "result_digest": "38845629cd7def0c3c9daa6dae097fbb4b42e2e16bac72986dc0dd191ac9019a",
+        "occurred_at": "2026-10-07T12:30:30.632603Z",
+        "request_id": "intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "reason_code": "ALLOWED",
+        "evidence_refs": [
+          "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+          "38845629cd7def0c3c9daa6dae097fbb4b42e2e16bac72986dc0dd191ac9019a"
+        ],
+        "intent": null,
+        "prepared_effect_id": null,
+        "effect_descriptor_digest": null,
+        "result_commitment": null,
+        "commit_epoch": null,
+        "execution_receipt_id": null,
+        "compliance_proof_ref": null
+      },
+      "prev_hash": "d65e4e5d93c6f440231bcc306b1da6fba30f98662e7d0c88152954f142f1bfed",
+      "event_digest": "ce1f8d931420284aae0ee7188fa7438dad7dc9a739ea4af992f984f8138bfffe",
+      "chain_hash": "21a78dbda9f41d7e94fa904882a0f1e87876e2bfa352739d894eee073d275c09"
+    },
+    {
+      "event": {
+        "schema_version": "1.0",
+        "event_id": "event-aabcd08a-8db0-4b27-928b-557ee8fb42f0",
+        "sequence": 9,
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "parent_event_id": "event-eec41fca-b53c-4961-95f1-e8d21696fd88",
+        "type": "EXECUTION_STARTED",
+        "actor": "tool-gateway",
+        "source_ref": "gateway:intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "object_digest": "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+        "state": "EXECUTION_STARTED",
+        "decision": "ALLOW",
+        "result_digest": null,
+        "occurred_at": "2026-10-07T12:30:30.669690Z",
+        "request_id": "intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "reason_code": "ALLOWED",
+        "evidence_refs": [
+          "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90"
+        ],
+        "intent": null,
+        "prepared_effect_id": null,
+        "effect_descriptor_digest": null,
+        "result_commitment": null,
+        "commit_epoch": null,
+        "execution_receipt_id": null,
+        "compliance_proof_ref": null
+      },
+      "prev_hash": "21a78dbda9f41d7e94fa904882a0f1e87876e2bfa352739d894eee073d275c09",
+      "event_digest": "c8c9db92354643a3f01e05651b75529ca0dd09fb6242058f445232c201e45581",
+      "chain_hash": "b47ce3defcd975d4a20040b2fc253b3ee98bd70ca94e224cd83eea5e0d42322e"
+    },
+    {
+      "event": {
+        "schema_version": "1.0",
+        "event_id": "event-06501f21-f1e6-4dd6-840d-f5d0e82f93ce",
+        "sequence": 10,
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "parent_event_id": "event-aabcd08a-8db0-4b27-928b-557ee8fb42f0",
+        "type": "EXECUTION_FINISHED",
+        "actor": "tool-gateway",
+        "source_ref": "gateway:intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "object_digest": "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+        "state": "EXECUTED",
+        "decision": "ALLOW",
+        "result_digest": "5e962ebe3feb0f0cf48da3d31071c2e1a0c723a422c127430ad726da4dacd7d2",
+        "occurred_at": "2026-10-07T12:30:30.780537Z",
+        "request_id": "intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "reason_code": "ALLOWED",
+        "evidence_refs": [
+          "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "c2030c038d85f81ca02509246234964da682c2949383f7e76686bcf3cfd3ec90",
+          "5e962ebe3feb0f0cf48da3d31071c2e1a0c723a422c127430ad726da4dacd7d2"
+        ],
+        "intent": null,
+        "prepared_effect_id": null,
+        "effect_descriptor_digest": null,
+        "result_commitment": null,
+        "commit_epoch": null,
+        "execution_receipt_id": null,
+        "compliance_proof_ref": null
+      },
+      "prev_hash": "b47ce3defcd975d4a20040b2fc253b3ee98bd70ca94e224cd83eea5e0d42322e",
+      "event_digest": "611a3eea82897fe6d88efadfcb69647609d93d695bc5301280e71aa3d3d28063",
+      "chain_hash": "318d861c216f7a0882bff3f9c8277d9ef78581f29f8a037a86298065b5269c54"
+    },
+    {
+      "event": {
+        "schema_version": "1.0",
+        "event_id": "event-cd59a34c-c5d1-444a-a233-576844613a94",
+        "sequence": 11,
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "parent_event_id": "event-06501f21-f1e6-4dd6-840d-f5d0e82f93ce",
+        "type": "PERMISSION_EVALUATED",
+        "actor": "permission-resolver",
+        "source_ref": "gateway:intent-req-c3c63643c7d0438894d6ff4af3dc20b7",
+        "object_digest": "b7a13c237166a3b255be1ac6badf94ed4569454f10be66c58d3b812bb81c2d81",
+        "state": "PERMISSION_DENIED",
+        "decision": "DENY",
+        "result_digest": "730862b971f1ba46508067d7cb72fe82ad02865f9122bab02735ee168622a60b",
+        "occurred_at": "2026-10-07T12:30:30.925941Z",
+        "request_id": "intent-req-c3c63643c7d0438894d6ff4af3dc20b7",
+        "reason_code": "OUT_OF_CONTRACT",
+        "evidence_refs": [
+          "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "b7a13c237166a3b255be1ac6badf94ed4569454f10be66c58d3b812bb81c2d81",
+          "730862b971f1ba46508067d7cb72fe82ad02865f9122bab02735ee168622a60b"
+        ],
+        "intent": null,
+        "prepared_effect_id": null,
+        "effect_descriptor_digest": null,
+        "result_commitment": null,
+        "commit_epoch": null,
+        "execution_receipt_id": null,
+        "compliance_proof_ref": null
+      },
+      "prev_hash": "318d861c216f7a0882bff3f9c8277d9ef78581f29f8a037a86298065b5269c54",
+      "event_digest": "daff1a7235cd7f12e6f5855522813bc8b8651b4d772b33868dac341bd71fb28b",
+      "chain_hash": "4b9ec2a343e1c7cdcc2faaf15742487c6971c0d4612bd4c80e1f43eaba820c6d"
+    },
+    {
+      "event": {
+        "schema_version": "1.0",
+        "event_id": "event-7695b6fe-fcd9-4b22-a407-11077f02e3de",
+        "sequence": 12,
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "parent_event_id": "event-cd59a34c-c5d1-444a-a233-576844613a94",
+        "type": "GATEWAY_DENIED",
+        "actor": "tool-gateway",
+        "source_ref": "gateway:intent-req-c3c63643c7d0438894d6ff4af3dc20b7",
+        "object_digest": "b7a13c237166a3b255be1ac6badf94ed4569454f10be66c58d3b812bb81c2d81",
+        "state": "GATEWAY_DENIED",
+        "decision": "DENY",
+        "result_digest": "730862b971f1ba46508067d7cb72fe82ad02865f9122bab02735ee168622a60b",
+        "occurred_at": "2026-10-07T12:30:30.930304Z",
+        "request_id": "intent-req-c3c63643c7d0438894d6ff4af3dc20b7",
+        "reason_code": "OUT_OF_CONTRACT",
+        "evidence_refs": [
+          "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "b7a13c237166a3b255be1ac6badf94ed4569454f10be66c58d3b812bb81c2d81",
+          "730862b971f1ba46508067d7cb72fe82ad02865f9122bab02735ee168622a60b"
+        ],
+        "intent": null,
+        "prepared_effect_id": null,
+        "effect_descriptor_digest": null,
+        "result_commitment": null,
+        "commit_epoch": null,
+        "execution_receipt_id": null,
+        "compliance_proof_ref": null
+      },
+      "prev_hash": "4b9ec2a343e1c7cdcc2faaf15742487c6971c0d4612bd4c80e1f43eaba820c6d",
+      "event_digest": "73f20a62c54a8e1f364f45f891a66e6361be93b5edb2a9dd3bbb1ececc151fde",
+      "chain_hash": "5a10b968f7e7af9ee199091b1db0a325e35afdb8096fa9487812d26ff3016390"
+    }
+  ],
+  "objects": [
+    {
+      "payload": {
+        "allowed": [
+          {
+            "action": "read_file",
+            "effect": "*",
+            "resource": "workspace/hard_boundary-2-0/inputs/*",
+            "tool": "*"
+          },
+          {
+            "action": "memory_read",
+            "effect": "*",
+            "resource": "context-hard_boundary-2-0",
+            "tool": "*"
+          },
+          {
+            "action": "write_file",
+            "effect": "*",
+            "resource": "reports/single-hard_boundary-2-0.txt",
+            "tool": "*"
+          }
+        ],
+        "commit_epoch": null,
+        "completion_criteria": [
+          "intent:report=reports/single-hard_boundary-2-0.txt",
+          "intent:contains=synthetic-device-2-0",
+          "intent:contains=config_version=7",
+          "intent:contains=review configuration",
+          "intent:evidence_source=workspace/hard_boundary-2-0/inputs/log.txt"
+        ],
+        "compliance_proof_ref": null,
+        "confirmation": {
+          "required_actions": [
+            "delete_file",
+            "send_email_dry_run"
+          ],
+          "required_effect_classes": []
+        },
+        "contract_id": "contract-d529cb13-eaff-4e52-aea0-50ed0f028f18",
+        "denied": [],
+        "effect_descriptor_digest": null,
+        "execution_receipt_id": null,
+        "goals": [
+          "Prepare configuration audit for synthetic-device-2-0"
+        ],
+        "limits": {},
+        "parent_digest": null,
+        "policy_version": "local-regression:1",
+        "prepared_effect_id": null,
+        "result_commitment": null,
+        "session_id": "session-e312eca2-ee75-4d1d-a693-6d28c483818e",
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "tool_manifest_digest": "runtime-fixtures:1",
+        "user_id": "local-regression-operator",
+        "version": 1
+      },
+      "envelope": {
+        "object_type": "TaskContractV2",
+        "schema_version": "1.0",
+        "algorithm": "SM2-SM3",
+        "key_id": "local-core-audit-v1",
+        "payload_digest": "f80a1595d870375b723fd68f0ca3fc73e7f302a17727610da1ed0dad53fa2b0c",
+        "signature": "MEYCIQD86KmSZaGdRv29Lx4LPdCfhfviyyIP140SAH5UK5E0xgIhAMOvdvMEe/h0A1unDD5v+i9mDqSjx7qgtAv7SM9AKunf"
+      }
+    },
+    {
+      "payload": {
+        "confirmation_id": null,
+        "decision": "ALLOW",
+        "evidence_refs": [
+          "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb"
+        ],
+        "intent": {
+          "contract_digest": "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "contract_version": 1,
+          "detector_version": "bounded-report-rule:1",
+          "disposition": "CONTINUE",
+          "enabled": true,
+          "evidence_refs": [],
+          "policy_version": "intent-single:1",
+          "reason": "within approved report criteria",
+          "risk_score": 0,
+          "schema_version": "intent-rule-v1",
+          "step_index": 0,
+          "trigger_dimensions": []
+        },
+        "reason_code": "ALLOWED",
+        "request_id": "intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "versions": {
+          "contract": 1,
+          "contract_policy": "local-regression:1",
+          "detector": "bounded-report-rule:1",
+          "intent_policy": "intent-single:1",
+          "policy": "default:1",
+          "tool_manifest": "runtime-fixtures:1"
+        }
+      },
+      "envelope": {
+        "object_type": "GatewayDecision",
+        "schema_version": "1.0",
+        "algorithm": "SM2-SM3",
+        "key_id": "local-core-audit-v1",
+        "payload_digest": "5ca117ab402a9244647381df84bb239bc09ce44917dfb7ae01ccbd9add2eb6f1",
+        "signature": "MEQCICKsYXkZukvT+IIVCb6D2Guup0eUtbpcAvnQ2EJa4MkLAiBX0gxNZx319Tdbx+J8sO9Bw6x3BsCyOsIBhl24pPGZWA=="
+      }
+    },
+    {
+      "payload": {
+        "request_id": "intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "result": {
+          "content": "synthetic-device-2-0: config_version=7",
+          "path": "workspace/hard_boundary-2-0/inputs/log.txt",
+          "tool": "read_file"
+        },
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3"
+      },
+      "envelope": {
+        "object_type": "ToolResult",
+        "schema_version": "1.0",
+        "algorithm": "SM2-SM3",
+        "key_id": "local-core-audit-v1",
+        "payload_digest": "509ccae597577199fc82f69c7a301825fe556d04cf9bfcfa0e00f5a9dc1c880e",
+        "signature": "MEYCIQDYiWPyN/zHeBwsYPWOlhN+cLslu5M+DtFqb4v2PMgf8AIhAPbLh0Y2ehpII6V2GcgfDT43tqnp9l3QMIarNWtLv458"
+      }
+    },
+    {
+      "payload": {
+        "confirmation_id": null,
+        "decision": "DENY",
+        "evidence_refs": [
+          "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb"
+        ],
+        "reason_code": "OUT_OF_CONTRACT",
+        "request_id": "intent-req-c3c63643c7d0438894d6ff4af3dc20b7",
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "versions": {
+          "contract": 1,
+          "contract_policy": "local-regression:1",
+          "policy": "default:1",
+          "tool_manifest": "runtime-fixtures:1"
+        }
+      },
+      "envelope": {
+        "object_type": "GatewayDecision",
+        "schema_version": "1.0",
+        "algorithm": "SM2-SM3",
+        "key_id": "local-core-audit-v1",
+        "payload_digest": "b4723a1022fe18d49b5dc6b1af79a734a9c99bff65a9ddb99cc97fb59dda87cc",
+        "signature": "MEUCIC/TQ32CtS3ZBeOGIYvAdhg8p7wspiYB+jKLfSIPRsWkAiEA+ft0X+WYf6l4e2RXWl63J5YqK2e6itYNJyXqPJQoyks="
+      }
+    },
+    {
+      "payload": {
+        "action": "send_email_dry_run",
+        "canonical_args": {
+          "body": "synthetic only",
+          "content": "synthetic-only",
+          "to": "blocked@example.invalid"
+        },
+        "contract_ref": {
+          "confirmed_at": "2026-10-07T12:30:30.287280Z",
+          "confirmed_by": "local-regression-operator",
+          "contract_id": "contract-d529cb13-eaff-4e52-aea0-50ed0f028f18",
+          "digest": "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "status": "CONFIRMED",
+          "version": 1
+        },
+        "effect_class": "NETWORK",
+        "request_id": "intent-req-c3c63643c7d0438894d6ff4af3dc20b7",
+        "resource": "email:blocked@example.invalid",
+        "session_id": "session-e312eca2-ee75-4d1d-a693-6d28c483818e",
+        "skill_ref": "core-ui",
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "tool": "send_email_dry_run"
+      },
+      "envelope": {
+        "object_type": "ToolCallEnvelope",
+        "schema_version": "1.0",
+        "algorithm": "SM2-SM3",
+        "key_id": "local-core-audit-v1",
+        "payload_digest": "c368fdfbf2d2c5b3c24adf026d53354ce3920e4e4f176318c22b4e0d0f715001",
+        "signature": "MEQCIEaMinas4Pz3wi6s7Y4srqADnc6ymF3Y9m5RS1vbZNjnAiBlpfe13Yzw7bKLum3cTe6D037lpf/8kDZpsFS0EAXVjA=="
+      }
+    },
+    {
+      "payload": {
+        "action": "read_file",
+        "canonical_args": {
+          "path": "workspace/hard_boundary-2-0/inputs/log.txt"
+        },
+        "contract_ref": {
+          "confirmed_at": "2026-10-07T12:30:30.287280Z",
+          "confirmed_by": "local-regression-operator",
+          "contract_id": "contract-d529cb13-eaff-4e52-aea0-50ed0f028f18",
+          "digest": "c107581fea002ec5829784735388e367632e99a1103d6bf73568be397d1db0cb",
+          "status": "CONFIRMED",
+          "version": 1
+        },
+        "effect_class": "READ",
+        "request_id": "intent-req-48db6e41a6a84d0b882c2effbfcf35cc",
+        "resource": "workspace/hard_boundary-2-0/inputs/log.txt",
+        "session_id": "session-e312eca2-ee75-4d1d-a693-6d28c483818e",
+        "skill_ref": "core-ui",
+        "task_id": "intent-bf689b1e35c84171ba9d3df88861bfb3",
+        "tool": "read_file"
+      },
+      "envelope": {
+        "object_type": "ToolCallEnvelope",
+        "schema_version": "1.0",
+        "algorithm": "SM2-SM3",
+        "key_id": "local-core-audit-v1",
+        "payload_digest": "a8e60f7b736f3b07d9387c36b2410166f53e8eb98571361f4718f6dc30347883",
+        "signature": "MEUCIFUJ02fWICmberqMQ7hrfVmau34F1ZXhlobYB6wU2hzdAiEA68YRxRv95dWsIP1wW5/5gtl+Ln8gsb40Z/czWTqglHw="
+      }
+    }
+  ]
+}

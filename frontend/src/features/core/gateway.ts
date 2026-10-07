@@ -105,6 +105,7 @@ export type RealToolEvaluationRequest = {
 export type RealEvaluationResult = {
   decision: GatewayDecision
   effective_permission: EffectivePermission
+  intent?: import('./generated').IntentAssessment | null
 }
 
 export type RealExecutionResult = {
@@ -185,13 +186,29 @@ export class RealCoreGatewayClient {
     })
   }
 
-  createTask(sessionId: string, objective: string): Promise<CoreTaskDraft> {
+  createTask(
+    sessionId: string,
+    objective: string,
+    completionCriteria: string[] = [],
+  ): Promise<CoreTaskDraft> {
     return this.post(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/tasks`,
-      { objective, completion_criteria: [] },
+      { objective, completion_criteria: completionCriteria },
     )
   }
 
+  proposeRecovery(taskId: string): Promise<RecoveryPlan> {
+    return this.post(
+      `/api/v1/tasks/${encodeURIComponent(taskId)}/intent/recovery`,
+      {},
+    )
+  }
+  approveRecovery(planId: string): Promise<RecoveryPlan> {
+    return this.post(
+      `/api/v1/intent/recovery/${encodeURIComponent(planId)}/approve`,
+      { confirmed_by: 'core-ui' },
+    )
+  }
   taskSnapshot(taskId: string): Promise<CoreTaskSnapshot> {
     return this.request(`/api/v1/tasks/${encodeURIComponent(taskId)}/snapshot`)
   }
@@ -308,3 +325,18 @@ export class RealCoreGatewayClient {
   }
 }
 import { apiUrl } from '../../api/url'
+
+export type RecoveryPlan = {
+  plan_id: string
+  status: string
+  added_scope: string[]
+  contaminated_refs: string[]
+  retry_budget: number
+  draft_contract_version: number
+  proposed_actions: Array<{
+    tool: string
+    resource: string
+    args: Record<string, unknown>
+  }>
+  error?: string
+}

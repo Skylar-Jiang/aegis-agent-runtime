@@ -14,6 +14,7 @@ from typing import Any
 from pydantic import Field, field_validator, model_validator
 
 from .common import ContractModel, UTCDateTime
+from .intent import IntentAssessment
 
 
 class GrantScope(StrEnum):
@@ -61,6 +62,8 @@ class GatewayReasonCode(StrEnum):
     CHECK_UNAVAILABLE = "CHECK_UNAVAILABLE"
     ADAPTER_BYPASS = "ADAPTER_BYPASS"
     SIGNATURE_INVALID = "SIGNATURE_INVALID"
+    INTENT_DEVIATION = "INTENT_DEVIATION"
+    INTENT_STOPPED = "INTENT_STOPPED"
 
 
 class EffectClass(StrEnum):
@@ -298,6 +301,7 @@ class ToolEvaluationRequest(ContractModel):
 class GatewayEvaluationResult(ContractModel):
     decision: GatewayDecision
     effective_permission: EffectivePermission
+    intent: IntentAssessment | None = None
 
 
 class GatewayExecutionResult(ContractModel):

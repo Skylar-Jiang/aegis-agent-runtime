@@ -76,10 +76,87 @@
           "CONFIRMATION_REQUIRED",
           "CHECK_UNAVAILABLE",
           "ADAPTER_BYPASS",
-          "SIGNATURE_INVALID"
+          "SIGNATURE_INVALID",
+          "INTENT_DEVIATION",
+          "INTENT_STOPPED"
         ],
         "title": "GatewayReasonCode",
         "type": "string"
+      },
+      "IntentAssessment": {
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "default": "intent-rule-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "risk_score": {
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Risk Score",
+            "type": "number"
+          },
+          "trigger_dimensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Trigger Dimensions",
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "policy_version": {
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "detector_version": {
+            "default": "bounded-report-rule:1",
+            "title": "Detector Version",
+            "type": "string"
+          },
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "contract_digest": {
+            "title": "Contract Digest",
+            "type": "string"
+          },
+          "step_index": {
+            "title": "Step Index",
+            "type": "integer"
+          },
+          "disposition": {
+            "title": "Disposition",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "risk_score",
+          "policy_version",
+          "contract_version",
+          "contract_digest",
+          "step_index",
+          "disposition",
+          "reason",
+          "enabled"
+        ],
+        "title": "IntentAssessment",
+        "type": "object"
       },
       "BehaviorEvent": {
         "additionalProperties": false,
@@ -228,6 +305,17 @@
             "maxItems": 100,
             "title": "Evidence Refs",
             "type": "array"
+          },
+          "intent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IntentAssessment"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "prepared_effect_id": {
             "anyOf": [

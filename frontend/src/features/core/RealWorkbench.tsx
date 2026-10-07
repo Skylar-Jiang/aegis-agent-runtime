@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '../../i18n'
 import type { BehaviorEvent } from './generated'
+import { IntentPanel } from './IntentPanel'
+import { RecoveryPanel } from './RecoveryPanel'
 import {
   RealCoreGatewayClient,
   CoreApiError,
@@ -172,6 +174,9 @@ export function RealWorkbench() {
   const [health, setHealth] = useState<CoreHealth | null>(null)
   const [healthError, setHealthError] = useState('')
   const [objective, setObjective] = useState('')
+  const [intentEnabled, setIntentEnabled] = useState(false)
+  const [reportPath, setReportPath] = useState('reports/report.txt')
+  const [requiredText, setRequiredText] = useState('Evidence:')
   const [reopenId, setReopenId] = useState(
     () => new URLSearchParams(window.location.search).get('task_id') ?? '',
   )
@@ -394,6 +399,15 @@ export function RealWorkbench() {
       setTask(snapshot.task)
       setObjective(snapshot.task.contract.contract.goals[0] ?? '')
       setRequest(restoredRequest)
+      if (restoredRequest && tools.includes(restoredRequest.envelope.tool)) {
+        setTool(restoredRequest.envelope.tool)
+        setResource(restoredRequest.envelope.resource)
+        setContent(
+          typeof restoredRequest.envelope.canonical_args.content === 'string'
+            ? restoredRequest.envelope.canonical_args.content
+            : '',
+        )
+      }
       setRaw(
         restoredRequest
           ? JSON.stringify(restoredRequest, null, 2)
@@ -429,6 +443,16 @@ export function RealWorkbench() {
       const created = await client.createTask(
         session.session_id,
         objective.trim(),
+        intentEnabled
+          ? [
+              `intent:report=${reportPath.trim()}`,
+              ...requiredText
+                .split('\n')
+                .map((value) => value.trim())
+                .filter(Boolean)
+                .map((value) => `intent:contains=${value}`),
+            ]
+          : [],
       )
       if (generation !== operationGeneration.current) return
       invalidate()
@@ -487,6 +511,10 @@ export function RealWorkbench() {
       const evaluation = await client.evaluate(next)
       setRequest(next)
       setResult(evaluation)
+      if (evaluation.intent?.disposition === 'SAFE_STOP')
+        setTask((previous) =>
+          previous ? { ...previous, status: 'CANCELLED' } : previous,
+        )
       setExecutionState('READY')
       setRaw(JSON.stringify(next, null, 2))
       await refreshEvents(next.envelope.task_id)
@@ -686,6 +714,51 @@ export function RealWorkbench() {
           {text('Reopen task', '重新打开任务')}
         </button>
       </div>
+      <details className="intent-setup">
+        <summary>
+          {text('Report completion conditions', '报告完成条件')}
+        </summary>
+        <label>
+          <input
+            type="checkbox"
+            checked={intentEnabled}
+            onChange={(event) => setIntentEnabled(event.target.checked)}
+          />
+          {text(
+            'Check report consistency before execution',
+            '执行前检查报告是否符合目标',
+          )}
+        </label>
+        {intentEnabled && (
+          <>
+            <label htmlFor="intent-report-path">
+              {text('Report path', '报告路径')}
+            </label>
+            <input
+              id="intent-report-path"
+              value={reportPath}
+              onChange={(event) => setReportPath(event.target.value)}
+            />
+            <label htmlFor="intent-required-text">
+              {text(
+                'Required report text (one item per line)',
+                '报告必须包含的内容（每行一项）',
+              )}
+            </label>
+            <textarea
+              id="intent-required-text"
+              value={requiredText}
+              onChange={(event) => setRequiredText(event.target.value)}
+            />
+            <p>
+              {text(
+                'Review these conditions in the contract before confirming. Mismatch stops the task.',
+                '创建任务后请审阅契约中的这些条件。报告不符合条件时将终止任务。',
+              )}
+            </p>
+          </>
+        )}
+      </details>
       <div className="workflow-steps" aria-label={text('Workflow', '操作流程')}>
         {[
           text('01  Task & contract', '01  任务与契约'),
@@ -825,6 +898,15 @@ export function RealWorkbench() {
                   </Property>
                   <Property label={text('Limits', '限制')}>
                     {JSON.stringify(task.contract.contract.limits)}
+                  </Property>
+                  <Property label={text('Completion conditions', '完成条件')}>
+                    {task.contract.contract.completion_criteria
+                      ?.map((item) =>
+                        item
+                          .replace('intent:report=', '报告路径：')
+                          .replace('intent:contains=', '必须包含：'),
+                      )
+                      .join('\n') || text('None declared', '未声明')}
                   </Property>
                 </dl>
               </details>
@@ -1096,6 +1178,14 @@ export function RealWorkbench() {
             )}
           </div>
           <Activity events={events} />
+          <IntentPanel events={events} onSelect={setSelected} />
+          {task && task.status === 'CANCELLED' && (
+            <RecoveryPanel
+              key={task.task_id}
+              taskId={task.task_id}
+              onComplete={() => reopen(task.task_id)}
+            />
+          )}
           <div className="audit-tools">
             <h3>{text('Independent verification', '独立核验')}</h3>
             <p className="micro-copy">

@@ -1,3 +1,5 @@
+> 历史方案：最新实现和验收状态请看 LOCAL_ACCEPTANCE.md，实际人工操作请看 HUMAN_HANDOFF.md。
+
 # 从代码接收到终验的执行流程
 
 ## 1. 拉取和接收

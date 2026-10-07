@@ -21,6 +21,7 @@ from ra_agent.api import (
     tools_router,
 )
 from ra_agent.api.body_limits import CoreBodyLimitMiddleware
+from ra_agent.api.core_intent import router as core_intent_router
 from ra_agent.api.core_views import router as core_views_router
 from ra_agent.confirmations import ConfirmationService
 from ra_agent.contracts import APIResponse, ContractService
@@ -116,6 +117,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.core_policy = TrustedCorePolicy(
         app, runtime_settings.security_config_dir / "core_skills.json"
     )
+    from ra_agent.security.intent import IntentRuleGuard
+    from ra_agent.security.intent_policy import load_policy
+
+    intent_policy_path = (
+        core_state.path or runtime_settings.core_event_log_path
+    ).parent / "intent-policy.json"
     app.state.core_gateway = ToolGateway(
         contracts=app.state.core_contract_service,
         resolver=app.state.core_permission_resolver,
@@ -129,6 +136,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         permission_provider=app.state.core_policy.authority_for,
         admission_guard=guard,
         task_limit_provider=app.state.core_policy.task_limits_for,
+        intent_guard=IntentRuleGuard(
+            core_state,
+            policy_provider=lambda: load_policy(intent_policy_path),
+        ),
     )
     app.state.services = replace(
         app.state.services,
@@ -143,6 +154,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(tasks_router)
     app.include_router(core_v1_router)
     app.include_router(core_views_router)
+    app.include_router(core_intent_router)
     app.include_router(profile_router)
     app.include_router(conversation_router)
     app.include_router(tools_router)

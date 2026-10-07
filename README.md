@@ -57,9 +57,19 @@ Aegis-Intent consists of:
 
 ## Development
 
-```bash
-python scripts/start_core.py
+后端使用 Python 3.11 和 backend/uv.lock。前端使用 Node.js >=24.14.0 且 <25，以及 pnpm 10.12.4。
 
-Frontend:
-cd frontend
+```powershell
+python scripts/start_core.py
+```
+
+在另一终端先进入 frontend，保证 Corepack 读取该目录的 packageManager：
+
+```powershell
+Set-Location frontend
+corepack pnpm --version
+corepack pnpm install --frozen-lockfile
 corepack pnpm dev
+```
+
+本地 Intent 实现和验收证据见 [实验入口](experiments/intent/README.md)。

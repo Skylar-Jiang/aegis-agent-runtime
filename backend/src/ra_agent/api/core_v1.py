@@ -343,6 +343,8 @@ async def evaluate_tool_call(
 ) -> APIResponse[GatewayEvaluationResult]:
     try:
         result = await _gateway(request).evaluate(body.envelope, body.permissions)
+        if result.intent is not None and result.intent.disposition == "SAFE_STOP":
+            await set_core_task_status(request, body.envelope.task_id, "CANCELLED")
     except (GatewayError, ConfirmationConflictError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return APIResponse(data=result)

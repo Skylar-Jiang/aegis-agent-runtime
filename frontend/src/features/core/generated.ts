@@ -18,6 +18,7 @@ export type BehaviorEvent = {
   request_id?: string | null
   reason_code?: GatewayReasonCode | null
   evidence_refs?: Array<string>
+  intent?: IntentAssessment | null
   prepared_effect_id?: string | null
   effect_descriptor_digest?: string | null
   result_commitment?: string | null
@@ -60,11 +61,26 @@ export type GatewayDecision = {
 
 export type GatewayDecisionType = "ALLOW" | "DENY" | "REQUIRE_CONFIRMATION" | "REQUIRE_REPLAN"
 
-export type GatewayReasonCode = "ALLOWED" | "USER_DENY" | "OUT_OF_CONTRACT" | "SKILL_LIMIT" | "SYSTEM_DENY" | "RESOURCE_MISMATCH" | "VERSION_STALE" | "CONFIRMATION_REQUIRED" | "CHECK_UNAVAILABLE" | "ADAPTER_BYPASS" | "SIGNATURE_INVALID"
+export type GatewayReasonCode = "ALLOWED" | "USER_DENY" | "OUT_OF_CONTRACT" | "SKILL_LIMIT" | "SYSTEM_DENY" | "RESOURCE_MISMATCH" | "VERSION_STALE" | "CONFIRMATION_REQUIRED" | "CHECK_UNAVAILABLE" | "ADAPTER_BYPASS" | "SIGNATURE_INVALID" | "INTENT_DEVIATION" | "INTENT_STOPPED"
 
 export type GrantEffect = "ALLOW" | "DENY"
 
 export type GrantScope = "GLOBAL" | "SESSION" | "TASK" | "ONE_SHOT"
+
+export type IntentAssessment = {
+  schema_version?: string
+  risk_score: number
+  trigger_dimensions?: Array<string>
+  evidence_refs?: Array<string>
+  policy_version: string
+  detector_version?: string
+  contract_version: number
+  contract_digest: string
+  step_index: number
+  disposition: string
+  reason: string
+  enabled: boolean
+}
 
 export type PermissionGrant = {
   subject: string

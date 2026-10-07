@@ -6,6 +6,7 @@ from pydantic import Field, field_validator
 
 from ra_agent.contracts.common import ContractModel, UTCDateTime
 from ra_agent.contracts.core_v1 import GatewayDecisionType, GatewayReasonCode
+from ra_agent.contracts.intent import IntentAssessment
 
 Identifier = Annotated[str, Field(min_length=1, max_length=128, pattern=r"\S")]
 Reference = Annotated[str, Field(min_length=1, max_length=512, pattern=r"\S")]
@@ -38,6 +39,7 @@ class BehaviorEvent(ContractModel):
     request_id: Identifier | None = None
     reason_code: GatewayReasonCode | None = None
     evidence_refs: list[Reference] = Field(default_factory=list, max_length=100)
+    intent: IntentAssessment | None = None
 
     # Reserved Cap extension points; Core stores these without interpreting them.
     prepared_effect_id: Identifier | None = None
