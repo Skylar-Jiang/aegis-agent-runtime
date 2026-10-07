@@ -13,6 +13,7 @@ from ra_agent.api import (
     demo_router,
     experiments_router,
     graph_router,
+    intent_router,
     profile_router,
     reports_router,
     streams_router,
@@ -45,6 +46,13 @@ from ra_agent.gateway.audit_view import CoreAuditView
 from ra_agent.gateway.runtime_bridge import build_core_runtime_bridge
 from ra_agent.gateway.state import CoreStateStore
 from ra_agent.gateway.trusted_policy import TrustedCorePolicy
+from ra_agent.intent import (
+    BaselineIntentDetector,
+    CorrectionManager,
+    IntentEnforcer,
+    IntentRegistry,
+    RuleBasedIntentExtractor,
+)
 from ra_agent.permissions import PermissionResolver
 
 
@@ -116,6 +124,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.core_policy = TrustedCorePolicy(
         app, runtime_settings.security_config_dir / "core_skills.json"
     )
+    app.state.intent_registry = IntentRegistry(store=core_state)
+    app.state.intent_correction_manager = CorrectionManager(store=core_state)
+    app.state.intent_extractor = RuleBasedIntentExtractor()
+    app.state.intent_detector = BaselineIntentDetector(app.state.intent_registry)
+    app.state.intent_enforcer = (
+        IntentEnforcer(
+            app.state.intent_detector,
+            timeout_seconds=runtime_settings.intent_detection_timeout_seconds,
+        )
+        if runtime_settings.intent_baseline_enabled
+        else None
+    )
     app.state.core_gateway = ToolGateway(
         contracts=app.state.core_contract_service,
         resolver=app.state.core_permission_resolver,
@@ -129,6 +149,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         permission_provider=app.state.core_policy.authority_for,
         admission_guard=guard,
         task_limit_provider=app.state.core_policy.task_limits_for,
+        intent_enforcer=app.state.intent_enforcer,
+        intent_effect_recorder=app.state.intent_correction_manager.record_effect,
     )
     app.state.services = replace(
         app.state.services,
@@ -153,6 +175,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(reports_router)
     app.include_router(streams_router)
     app.include_router(experiments_router)
+    app.include_router(intent_router)
 
     @app.get("/health")
     async def health() -> APIResponse[dict[str, str]]:
