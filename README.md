@@ -62,4 +62,5 @@ python scripts/start_core.py
 
 Frontend:
 cd frontend
+corepack pnpm --version
 corepack pnpm dev

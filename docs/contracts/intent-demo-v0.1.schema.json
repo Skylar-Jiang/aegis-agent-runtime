@@ -1,0 +1,526 @@
+{
+  "$defs": {
+    "BehaviorEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "event_id": {
+          "minLength": 1,
+          "title": "Event Id",
+          "type": "string"
+        },
+        "task_id": {
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        },
+        "step_index": {
+          "minimum": 1,
+          "title": "Step Index",
+          "type": "integer"
+        },
+        "actor": {
+          "minLength": 1,
+          "title": "Actor",
+          "type": "string"
+        },
+        "source_type": {
+          "enum": [
+            "user",
+            "agent",
+            "retrieval",
+            "tool",
+            "memory",
+            "system"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "source_ref": {
+          "minLength": 1,
+          "title": "Source Ref",
+          "type": "string"
+        },
+        "subgoal": {
+          "title": "Subgoal",
+          "type": "string"
+        },
+        "tool": {
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "action": {
+          "minLength": 1,
+          "title": "Action",
+          "type": "string"
+        },
+        "args_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Args Digest",
+          "type": "string"
+        },
+        "target": {
+          "minLength": 1,
+          "title": "Target",
+          "type": "string"
+        },
+        "risk_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Risk Flags",
+          "type": "array"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "task_id",
+        "step_index",
+        "actor",
+        "source_type",
+        "source_ref",
+        "subgoal",
+        "tool",
+        "action",
+        "args_digest",
+        "target",
+        "risk_flags",
+        "timestamp"
+      ],
+      "title": "BehaviorEvent",
+      "type": "object"
+    },
+    "CorrectionPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "plan_id": {
+          "minLength": 1,
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "base_contract_version": {
+          "minimum": 1,
+          "title": "Base Contract Version",
+          "type": "integer"
+        },
+        "contaminated_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Contaminated Refs",
+          "type": "array"
+        },
+        "proposed_actions": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Proposed Actions",
+          "type": "array"
+        },
+        "added_scope": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Added Scope",
+          "type": "array"
+        },
+        "confirmation_required": {
+          "title": "Confirmation Required",
+          "type": "boolean"
+        },
+        "retry_budget": {
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Retry Budget",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "PROPOSED",
+            "EXECUTED",
+            "REJECTED"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_id",
+        "base_contract_version",
+        "contaminated_refs",
+        "proposed_actions",
+        "added_scope",
+        "confirmation_required",
+        "retry_budget",
+        "status"
+      ],
+      "title": "CorrectionPlan",
+      "type": "object"
+    },
+    "DecisionResult": {
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "minLength": 1,
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "ALLOW",
+            "BLOCK",
+            "CLARIFY",
+            "REPLAN"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "risk_score": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Risk Score",
+          "type": "number"
+        },
+        "trigger_dimensions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Trigger Dimensions",
+          "type": "array"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "reason_code": {
+          "minLength": 1,
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "policy_version": {
+          "minLength": 1,
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "detector_version": {
+          "minLength": 1,
+          "title": "Detector Version",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_id",
+        "decision",
+        "risk_score",
+        "trigger_dimensions",
+        "evidence_refs",
+        "reason_code",
+        "policy_version",
+        "detector_version",
+        "expires_at"
+      ],
+      "title": "DecisionResult",
+      "type": "object"
+    },
+    "EffectCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "effect_id": {
+          "minLength": 1,
+          "title": "Effect Id",
+          "type": "string"
+        },
+        "request_id": {
+          "minLength": 1,
+          "title": "Request Id",
+          "type": "string"
+        },
+        "tool": {
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "normalized_target": {
+          "minLength": 1,
+          "title": "Normalized Target",
+          "type": "string"
+        },
+        "before_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Before Digest",
+          "type": "string"
+        },
+        "after_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "After Digest",
+          "type": "string"
+        },
+        "side_effect_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Side Effect Ref"
+        },
+        "status": {
+          "enum": [
+            "UNCHANGED",
+            "APPLIED",
+            "FAILED",
+            "MISMATCH"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "effect_id",
+        "request_id",
+        "tool",
+        "normalized_target",
+        "before_digest",
+        "after_digest",
+        "side_effect_ref",
+        "status"
+      ],
+      "title": "EffectCheck",
+      "type": "object"
+    },
+    "IntentSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "intent_id": {
+          "minLength": 1,
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "task_id": {
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        },
+        "goal": {
+          "minLength": 1,
+          "title": "Goal",
+          "type": "string"
+        },
+        "scope": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scope",
+          "type": "array"
+        },
+        "allowed_actions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Actions",
+          "type": "array"
+        },
+        "forbidden_actions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Forbidden Actions",
+          "type": "array"
+        },
+        "success_criteria": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Success Criteria",
+          "type": "array"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "confirmed_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confirmed By"
+        },
+        "confirmed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confirmed At"
+        }
+      },
+      "required": [
+        "intent_id",
+        "task_id",
+        "goal",
+        "scope",
+        "allowed_actions",
+        "forbidden_actions",
+        "success_criteria",
+        "source_refs",
+        "version",
+        "confirmed_by",
+        "confirmed_at"
+      ],
+      "title": "IntentSpec",
+      "type": "object"
+    },
+    "TaskContract": {
+      "additionalProperties": false,
+      "properties": {
+        "contract_id": {
+          "minLength": 1,
+          "title": "Contract Id",
+          "type": "string"
+        },
+        "contract_version": {
+          "minimum": 1,
+          "title": "Contract Version",
+          "type": "integer"
+        },
+        "intent_ref": {
+          "minLength": 1,
+          "title": "Intent Ref",
+          "type": "string"
+        },
+        "resources": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Resources",
+          "type": "array"
+        },
+        "tools": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tools",
+          "type": "array"
+        },
+        "permissions": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Permissions",
+          "type": "object"
+        },
+        "completion_conditions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Completion Conditions",
+          "type": "array"
+        },
+        "parent_version": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Parent Version"
+        },
+        "status": {
+          "enum": [
+            "DRAFT",
+            "CONFIRMED",
+            "SUPERSEDED"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Digest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "contract_id",
+        "contract_version",
+        "intent_ref",
+        "resources",
+        "tools",
+        "permissions",
+        "completion_conditions",
+        "parent_version",
+        "status",
+        "digest"
+      ],
+      "title": "TaskContract",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Catalog used to publish JSON Schema; never a production runtime envelope.",
+  "properties": {
+    "intent_spec": {
+      "$ref": "#/$defs/IntentSpec"
+    },
+    "task_contract": {
+      "$ref": "#/$defs/TaskContract"
+    },
+    "behavior_event": {
+      "$ref": "#/$defs/BehaviorEvent"
+    },
+    "decision_result": {
+      "$ref": "#/$defs/DecisionResult"
+    },
+    "correction_plan": {
+      "$ref": "#/$defs/CorrectionPlan"
+    },
+    "effect_check": {
+      "$ref": "#/$defs/EffectCheck"
+    }
+  },
+  "required": [
+    "intent_spec",
+    "task_contract",
+    "behavior_event",
+    "decision_result",
+    "correction_plan",
+    "effect_check"
+  ],
+  "title": "IntentDemoSchema",
+  "type": "object"
+}

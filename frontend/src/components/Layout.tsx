@@ -49,6 +49,7 @@ export function Layout() {
       label: text('Approvals', '审批中心'),
     },
     { path: '/audit', icon: 'audit', label: text('Audit', '执行审计') },
+    { path: '/intent', icon: 'core', label: text('Intent demo', 'Intent 演示') },
     {
       path: '/experiments',
       icon: 'experiments',
