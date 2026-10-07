@@ -1,0 +1,471 @@
+{
+  "schema_version": "1.0",
+  "status": "complete",
+  "started_at": "2026-09-23T04:49:40.910285+00:00",
+  "environment": {
+    "python": "3.11.15 (main, Jun 23 2026, 15:20:37) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "cpu_count": 32,
+    "openssl": "OpenSSL 3.5.5 27 Jan 2026 (Library: OpenSSL 3.5.5 27 Jan 2026)",
+    "git_commit": "d654df75cb980e0dad65a91d90c8d4c3e96af6ef",
+    "working_tree_dirty": true
+  },
+  "parameters": {
+    "output": "C:\\Users\\LENOVO\\Desktop\\我的文件\\计算机学习\\密码学竞赛\\aegis\\.runtime\\review-fixes\\benchmarks\\20260923T044940Z-9af71f9b",
+    "history_sizes": [
+      1
+    ],
+    "samples": 1,
+    "crypto_samples": 1,
+    "export_samples": 1,
+    "objects": 1,
+    "object_bytes": 1024,
+    "concurrency": 1,
+    "verification_jobs": 1,
+    "boundary_checks": true
+  },
+  "measurement_notes": [
+    "Current working-tree implementation; no baseline-versus-patch speedup claim.",
+    "Percentiles use linear interpolation; raw monotonic-clock samples are retained.",
+    "SQLite append includes thread dispatch, validation, hashing, transaction and commit.",
+    "SM2 sign includes the provider's mandatory post-sign verification.",
+    "HTTP verification and health use real loopback TCP and the same FastAPI event loop.",
+    "Loop lag is excess over a 10 ms sleep; compare the idle baseline on this OS.",
+    "Synthetic workload; these results do not establish production capacity or an SLO."
+  ],
+  "measurements": [
+    {
+      "metric": "sqlite_append",
+      "history_events": 1,
+      "samples": 1,
+      "min_ms": 14.0124,
+      "p50_ms": 14.0124,
+      "p95_ms": 14.0124,
+      "max_ms": 14.0124,
+      "mean_ms": 14.0124,
+      "raw_ms": [
+        14.0124
+      ]
+    },
+    {
+      "metric": "sqlite_complete_replay",
+      "history_events": 2,
+      "samples": 1,
+      "min_ms": 5.0796,
+      "p50_ms": 5.0796,
+      "p95_ms": 5.0796,
+      "max_ms": 5.0796,
+      "mean_ms": 5.0796,
+      "raw_ms": [
+        5.0796
+      ]
+    },
+    {
+      "metric": "sm2_sign_with_self_verification",
+      "samples": 1,
+      "min_ms": 129.5616,
+      "p50_ms": 129.5616,
+      "p95_ms": 129.5616,
+      "max_ms": 129.5616,
+      "mean_ms": 129.5616,
+      "raw_ms": [
+        129.5616
+      ]
+    },
+    {
+      "metric": "sm2_verify",
+      "samples": 1,
+      "min_ms": 53.3235,
+      "p50_ms": 53.3235,
+      "p95_ms": 53.3235,
+      "max_ms": 53.3235,
+      "mean_ms": 53.3235,
+      "raw_ms": [
+        53.3235
+      ]
+    },
+    {
+      "metric": "sign_and_persist_evidence",
+      "samples": 1,
+      "min_ms": 148.7767,
+      "p50_ms": 148.7767,
+      "p95_ms": 148.7767,
+      "max_ms": 148.7767,
+      "mean_ms": 148.7767,
+      "raw_ms": [
+        148.7767
+      ]
+    },
+    {
+      "metric": "export_with_new_checkpoint",
+      "samples": 1,
+      "min_ms": 430.7529,
+      "p50_ms": 430.7529,
+      "p95_ms": 430.7529,
+      "max_ms": 430.7529,
+      "mean_ms": 430.7529,
+      "raw_ms": [
+        430.7529
+      ]
+    },
+    {
+      "metric": "verify_bundle_service",
+      "samples": 1,
+      "min_ms": 233.6584,
+      "p50_ms": 233.6584,
+      "p95_ms": 233.6584,
+      "max_ms": 233.6584,
+      "mean_ms": 233.6584,
+      "raw_ms": [
+        233.6584
+      ]
+    },
+    {
+      "metric": "verify_bundle_http_concurrent",
+      "samples": 1,
+      "min_ms": 232.7252,
+      "p50_ms": 232.7252,
+      "p95_ms": 232.7252,
+      "max_ms": 232.7252,
+      "mean_ms": 232.7252,
+      "raw_ms": [
+        232.7252
+      ]
+    },
+    {
+      "metric": "idle_loop_lag",
+      "samples": 82,
+      "min_ms": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 6.1732,
+      "max_ms": 31.3805,
+      "mean_ms": 2.0565,
+      "raw_ms": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        31.380499999999998,
+        0,
+        0,
+        7.996400000000001,
+        5.2149,
+        5.3581,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3.0060000000000002,
+        5.9655000000000005,
+        5.8725000000000005,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1.4016000000000002,
+        5.853400000000001,
+        5.5649,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2.4467999999999996,
+        5.48,
+        6.181100000000001,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2.5566999999999993,
+        6.542300000000001,
+        5.731400000000001,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1.6884999999999994,
+        6.023700000000002,
+        5.8385,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1.4771999999999998,
+        5.577500000000001,
+        6.199999999999999,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1.8582,
+        5.6563,
+        4.756,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2.4316999999999993,
+        5.7889,
+        5.656599999999999,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3.3861000000000008,
+        5.742800000000001
+      ]
+    },
+    {
+      "metric": "idle_health_http",
+      "samples": 10,
+      "min_ms": 2.3011,
+      "p50_ms": 3.4674,
+      "p95_ms": 28.3233,
+      "max_ms": 47.9666,
+      "mean_ms": 7.811,
+      "raw_ms": [
+        47.9666,
+        2.6989,
+        4.3148,
+        3.3759,
+        3.2918,
+        3.5588,
+        3.7659,
+        3.8006,
+        3.0361,
+        2.3011
+      ]
+    },
+    {
+      "metric": "verification_load_loop_lag",
+      "samples": 44,
+      "min_ms": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 6.0861,
+      "max_ms": 15.9412,
+      "mean_ms": 1.6624,
+      "raw_ms": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        10.2151,
+        6.1005,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1.5192999999999994,
+        5.953900000000001,
+        5.4917,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2.4529999999999994,
+        6.004300000000001,
+        5.5351,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2.5937,
+        5.344099999999999,
+        4.9717,
+        0,
+        0,
+        0,
+        0,
+        0,
+        15.941199999999998,
+        1.0214999999999996,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "metric": "verification_load_health_http",
+      "samples": 6,
+      "min_ms": 2.7324,
+      "p50_ms": 4.2295,
+      "p95_ms": 6.4294,
+      "max_ms": 6.9025,
+      "mean_ms": 4.3529,
+      "raw_ms": [
+        6.9025,
+        4.4341,
+        4.025,
+        3.0129,
+        5.0102,
+        2.7324
+      ]
+    }
+  ],
+  "bundle_bytes": 2904,
+  "http": {
+    "transport": "loopback TCP",
+    "base_url": "http://127.0.0.1:59205",
+    "audit_concurrency_limit": 2
+  },
+  "concurrent_verification": {
+    "jobs": 1,
+    "concurrency": 1,
+    "wall_ms": 297.3747,
+    "completed_per_second": 3.362760853562862,
+    "health_failures": 0
+  },
+  "boundary_checks": [
+    {
+      "name": "minus",
+      "bytes": 67108863,
+      "expected_bytes": 67108863,
+      "contains_utf8_chinese": true,
+      "http_export_status": 200,
+      "http_export_ms": 10259.3923,
+      "http_verification": {
+        "valid": true,
+        "verified_events": 5,
+        "anchored_from_seq": 1,
+        "anchored_to_seq": 5,
+        "tail_complete": false,
+        "errors": []
+      },
+      "direct_verification": {
+        "valid": true,
+        "verified_events": 5,
+        "anchored_from_seq": 1,
+        "anchored_to_seq": 5,
+        "tail_complete": false,
+        "errors": []
+      },
+      "cli_exit": 0,
+      "cli_ms": 3978.0092,
+      "cli_result": {
+        "valid": true,
+        "verified_events": 5,
+        "anchored_from_seq": 1,
+        "anchored_to_seq": 5,
+        "tail_complete": false,
+        "errors": []
+      },
+      "bundle_file": "boundary-minus.json",
+      "fresh_oversize_export": null
+    },
+    {
+      "name": "exact",
+      "bytes": 67108864,
+      "expected_bytes": 67108864,
+      "contains_utf8_chinese": true,
+      "http_export_status": 200,
+      "http_export_ms": 10691.8382,
+      "http_verification": {
+        "valid": true,
+        "verified_events": 5,
+        "anchored_from_seq": 1,
+        "anchored_to_seq": 5,
+        "tail_complete": false,
+        "errors": []
+      },
+      "direct_verification": {
+        "valid": true,
+        "verified_events": 5,
+        "anchored_from_seq": 1,
+        "anchored_to_seq": 5,
+        "tail_complete": false,
+        "errors": []
+      },
+      "cli_exit": 0,
+      "cli_ms": 4354.5705,
+      "cli_result": {
+        "valid": true,
+        "verified_events": 5,
+        "anchored_from_seq": 1,
+        "anchored_to_seq": 5,
+        "tail_complete": false,
+        "errors": []
+      },
+      "bundle_file": "boundary-exact.json",
+      "fresh_oversize_export": null
+    },
+    {
+      "name": "plus",
+      "bytes": 67108865,
+      "expected_bytes": 67108865,
+      "contains_utf8_chinese": true,
+      "http_export_status": 413,
+      "http_export_ms": 9091.0076,
+      "http_verification": {
+        "valid": false,
+        "verified_events": 0,
+        "anchored_from_seq": null,
+        "anchored_to_seq": null,
+        "tail_complete": false,
+        "errors": [
+          {
+            "code": "INPUT_TOO_LARGE",
+            "message": "INPUT_TOO_LARGE: audit bundle exceeds 64 MiB"
+          }
+        ]
+      },
+      "direct_verification": {
+        "valid": false,
+        "verified_events": 0,
+        "anchored_from_seq": null,
+        "anchored_to_seq": null,
+        "tail_complete": false,
+        "errors": [
+          {
+            "code": "INPUT_TOO_LARGE",
+            "message": "INPUT_TOO_LARGE: audit bundle exceeds 64 MiB"
+          }
+        ]
+      },
+      "cli_exit": 1,
+      "cli_ms": 1429.2361,
+      "cli_result": {
+        "valid": false,
+        "verified_events": 0,
+        "anchored_from_seq": null,
+        "anchored_to_seq": null,
+        "tail_complete": false,
+        "errors": [
+          {
+            "code": "INPUT_TOO_LARGE",
+            "message": "Cannot load/validate verifier inputs; check files and OpenSSL 3"
+          }
+        ]
+      },
+      "bundle_file": "boundary-plus.json",
+      "fresh_oversize_export": {
+        "http_status": 413,
+        "checkpoint_published": false
+      }
+    }
+  ],
+  "storage_bytes": {
+    "event_database": 49152,
+    "signed_evidence_and_index": 239029352,
+    "trusted_checkpoints": 2311,
+    "downloaded_bundle": 2904
+  },
+  "private_key_retained": false,
+  "finished_at": "2026-09-23T04:52:21.666110+00:00"
+}

@@ -1,0 +1,814 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "P2 Core event and UI contract proposal",
+    "version": "1.0",
+    "description": "Core event schemas; the task-events route is implemented in PR2."
+  },
+  "paths": {
+    "/api/v1/tasks/{task_id}/events": {
+      "get": {
+        "operationId": "listCoreTaskEvents",
+        "x-implementation-status": "implemented-pr2",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "APIResponse containing task events in sequence order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BehaviorEvent"
+                      }
+                    },
+                    "error": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "GatewayDecisionType": {
+        "enum": [
+          "ALLOW",
+          "DENY",
+          "REQUIRE_CONFIRMATION",
+          "REQUIRE_REPLAN"
+        ],
+        "title": "GatewayDecisionType",
+        "type": "string"
+      },
+      "GatewayReasonCode": {
+        "enum": [
+          "ALLOWED",
+          "USER_DENY",
+          "OUT_OF_CONTRACT",
+          "SKILL_LIMIT",
+          "SYSTEM_DENY",
+          "RESOURCE_MISMATCH",
+          "VERSION_STALE",
+          "CONFIRMATION_REQUIRED",
+          "CHECK_UNAVAILABLE",
+          "ADAPTER_BYPASS",
+          "SIGNATURE_INVALID"
+        ],
+        "title": "GatewayReasonCode",
+        "type": "string"
+      },
+      "BehaviorEvent": {
+        "additionalProperties": false,
+        "description": "A stored event with all twelve plan fields explicitly present.\n\nNullable facts are explicit; consumers must not invent missing provenance.\nThe store allocates sequence before validating this persisted representation.",
+        "properties": {
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "event_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "sequence": {
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "task_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "parent_event_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Event Id"
+          },
+          "type": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Type",
+            "type": "string"
+          },
+          "actor": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Actor",
+            "type": "string"
+          },
+          "source_ref": {
+            "maxLength": 512,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Source Ref",
+            "type": "string"
+          },
+          "object_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Object Digest"
+          },
+          "state": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "State",
+            "type": "string"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GatewayDecisionType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Digest"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Request Id"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GatewayReasonCode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "evidence_refs": {
+            "items": {
+              "maxLength": 512,
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "prepared_effect_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Prepared Effect Id"
+          },
+          "effect_descriptor_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Effect Descriptor Digest"
+          },
+          "result_commitment": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result Commitment"
+          },
+          "commit_epoch": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Commit Epoch"
+          },
+          "execution_receipt_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Execution Receipt Id"
+          },
+          "compliance_proof_ref": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Compliance Proof Ref"
+          }
+        },
+        "required": [
+          "event_id",
+          "sequence",
+          "task_id",
+          "parent_event_id",
+          "type",
+          "actor",
+          "source_ref",
+          "object_digest",
+          "state",
+          "decision",
+          "result_digest",
+          "occurred_at"
+        ],
+        "title": "BehaviorEvent",
+        "type": "object"
+      },
+      "ConfirmationPolicyV1": {
+        "additionalProperties": false,
+        "properties": {
+          "required_actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Actions",
+            "type": "array"
+          },
+          "required_effect_classes": {
+            "items": {
+              "$ref": "#/components/schemas/EffectClass"
+            },
+            "title": "Required Effect Classes",
+            "type": "array"
+          }
+        },
+        "title": "ConfirmationPolicyV1",
+        "type": "object"
+      },
+      "ContractPermissionRule": {
+        "additionalProperties": false,
+        "description": "One TaskContractV2 allow/deny boundary rule.\n\n``*`` is supported for tool/action/effect. ``resource`` additionally accepts\nfnmatch-style patterns such as ``reports/**``.",
+        "properties": {
+          "tool": {
+            "default": "*",
+            "title": "Tool",
+            "type": "string"
+          },
+          "action": {
+            "minLength": 1,
+            "title": "Action",
+            "type": "string"
+          },
+          "resource": {
+            "default": "*",
+            "title": "Resource",
+            "type": "string"
+          },
+          "effect": {
+            "default": "*",
+            "title": "Effect",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "ContractPermissionRule",
+        "type": "object"
+      },
+      "EffectClass": {
+        "enum": [
+          "READ",
+          "WRITE",
+          "DELETE",
+          "MEMORY",
+          "NETWORK",
+          "PROCESS",
+          "OTHER"
+        ],
+        "title": "EffectClass",
+        "type": "string"
+      },
+      "TaskContractV2": {
+        "additionalProperties": false,
+        "properties": {
+          "contract_id": {
+            "minLength": 1,
+            "title": "Contract Id",
+            "type": "string"
+          },
+          "session_id": {
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "task_id": {
+            "minLength": 1,
+            "title": "Task Id",
+            "type": "string"
+          },
+          "user_id": {
+            "minLength": 1,
+            "title": "User Id",
+            "type": "string"
+          },
+          "version": {
+            "minimum": 1,
+            "title": "Version",
+            "type": "integer"
+          },
+          "goals": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Goals",
+            "type": "array"
+          },
+          "completion_criteria": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Completion Criteria",
+            "type": "array"
+          },
+          "allowed": {
+            "items": {
+              "$ref": "#/components/schemas/ContractPermissionRule"
+            },
+            "title": "Allowed",
+            "type": "array"
+          },
+          "denied": {
+            "items": {
+              "$ref": "#/components/schemas/ContractPermissionRule"
+            },
+            "title": "Denied",
+            "type": "array"
+          },
+          "limits": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "title": "Limits",
+            "type": "object"
+          },
+          "confirmation": {
+            "$ref": "#/components/schemas/ConfirmationPolicyV1"
+          },
+          "policy_version": {
+            "minLength": 1,
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "tool_manifest_digest": {
+            "minLength": 1,
+            "title": "Tool Manifest Digest",
+            "type": "string"
+          },
+          "parent_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Parent Digest"
+          },
+          "prepared_effect_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Prepared Effect Id"
+          },
+          "effect_descriptor_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Effect Descriptor Digest"
+          },
+          "result_commitment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result Commitment"
+          },
+          "commit_epoch": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Commit Epoch"
+          },
+          "execution_receipt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Execution Receipt Id"
+          },
+          "compliance_proof_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Compliance Proof Ref"
+          }
+        },
+        "required": [
+          "contract_id",
+          "session_id",
+          "task_id",
+          "user_id",
+          "version",
+          "goals",
+          "policy_version",
+          "tool_manifest_digest"
+        ],
+        "title": "TaskContractV2",
+        "type": "object"
+      },
+      "GrantEffect": {
+        "enum": [
+          "ALLOW",
+          "DENY"
+        ],
+        "title": "GrantEffect",
+        "type": "string"
+      },
+      "GrantScope": {
+        "enum": [
+          "GLOBAL",
+          "SESSION",
+          "TASK",
+          "ONE_SHOT"
+        ],
+        "title": "GrantScope",
+        "type": "string"
+      },
+      "PermissionGrant": {
+        "additionalProperties": false,
+        "properties": {
+          "subject": {
+            "minLength": 1,
+            "title": "Subject",
+            "type": "string"
+          },
+          "skill": {
+            "minLength": 1,
+            "title": "Skill",
+            "type": "string"
+          },
+          "tool": {
+            "minLength": 1,
+            "title": "Tool",
+            "type": "string"
+          },
+          "action": {
+            "minLength": 1,
+            "title": "Action",
+            "type": "string"
+          },
+          "resource": {
+            "minLength": 1,
+            "title": "Resource",
+            "type": "string"
+          },
+          "effect": {
+            "$ref": "#/components/schemas/GrantEffect"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/GrantScope"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expires At"
+          },
+          "source": {
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "limits": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Limits",
+            "type": "object"
+          },
+          "scope_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Scope Ref"
+          }
+        },
+        "required": [
+          "subject",
+          "skill",
+          "tool",
+          "action",
+          "resource",
+          "effect",
+          "scope",
+          "source"
+        ],
+        "title": "PermissionGrant",
+        "type": "object"
+      },
+      "EffectivePermission": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "items": {
+              "$ref": "#/components/schemas/PermissionGrant"
+            },
+            "title": "Allowed",
+            "type": "array"
+          },
+          "denied": {
+            "items": {
+              "$ref": "#/components/schemas/PermissionGrant"
+            },
+            "title": "Denied",
+            "type": "array"
+          },
+          "constraints": {
+            "additionalProperties": true,
+            "title": "Constraints",
+            "type": "object"
+          },
+          "matched_sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Matched Sources",
+            "type": "array"
+          },
+          "conflict_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Conflict Reason"
+          },
+          "conflict_code": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GatewayReasonCode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "requires_confirmation": {
+            "default": false,
+            "title": "Requires Confirmation",
+            "type": "boolean"
+          }
+        },
+        "title": "EffectivePermission",
+        "type": "object"
+      },
+      "GatewayDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/GatewayDecisionType"
+          },
+          "reason_code": {
+            "$ref": "#/components/schemas/GatewayReasonCode"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "versions": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "title": "Versions",
+            "type": "object"
+          },
+          "confirmation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confirmation Id"
+          }
+        },
+        "required": [
+          "decision",
+          "reason_code"
+        ],
+        "title": "GatewayDecision",
+        "type": "object"
+      }
+    }
+  }
+}

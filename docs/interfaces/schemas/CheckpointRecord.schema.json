@@ -1,0 +1,120 @@
+{
+  "$defs": {
+    "AuditCheckpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "checkpoint_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Checkpoint Id",
+          "type": "string"
+        },
+        "from_seq": {
+          "minimum": 1,
+          "title": "From Seq",
+          "type": "integer"
+        },
+        "to_seq": {
+          "minimum": 1,
+          "title": "To Seq",
+          "type": "integer"
+        },
+        "chain_head": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Chain Head",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "signer": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Signer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "checkpoint_id",
+        "from_seq",
+        "to_seq",
+        "chain_head",
+        "created_at",
+        "signer"
+      ],
+      "title": "AuditCheckpoint",
+      "type": "object"
+    },
+    "SignedEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "object_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Object Type",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "algorithm": {
+          "const": "SM2-SM3",
+          "default": "SM2-SM3",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "key_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Key Id",
+          "type": "string"
+        },
+        "payload_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Payload Digest",
+          "type": "string"
+        },
+        "signature": {
+          "maxLength": 100,
+          "minLength": 88,
+          "title": "Signature",
+          "type": "string"
+        }
+      },
+      "required": [
+        "object_type",
+        "key_id",
+        "payload_digest",
+        "signature"
+      ],
+      "title": "SignedEnvelope",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "task_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Task Id",
+      "type": "string"
+    },
+    "checkpoint": {
+      "$ref": "#/$defs/AuditCheckpoint"
+    },
+    "signed_checkpoint": {
+      "$ref": "#/$defs/SignedEnvelope"
+    }
+  },
+  "required": [
+    "task_id",
+    "checkpoint",
+    "signed_checkpoint"
+  ],
+  "title": "CheckpointRecord",
+  "type": "object"
+}

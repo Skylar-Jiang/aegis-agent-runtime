@@ -1,0 +1,127 @@
+{
+  "created_at": "2026-09-23T05:03:22.274252+00:00",
+  "run_id": "24fa441ae55b4fab8bbaaca4d5c2388c",
+  "url": "http://127.0.0.1:8000",
+  "health": {
+    "status": "ok",
+    "core_version": "v1-pr2",
+    "contract_service": "ContractService",
+    "event_store": "SqliteEventStore",
+    "signature_provider": "OpenSSLSignatureProvider",
+    "public_keys": [
+      "local-core-audit-v1"
+    ],
+    "crypto_mode": "sm2",
+    "limits": {
+      "audit_bundle_bytes": 67108864,
+      "max_read_bytes": 1048576,
+      "max_write_bytes": 1048576,
+      "max_list_entries": 1000
+    },
+    "confirmation_service": "ConfirmationService",
+    "tool_executor": "CoreRuntimeBridge",
+    "evidence_recorder": "FileEvidenceRecorder",
+    "audit_exporter": "AuditExportService",
+    "audit_verifier": "AuditVerifier"
+  },
+  "results": [
+    {
+      "case": "same_request_changed_parameters",
+      "passed": true,
+      "status": 409
+    },
+    {
+      "case": "four_concurrent_retries",
+      "passed": true,
+      "execution_events": 1,
+      "receipt": {
+        "request_id": "control-18d9bf1aa7ca4f9c9d0d3eb5ebe93587",
+        "checkpoint_id": "checkpoint-control-18d9bf1aa7ca4f9c9d0d3eb5ebe93587",
+        "effect_id": "53cf1a85-d0f2-5552-97d1-d57141adb781",
+        "commit_status": "COMMITTED"
+      },
+      "file": "24fa441ae55b4fab8bbaaca4d5c2388c-normal.txt"
+    },
+    {
+      "case": "shared_runtime_effects",
+      "passed": true,
+      "effects": [
+        {
+          "effect_id": "53cf1a85-d0f2-5552-97d1-d57141adb781",
+          "kind": "FILE_WRITE",
+          "target_ref": "file:reports/24fa441ae55b4fab8bbaaca4d5c2388c-normal.txt",
+          "status": "COMMITTED",
+          "checkpoint_id": "checkpoint-control-18d9bf1aa7ca4f9c9d0d3eb5ebe93587",
+          "artifact_refs": [
+            "artifact:control-18d9bf1aa7ca4f9c9d0d3eb5ebe93587:pending_file:52098d23f2da8bf233000b32b2115ea25f5593906ca279de189b7a0ca20d2541:18"
+          ],
+          "parent_effect_ids": [],
+          "created_at": "2026-09-23T05:03:11.103431Z"
+        }
+      ]
+    },
+    {
+      "case": "zero_objects",
+      "passed": true,
+      "status": 409,
+      "file_created": false
+    },
+    {
+      "case": "byte_limit",
+      "passed": true,
+      "status": 409,
+      "file_created": false
+    },
+    {
+      "case": "cancel_before_execution",
+      "passed": true,
+      "file_created": false
+    },
+    {
+      "case": "task_binding",
+      "passed": true
+    },
+    {
+      "case": "task_total_across_tools_and_skills",
+      "passed": true,
+      "file_created": false
+    },
+    {
+      "case": "policy_change_before_execution",
+      "passed": true,
+      "file_created": false
+    },
+    {
+      "case": "windows_case_identity",
+      "passed": true
+    },
+    {
+      "case": "sm2_sm3_evidence",
+      "passed": true,
+      "original": {
+        "valid": true,
+        "verified_events": 26,
+        "anchored_from_seq": 1,
+        "anchored_to_seq": 26,
+        "tail_complete": false,
+        "errors": []
+      },
+      "tampered": {
+        "valid": false,
+        "verified_events": 0,
+        "anchored_from_seq": null,
+        "anchored_to_seq": null,
+        "tail_complete": false,
+        "errors": [
+          {
+            "code": "CHAIN_INVALID",
+            "message": "CHAIN_INVALID: event sequence 1"
+          }
+        ]
+      }
+    }
+  ],
+  "status": "passed",
+  "task_id": "task-7e1936ea-d3b2-495e-b2b1-c8ad4f5877e0",
+  "checkpoint_id": "controls-a2617e0e258e4d5d92bb8eb45ead20cc"
+}

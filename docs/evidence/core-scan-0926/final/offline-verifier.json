@@ -1,0 +1,43 @@
+[
+  {
+    "file": "bundle.json",
+    "exit": 0,
+    "result": {
+      "valid": true,
+      "verified_events": 20,
+      "anchored_from_seq": 1,
+      "anchored_to_seq": 20,
+      "tail_complete": false,
+      "errors": []
+    }
+  },
+  {
+    "file": "original-bundle.json",
+    "exit": 0,
+    "result": {
+      "valid": true,
+      "verified_events": 11,
+      "anchored_from_seq": 1,
+      "anchored_to_seq": 11,
+      "tail_complete": false,
+      "errors": []
+    }
+  },
+  {
+    "file": "tampered-copy",
+    "exit": 1,
+    "result": {
+      "valid": false,
+      "verified_events": 0,
+      "anchored_from_seq": null,
+      "anchored_to_seq": null,
+      "tail_complete": false,
+      "errors": [
+        {
+          "code": "CHAIN_INVALID",
+          "message": "CHAIN_INVALID: event sequence 1"
+        }
+      ]
+    }
+  }
+]

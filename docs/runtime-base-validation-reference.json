@@ -1,0 +1,105 @@
+{
+  "suite": "Aegis Runtime Base main-chain validation",
+  "generated_at": "2026-09-11T16:12:30.579285+00:00",
+  "python": "3.11.16 (main, Sep  1 2026, 14:18:37) [Clang 22.1.3 ]",
+  "deterministic": true,
+  "external_llm_required": false,
+  "summary": {
+    "total": 10,
+    "passed": 10,
+    "failed": 0,
+    "status": "PASS"
+  },
+  "cases": [
+    {
+      "case_id": "B1_AGENT_APPROVAL_RESUME",
+      "description": "Approval API resumes a paused Agent task and reaches completion",
+      "pytest_node": "tests/integration/test_task_runner_api.py::test_agent_task_approval_endpoint_resumes_and_completes_the_task",
+      "status": "PASS",
+      "return_code": 0,
+      "elapsed_ms": 1596.11,
+      "output_tail": ".                                                                        [100%]\n=============================== warnings summary ===============================\nbackend/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1\n  <PROJECT_ROOT>/backend/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.59s"
+    },
+    {
+      "case_id": "B2_TASK_API_FACTS",
+      "description": "Task history, steps, and Runtime graph are backed by server state",
+      "pytest_node": "tests/integration/test_task_runner_api.py::test_tasks_are_listed_and_expose_runtime_steps_and_graph_view",
+      "status": "PASS",
+      "return_code": 0,
+      "elapsed_ms": 1362.62,
+      "output_tail": ".                                                                        [100%]\n=============================== warnings summary ===============================\nbackend/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1\n  <PROJECT_ROOT>/backend/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.52s"
+    },
+    {
+      "case_id": "B3_TASK_PERSISTENCE",
+      "description": "Task snapshots survive recreation of the persistence adapter",
+      "pytest_node": "tests/unit/database/test_task_store.py::test_task_snapshot_survives_store_recreation",
+      "status": "PASS",
+      "return_code": 0,
+      "elapsed_ms": 957.43,
+      "output_tail": ".                                                                        [100%]\n1 passed in 0.29s"
+    },
+    {
+      "case_id": "B4_CONTROLLED_WRITE",
+      "description": "A real Agent write reaches commit through the Runtime chain",
+      "pytest_node": "tests/e2e/test_live_runtime.py::test_agent_commits_controlled_write_through_live_runtime",
+      "status": "PASS",
+      "return_code": 0,
+      "elapsed_ms": 1255.35,
+      "output_tail": ".                                                                        [100%]\n1 passed in 0.44s"
+    },
+    {
+      "case_id": "B5_DANGEROUS_SHELL_BLOCK",
+      "description": "A dangerous shell command is blocked before process execution",
+      "pytest_node": "tests/e2e/test_live_runtime.py::test_agent_blocks_dangerous_shell_before_any_process_runs",
+      "status": "PASS",
+      "return_code": 0,
+      "elapsed_ms": 1225.69,
+      "output_tail": ".                                                                        [100%]\n1 passed in 0.41s"
+    },
+    {
+      "case_id": "B6_APPROVAL_COMMIT",
+      "description": "A granted reversible high-risk operation resumes through controlled commit",
+      "pytest_node": "tests/integration/test_runtime_approval.py::test_grant_resumes_reversible_high_risk_tool_through_sandbox",
+      "status": "PASS",
+      "return_code": 0,
+      "elapsed_ms": 945.52,
+      "output_tail": ".                                                                        [100%]\n1 passed in 0.26s"
+    },
+    {
+      "case_id": "B7_SECURITY_PROFILE_PERSISTENCE",
+      "description": "Versioned permissions and conversations survive a Runtime restart",
+      "pytest_node": "tests/integration/test_workbench_api.py::test_profile_and_conversation_survive_a_persistent_runtime_restart",
+      "status": "PASS",
+      "return_code": 0,
+      "elapsed_ms": 1674.37,
+      "output_tail": ".                                                                        [100%]\n=============================== warnings summary ===============================\nbackend/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1\n  <PROJECT_ROOT>/backend/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.74s"
+    },
+    {
+      "case_id": "B8_CONVERSATION_CONTEXT",
+      "description": "A follow-up TaskRun receives prior user and Agent messages",
+      "pytest_node": "tests/integration/test_workbench_api.py::test_follow_up_turn_receives_prior_user_and_assistant_messages",
+      "status": "PASS",
+      "return_code": 0,
+      "elapsed_ms": 1492.31,
+      "output_tail": ".                                                                        [100%]\n=============================== warnings summary ===============================\nbackend/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1\n  <PROJECT_ROOT>/backend/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.53s"
+    },
+    {
+      "case_id": "B9_TOOL_SCHEMAS",
+      "description": "Every production tool exposes and enforces its Runtime-owned JSON Schema",
+      "pytest_node": "tests/unit/tools/test_tool_schemas.py::test_every_runtime_tool_exposes_and_enforces_one_json_schema",
+      "status": "PASS",
+      "return_code": 0,
+      "elapsed_ms": 593.32,
+      "output_tail": ".                                                                        [100%]\n1 passed in 0.05s"
+    },
+    {
+      "case_id": "B10_CONVERSATION_RUNTIME_WRITE",
+      "description": "A Conversation TaskRun commits a real file through checkpoint and deep check",
+      "pytest_node": "tests/integration/test_workbench_api.py::test_conversation_agent_write_uses_the_real_runtime_chain",
+      "status": "PASS",
+      "return_code": 0,
+      "elapsed_ms": 1723.23,
+      "output_tail": ".                                                                        [100%]\n=============================== warnings summary ===============================\nbackend/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1\n  <PROJECT_ROOT>/backend/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.76s"
+    }
+  ]
+}
