@@ -1,0 +1,21 @@
+# 历史 Markdown 作品报告骨架
+
+> 本目录是分工期的 Markdown 写作材料，不是最终作品书正文。当前正式 LaTeX 整合源为 `essay/final-report/`；正式数字、主张边界和复现命令以根目录 `README.md` 与该 LaTeX 源为准。
+
+本目录是历史 V2 报告快照。仍保留的原始数据位于
+`experiments/v2/results/final-evidence/legacy/`；旧版衍生数据没有随当前 Runtime Base
+发布，因此这里的历史数字不作为当前 CI 或 Aegis Core PR1 的验收条件。当前验收口径见根目录
+`README.md`、`scripts/verify_runtime_base.py` 与 `scripts/verify_core_pr1.py`。
+
+| 章节 | 文件 | 主责 | 必需证据 |
+| --- | --- | --- |
+| 摘要与问题 | `01-summary.md` | 组长 | 威胁、贡献、范围与限制 |
+| 架构与运行时 | `02-architecture-runtime.md` | 组长 | 架构图、Graph 时序、Scheduler 不变量 |
+| 风险与人工审核 | `03-security-approval.md` | 成员 2 | 策略表、审批截图、安全/人工数据 |
+| 状态提交与回滚 | `04-effects-rollback.md` | 成员 3 | effect 时序、回滚证据和数据 |
+| 实验与演示 | `05-experiments-demo.md` | 成员 4 汇总 | raw run ID、CSV 图表、UI/Demo 截图 |
+| 结论与局限 | `06-conclusion-limitations.md` | 组长 | 可证明结论与未实现能力 |
+
+所有数字必须能追溯到 `02-experiment-data.md` 的 raw result；所有截图须标注场景、commit、生成日期，且不得包含密钥、敏感文件内容或隐藏推理。
+
+最终创新主张固定为：**Transactional Controlled Execution**、**Approval-aware TaskGraph Scheduling**、**Dependency-aware Selective Rollback**。每一项主张都必须在对应章节同时链接 implementation、test、正式 raw/derived run 与 Demo 截图；Risk/Policy/Approval/Audit 只作为支撑机制陈述。

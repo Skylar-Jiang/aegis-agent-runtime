@@ -1,0 +1,196 @@
+{
+  "$defs": {
+    "AuditCheckpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "checkpoint_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Checkpoint Id",
+          "type": "string"
+        },
+        "from_seq": {
+          "minimum": 1,
+          "title": "From Seq",
+          "type": "integer"
+        },
+        "to_seq": {
+          "minimum": 1,
+          "title": "To Seq",
+          "type": "integer"
+        },
+        "chain_head": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Chain Head",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "signer": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Signer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "checkpoint_id",
+        "from_seq",
+        "to_seq",
+        "chain_head",
+        "created_at",
+        "signer"
+      ],
+      "title": "AuditCheckpoint",
+      "type": "object"
+    },
+    "ChainEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "additionalProperties": true,
+          "title": "Event",
+          "type": "object"
+        },
+        "prev_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Prev Hash",
+          "type": "string"
+        },
+        "event_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Event Digest",
+          "type": "string"
+        },
+        "chain_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Chain Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event",
+        "prev_hash",
+        "event_digest",
+        "chain_hash"
+      ],
+      "title": "ChainEntry",
+      "type": "object"
+    },
+    "SignedEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "object_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Object Type",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "algorithm": {
+          "const": "SM2-SM3",
+          "default": "SM2-SM3",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "key_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Key Id",
+          "type": "string"
+        },
+        "payload_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Payload Digest",
+          "type": "string"
+        },
+        "signature": {
+          "maxLength": 100,
+          "minLength": 88,
+          "title": "Signature",
+          "type": "string"
+        }
+      },
+      "required": [
+        "object_type",
+        "key_id",
+        "payload_digest",
+        "signature"
+      ],
+      "title": "SignedEnvelope",
+      "type": "object"
+    },
+    "SignedObject": {
+      "additionalProperties": false,
+      "properties": {
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "envelope": {
+          "$ref": "#/$defs/SignedEnvelope"
+        }
+      },
+      "required": [
+        "payload",
+        "envelope"
+      ],
+      "title": "SignedObject",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "task_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Task Id",
+      "type": "string"
+    },
+    "checkpoint": {
+      "$ref": "#/$defs/AuditCheckpoint"
+    },
+    "signed_checkpoint": {
+      "$ref": "#/$defs/SignedEnvelope"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/ChainEntry"
+      },
+      "maxItems": 100000,
+      "minItems": 1,
+      "title": "Entries",
+      "type": "array"
+    },
+    "objects": {
+      "items": {
+        "$ref": "#/$defs/SignedObject"
+      },
+      "maxItems": 100000,
+      "title": "Objects",
+      "type": "array"
+    }
+  },
+  "required": [
+    "task_id",
+    "checkpoint",
+    "signed_checkpoint",
+    "entries"
+  ],
+  "title": "AuditBundle",
+  "type": "object"
+}

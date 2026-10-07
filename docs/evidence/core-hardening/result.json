@@ -1,0 +1,72 @@
+{
+  "experiment": "Real Edge UI + FastAPI + OpenSSL SM2; no HTTP mocks",
+  "run_utc": "2026-09-23T03:53:17Z",
+  "base_commit": "501ddcb",
+  "ui_commit": "7c31ae4",
+  "task_id": "task-0a063be1-3e9b-4247-9831-7ca32784359f",
+  "request_id": "request-617cc999-6592-4a1a-b7d2-b7a7f4b922c7",
+  "checkpoint_id": "checkpoint-4d544918-4163-4083-82aa-e61d358803bf",
+  "events": 11,
+  "checks": [
+    "no effect before approval",
+    "real file after execution",
+    "original verifies",
+    "tampered copy fails",
+    "cached retry without duplicate events",
+    "changed request ID payload rejected"
+  ],
+  "health": {
+    "status": "ok",
+    "core_version": "v1-pr2",
+    "contract_service": "ContractService",
+    "event_store": "SqliteEventStore",
+    "signature_provider": "OpenSSLSignatureProvider",
+    "public_keys": [
+      "local-core-audit-v1"
+    ],
+    "crypto_mode": "sm2",
+    "limits": {
+      "audit_bundle_bytes": 67108864,
+      "max_read_bytes": 1048576,
+      "max_write_bytes": 1048576,
+      "max_list_entries": 1000
+    },
+    "confirmation_service": "ConfirmationService",
+    "tool_executor": "CoreToolExecutor",
+    "evidence_recorder": "FileEvidenceRecorder",
+    "audit_exporter": "AuditExportService",
+    "audit_verifier": "AuditVerifier"
+  },
+  "browser_errors": [],
+  "offline": {
+    "original": {
+      "exit_code": 0,
+      "result": {
+        "valid": true,
+        "verified_events": 11,
+        "anchored_from_seq": 1,
+        "anchored_to_seq": 11,
+        "tail_complete": false,
+        "errors": []
+      }
+    },
+    "tampered": {
+      "exit_code": 1,
+      "result": {
+        "valid": false,
+        "verified_events": 0,
+        "anchored_from_seq": null,
+        "anchored_to_seq": null,
+        "tail_complete": false,
+        "errors": [
+          {
+            "code": "CHAIN_INVALID",
+            "message": "CHAIN_INVALID: event sequence 1"
+          }
+        ]
+      }
+    }
+  },
+  "trust_note": "Local development public key and checkpoint, published for reproducibility; production trust must be pinned through an independent channel.",
+  "backend_commit": "cd0ab12"
+}

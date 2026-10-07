@@ -1,0 +1,74 @@
+{
+  "$defs": {
+    "VerificationIssue": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "VerificationIssue",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "valid": {
+      "title": "Valid",
+      "type": "boolean"
+    },
+    "verified_events": {
+      "default": 0,
+      "title": "Verified Events",
+      "type": "integer"
+    },
+    "anchored_from_seq": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Anchored From Seq"
+    },
+    "anchored_to_seq": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Anchored To Seq"
+    },
+    "tail_complete": {
+      "default": false,
+      "title": "Tail Complete",
+      "type": "boolean"
+    },
+    "errors": {
+      "items": {
+        "$ref": "#/$defs/VerificationIssue"
+      },
+      "title": "Errors",
+      "type": "array"
+    }
+  },
+  "required": [
+    "valid"
+  ],
+  "title": "VerificationResult",
+  "type": "object"
+}

@@ -1,0 +1,48 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "object_type": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Object Type",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "algorithm": {
+      "const": "SM2-SM3",
+      "default": "SM2-SM3",
+      "title": "Algorithm",
+      "type": "string"
+    },
+    "key_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Key Id",
+      "type": "string"
+    },
+    "payload_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Payload Digest",
+      "type": "string"
+    },
+    "signature": {
+      "maxLength": 100,
+      "minLength": 88,
+      "title": "Signature",
+      "type": "string"
+    }
+  },
+  "required": [
+    "object_type",
+    "key_id",
+    "payload_digest",
+    "signature"
+  ],
+  "title": "SignedEnvelope",
+  "type": "object"
+}

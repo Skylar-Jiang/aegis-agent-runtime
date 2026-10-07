@@ -1,0 +1,1991 @@
+{
+  "schema": "aegis-core-controlled-ablations-v1",
+  "generated_at": "2026-09-23T04:55:46.249102+00:00",
+  "revision": "d654df75cb980e0dad65a91d90c8d4c3e96af6ef",
+  "working_tree_changes_included": true,
+  "python": "3.11.15",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "key_id": "ablation-cc15e57627e2",
+  "private_key_deleted": true,
+  "modes": {
+    "permission_only": {
+      "kind": "baseline",
+      "description": "Current permission intersection and bounded real tool execution.",
+      "signed_evidence": false,
+      "immutable_request_binding": false,
+      "execution_result_cache": false,
+      "live_permission_source": true
+    },
+    "permission_and_sm2": {
+      "kind": "baseline",
+      "description": "Baseline plus real SM2/SM3 signed request, decision and result evidence.",
+      "signed_evidence": true,
+      "immutable_request_binding": false,
+      "execution_result_cache": false,
+      "live_permission_source": true
+    },
+    "full_gateway": {
+      "kind": "current_gateway",
+      "description": "Unmodified ToolGateway, SQLite state/events, current permissions and SM2.",
+      "signed_evidence": true,
+      "immutable_request_binding": true,
+      "execution_result_cache": true,
+      "live_permission_source": true
+    },
+    "gateway_without_live_authority": {
+      "kind": "single_mechanism_ablation",
+      "description": "Same gateway without permission_provider; stored initial grants remain.",
+      "signed_evidence": true,
+      "immutable_request_binding": true,
+      "execution_result_cache": true,
+      "live_permission_source": false
+    }
+  },
+  "scope": {
+    "covered": [
+      "C2-C4 permission/request/execution controls",
+      "C5 full-gateway events",
+      "C6 SM2 evidence"
+    ],
+    "not_covered": [
+      "C1 application packaging",
+      "C7 browser interaction",
+      "Runtime recovery",
+      "HTTP integration",
+      "statistical performance claims"
+    ],
+    "shared_tool": "real CoreToolExecutor write_file, SafePathResolver, 4096-byte limit",
+    "retry": "original, same-instance retry, then new gateway with the same SQLite state",
+    "substitution": "same ID and authorized path; content changes after ALLOW evaluation",
+    "permission_tightening": "remove system ALLOW after evaluation, before execution"
+  },
+  "cases": [
+    {
+      "mode": "permission_only",
+      "scenario": "normal",
+      "final_status": "EXECUTED",
+      "actual_writes": 1,
+      "expected_writes": 1,
+      "actual_file_content": "approved content",
+      "valid_sm2_evidence_objects": 0,
+      "tampered_evidence_rejected": null,
+      "attempts": [
+        {
+          "action": "evaluate_original",
+          "status": "ALLOW",
+          "actual_writes": 0,
+          "elapsed_ms": 13.119
+        },
+        {
+          "action": "execute_original",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 16
+          },
+          "status": "EXECUTED",
+          "actual_writes": 1,
+          "elapsed_ms": 21.146
+        }
+      ],
+      "write_ledger": [
+        {
+          "write_number": 1,
+          "request_id": "same-request-id",
+          "resource": "reports/result.txt",
+          "actual_content": "approved content",
+          "actual_bytes": 16,
+          "actual_sha256": "3b1698580da742407583708ba40ccc0484d44f8848d62ddccc6940023aa1f13c"
+        }
+      ],
+      "signed_objects": [],
+      "events": []
+    },
+    {
+      "mode": "permission_only",
+      "scenario": "same_id_retry",
+      "final_status": "EXECUTED",
+      "actual_writes": 3,
+      "expected_writes": 3,
+      "actual_file_content": "approved content",
+      "valid_sm2_evidence_objects": 0,
+      "tampered_evidence_rejected": null,
+      "attempts": [
+        {
+          "action": "evaluate_original",
+          "status": "ALLOW",
+          "actual_writes": 0,
+          "elapsed_ms": 8.164
+        },
+        {
+          "action": "execute_original",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 16
+          },
+          "status": "EXECUTED",
+          "actual_writes": 1,
+          "elapsed_ms": 5.419
+        },
+        {
+          "action": "execute_same_instance_retry",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 16
+          },
+          "status": "EXECUTED",
+          "actual_writes": 1,
+          "elapsed_ms": 3.171
+        },
+        {
+          "action": "execute_after_gateway_recreation",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 16
+          },
+          "status": "EXECUTED",
+          "actual_writes": 1,
+          "elapsed_ms": 3.157
+        }
+      ],
+      "write_ledger": [
+        {
+          "write_number": 1,
+          "request_id": "same-request-id",
+          "resource": "reports/result.txt",
+          "actual_content": "approved content",
+          "actual_bytes": 16,
+          "actual_sha256": "3b1698580da742407583708ba40ccc0484d44f8848d62ddccc6940023aa1f13c"
+        },
+        {
+          "write_number": 2,
+          "request_id": "same-request-id",
+          "resource": "reports/result.txt",
+          "actual_content": "approved content",
+          "actual_bytes": 16,
+          "actual_sha256": "3b1698580da742407583708ba40ccc0484d44f8848d62ddccc6940023aa1f13c"
+        },
+        {
+          "write_number": 3,
+          "request_id": "same-request-id",
+          "resource": "reports/result.txt",
+          "actual_content": "approved content",
+          "actual_bytes": 16,
+          "actual_sha256": "3b1698580da742407583708ba40ccc0484d44f8848d62ddccc6940023aa1f13c"
+        }
+      ],
+      "signed_objects": [],
+      "events": []
+    },
+    {
+      "mode": "permission_only",
+      "scenario": "evaluated_argument_substitution",
+      "final_status": "EXECUTED",
+      "actual_writes": 1,
+      "expected_writes": 1,
+      "actual_file_content": "substituted content",
+      "valid_sm2_evidence_objects": 0,
+      "tampered_evidence_rejected": null,
+      "attempts": [
+        {
+          "action": "evaluate_original",
+          "status": "ALLOW",
+          "actual_writes": 0,
+          "elapsed_ms": 7.49
+        },
+        {
+          "action": "evaluate_substitution",
+          "status": "ALLOW",
+          "actual_writes": 0,
+          "elapsed_ms": 1.581
+        },
+        {
+          "action": "execute_substitution",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 19
+          },
+          "status": "EXECUTED",
+          "actual_writes": 1,
+          "elapsed_ms": 14.421
+        }
+      ],
+      "write_ledger": [
+        {
+          "write_number": 1,
+          "request_id": "same-request-id",
+          "resource": "reports/result.txt",
+          "actual_content": "substituted content",
+          "actual_bytes": 19,
+          "actual_sha256": "acc9a7db40adfe339443d45441510fc7dd36d08fc487973b5c5933e8406eff1b"
+        }
+      ],
+      "signed_objects": [],
+      "events": []
+    },
+    {
+      "mode": "permission_only",
+      "scenario": "permission_tightening",
+      "final_status": "REJECTED",
+      "actual_writes": 0,
+      "expected_writes": 0,
+      "actual_file_content": null,
+      "valid_sm2_evidence_objects": 0,
+      "tampered_evidence_rejected": null,
+      "attempts": [
+        {
+          "action": "evaluate_original",
+          "status": "ALLOW",
+          "actual_writes": 0,
+          "elapsed_ms": 8.071
+        },
+        {
+          "action": "execute_after_permission_tightening",
+          "status": "REJECTED",
+          "error": "Pre-execution recheck failed: SYSTEM_DENY",
+          "actual_writes": 0,
+          "elapsed_ms": 1.726
+        }
+      ],
+      "write_ledger": [],
+      "signed_objects": [],
+      "events": []
+    },
+    {
+      "mode": "permission_and_sm2",
+      "scenario": "normal",
+      "final_status": "EXECUTED",
+      "actual_writes": 1,
+      "expected_writes": 1,
+      "actual_file_content": "approved content",
+      "valid_sm2_evidence_objects": 3,
+      "tampered_evidence_rejected": true,
+      "attempts": [
+        {
+          "action": "evaluate_original",
+          "status": "ALLOW",
+          "actual_writes": 0,
+          "elapsed_ms": 345.329
+        },
+        {
+          "action": "execute_original",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 16
+          },
+          "status": "EXECUTED",
+          "actual_writes": 1,
+          "elapsed_ms": 128.043
+        }
+      ],
+      "write_ledger": [
+        {
+          "write_number": 1,
+          "request_id": "same-request-id",
+          "resource": "reports/result.txt",
+          "actual_content": "approved content",
+          "actual_bytes": 16,
+          "actual_sha256": "3b1698580da742407583708ba40ccc0484d44f8848d62ddccc6940023aa1f13c"
+        }
+      ],
+      "signed_objects": [
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ExperimentPermissionDecision",
+            "payload_digest": "395973423fd8eff4e3a43f26c0f4c962a4a2eb3e415d77a1009f56302982637c",
+            "schema_version": "1.0",
+            "signature": "MEQCICLRyeSxxqZoIF9g/yOTG70lEKsEpQGdZjhOk8qyWnKHAiA9j4WB7ydD6KEQQZmR4/YhXGX9QCAVVhgtfkBLxFLyVg=="
+          },
+          "payload": {
+            "decision": "ALLOW",
+            "reason": "ALLOWED",
+            "request_id": "same-request-id",
+            "task_id": "experiment-task"
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolResult",
+            "payload_digest": "2c2e1308a27428c2d32618ad72cbea7c7fd81405453904f36e77b9a305f1c182",
+            "schema_version": "1.0",
+            "signature": "MEUCIQDLAcEW+c5fcjfMsz4yiQEKNXvIn9E7aIuX+jgDiC2THQIgLnSyonAZKl12wHXl3Dsk4dAOfzmFhAd8C0L9s+0Xl18="
+          },
+          "payload": {
+            "request_id": "same-request-id",
+            "result": {
+              "bytes_written": 16,
+              "path": "reports/result.txt",
+              "tool": "write_file"
+            },
+            "task_id": "experiment-task"
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolCallEnvelope",
+            "payload_digest": "1a26984680d7781ec9af86058e2d7e95c1c2a03d6bbee1106062dc4f29c3c2ca",
+            "schema_version": "1.0",
+            "signature": "MEQCIFo92Thu+mjDetne4A0geWyZeKoj1pyC6m4dj66akNNeAiAA3h2BaAKCWcWNvah+/C5Ny0XpAvfyw4Zy/7070T5Z1w=="
+          },
+          "payload": {
+            "action": "write_file",
+            "canonical_args": {
+              "content": "approved content",
+              "path": "reports/result.txt"
+            },
+            "contract_ref": {
+              "confirmed_at": "2026-09-23T04:55:39.002101Z",
+              "confirmed_by": "experiment-user",
+              "contract_id": "contract-ae7771d8-5da2-43d3-8282-9a455f6e0c1a",
+              "digest": "40eeaa4ee13743ddac84459ade5b75685e7152b080cea6fd5dc4c7ed922fbf7f",
+              "status": "CONFIRMED",
+              "version": 1
+            },
+            "effect_class": "WRITE",
+            "request_id": "same-request-id",
+            "resource": "reports/result.txt",
+            "session_id": "experiment-session",
+            "skill_ref": "writer",
+            "task_id": "experiment-task",
+            "tool": "write_file"
+          }
+        }
+      ],
+      "events": []
+    },
+    {
+      "mode": "permission_and_sm2",
+      "scenario": "same_id_retry",
+      "final_status": "EXECUTED",
+      "actual_writes": 3,
+      "expected_writes": 3,
+      "actual_file_content": "approved content",
+      "valid_sm2_evidence_objects": 3,
+      "tampered_evidence_rejected": true,
+      "attempts": [
+        {
+          "action": "evaluate_original",
+          "status": "ALLOW",
+          "actual_writes": 0,
+          "elapsed_ms": 261.488
+        },
+        {
+          "action": "execute_original",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 16
+          },
+          "status": "EXECUTED",
+          "actual_writes": 1,
+          "elapsed_ms": 127.181
+        },
+        {
+          "action": "execute_same_instance_retry",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 16
+          },
+          "status": "EXECUTED",
+          "actual_writes": 1,
+          "elapsed_ms": 193.103
+        },
+        {
+          "action": "execute_after_gateway_recreation",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 16
+          },
+          "status": "EXECUTED",
+          "actual_writes": 1,
+          "elapsed_ms": 68.719
+        }
+      ],
+      "write_ledger": [
+        {
+          "write_number": 1,
+          "request_id": "same-request-id",
+          "resource": "reports/result.txt",
+          "actual_content": "approved content",
+          "actual_bytes": 16,
+          "actual_sha256": "3b1698580da742407583708ba40ccc0484d44f8848d62ddccc6940023aa1f13c"
+        },
+        {
+          "write_number": 2,
+          "request_id": "same-request-id",
+          "resource": "reports/result.txt",
+          "actual_content": "approved content",
+          "actual_bytes": 16,
+          "actual_sha256": "3b1698580da742407583708ba40ccc0484d44f8848d62ddccc6940023aa1f13c"
+        },
+        {
+          "write_number": 3,
+          "request_id": "same-request-id",
+          "resource": "reports/result.txt",
+          "actual_content": "approved content",
+          "actual_bytes": 16,
+          "actual_sha256": "3b1698580da742407583708ba40ccc0484d44f8848d62ddccc6940023aa1f13c"
+        }
+      ],
+      "signed_objects": [
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ExperimentPermissionDecision",
+            "payload_digest": "395973423fd8eff4e3a43f26c0f4c962a4a2eb3e415d77a1009f56302982637c",
+            "schema_version": "1.0",
+            "signature": "MEUCIGtVnFZPjAYnVIKVBBC+0pqwDnVFIugh7furbVLJCCYiAiEAlP9Qq2z70h4VUpFjxLRQQ/NNaz2uNfmTykcHs4zTJ9U="
+          },
+          "payload": {
+            "decision": "ALLOW",
+            "reason": "ALLOWED",
+            "request_id": "same-request-id",
+            "task_id": "experiment-task"
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolCallEnvelope",
+            "payload_digest": "1d4c43b6003b32d031a763771651a81757b17356579afbbb27ede13a026e4178",
+            "schema_version": "1.0",
+            "signature": "MEUCIQDnMrgcubDXx/x4m0+s7AaAF6+GC43Xf2w8sxu7HDMGNgIgeYVNBk7qgwhOdggz3BwqN59bfzPEA8/2BA8tPOiE/VQ="
+          },
+          "payload": {
+            "action": "write_file",
+            "canonical_args": {
+              "content": "approved content",
+              "path": "reports/result.txt"
+            },
+            "contract_ref": {
+              "confirmed_at": "2026-09-23T04:55:39.723977Z",
+              "confirmed_by": "experiment-user",
+              "contract_id": "contract-bb8ea3e5-e967-4305-b7dd-8216d4e35319",
+              "digest": "a287ab32ce5d8a9e57813a4f193df0f67bf2ed8694c0372e55d6e16fd945cc25",
+              "status": "CONFIRMED",
+              "version": 1
+            },
+            "effect_class": "WRITE",
+            "request_id": "same-request-id",
+            "resource": "reports/result.txt",
+            "session_id": "experiment-session",
+            "skill_ref": "writer",
+            "task_id": "experiment-task",
+            "tool": "write_file"
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolResult",
+            "payload_digest": "2c2e1308a27428c2d32618ad72cbea7c7fd81405453904f36e77b9a305f1c182",
+            "schema_version": "1.0",
+            "signature": "MEYCIQCZ1PKdYlDCvhhy7M0eFJ//sBEuXeh14alVI0OWb4990gIhAPxWoX4In5d+U/R9mxy5SIZw/FvF3p5NFRwCoCFpe6hX"
+          },
+          "payload": {
+            "request_id": "same-request-id",
+            "result": {
+              "bytes_written": 16,
+              "path": "reports/result.txt",
+              "tool": "write_file"
+            },
+            "task_id": "experiment-task"
+          }
+        }
+      ],
+      "events": []
+    },
+    {
+      "mode": "permission_and_sm2",
+      "scenario": "evaluated_argument_substitution",
+      "final_status": "EXECUTED",
+      "actual_writes": 1,
+      "expected_writes": 1,
+      "actual_file_content": "substituted content",
+      "valid_sm2_evidence_objects": 4,
+      "tampered_evidence_rejected": true,
+      "attempts": [
+        {
+          "action": "evaluate_original",
+          "status": "ALLOW",
+          "actual_writes": 0,
+          "elapsed_ms": 264.462
+        },
+        {
+          "action": "evaluate_substitution",
+          "status": "ALLOW",
+          "actual_writes": 0,
+          "elapsed_ms": 216.792
+        },
+        {
+          "action": "execute_substitution",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 19
+          },
+          "status": "EXECUTED",
+          "actual_writes": 1,
+          "elapsed_ms": 134.433
+        }
+      ],
+      "write_ledger": [
+        {
+          "write_number": 1,
+          "request_id": "same-request-id",
+          "resource": "reports/result.txt",
+          "actual_content": "substituted content",
+          "actual_bytes": 19,
+          "actual_sha256": "acc9a7db40adfe339443d45441510fc7dd36d08fc487973b5c5933e8406eff1b"
+        }
+      ],
+      "signed_objects": [
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ExperimentPermissionDecision",
+            "payload_digest": "395973423fd8eff4e3a43f26c0f4c962a4a2eb3e415d77a1009f56302982637c",
+            "schema_version": "1.0",
+            "signature": "MEUCIBH8dXsQmZ6ugAOOBKXAeaLIB8qC9HHkeKpqxf8sOzGdAiEAkcU0ikhfMlApVPqIvaLi6vlOA+9Bj517AQ7+/ZMJEsQ="
+          },
+          "payload": {
+            "decision": "ALLOW",
+            "reason": "ALLOWED",
+            "request_id": "same-request-id",
+            "task_id": "experiment-task"
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolResult",
+            "payload_digest": "53b9cbe13683406c0c8bda36322078be775e7c138aebe002190415b46f88e039",
+            "schema_version": "1.0",
+            "signature": "MEUCIQDnfdi4weXdbHAXnldU0CYHUrjphsHoBfRit0IZY6a0LAIgSUXFhRYylfeIhkmpTUKgT5sp7vVB7sS2AzFp2e0Giq8="
+          },
+          "payload": {
+            "request_id": "same-request-id",
+            "result": {
+              "bytes_written": 19,
+              "path": "reports/result.txt",
+              "tool": "write_file"
+            },
+            "task_id": "experiment-task"
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolCallEnvelope",
+            "payload_digest": "f5f49a81a67892758854d9197f66c56ce923fa578ccc21a51ec01a421104d1d2",
+            "schema_version": "1.0",
+            "signature": "MEQCIGxJiVlacP5C6gIKb/D3ecTSY7rxo09ctYGJx5oDRKCFAiBySyCGYPrJcGIMhAeCwB/Fh6cp2NBNDSG/qBMuvQJiJw=="
+          },
+          "payload": {
+            "action": "write_file",
+            "canonical_args": {
+              "content": "substituted content",
+              "path": "reports/result.txt"
+            },
+            "contract_ref": {
+              "confirmed_at": "2026-09-23T04:55:40.581806Z",
+              "confirmed_by": "experiment-user",
+              "contract_id": "contract-80ef0522-27e8-404e-a6c6-37f013496c30",
+              "digest": "0d2f2b847fcaa17a29f4ede55632be4e491de60e0a688faf418c34901b5efed3",
+              "status": "CONFIRMED",
+              "version": 1
+            },
+            "effect_class": "WRITE",
+            "request_id": "same-request-id",
+            "resource": "reports/result.txt",
+            "session_id": "experiment-session",
+            "skill_ref": "writer",
+            "task_id": "experiment-task",
+            "tool": "write_file"
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolCallEnvelope",
+            "payload_digest": "192e7743fe487ec9c7ec3e0c275d658c419ed140d08cc72729d6b7a5d5f3a8bb",
+            "schema_version": "1.0",
+            "signature": "MEQCIAkxrRpCFnvKQ4cdxzTfNRtSQqxjC1BpArcrMjgZYCMGAiBPI+F7WkZ1IFf5/l/CQJbXhDyfaO3xEljCgZ/XGJCAxQ=="
+          },
+          "payload": {
+            "action": "write_file",
+            "canonical_args": {
+              "content": "approved content",
+              "path": "reports/result.txt"
+            },
+            "contract_ref": {
+              "confirmed_at": "2026-09-23T04:55:40.581806Z",
+              "confirmed_by": "experiment-user",
+              "contract_id": "contract-80ef0522-27e8-404e-a6c6-37f013496c30",
+              "digest": "0d2f2b847fcaa17a29f4ede55632be4e491de60e0a688faf418c34901b5efed3",
+              "status": "CONFIRMED",
+              "version": 1
+            },
+            "effect_class": "WRITE",
+            "request_id": "same-request-id",
+            "resource": "reports/result.txt",
+            "session_id": "experiment-session",
+            "skill_ref": "writer",
+            "task_id": "experiment-task",
+            "tool": "write_file"
+          }
+        }
+      ],
+      "events": []
+    },
+    {
+      "mode": "permission_and_sm2",
+      "scenario": "permission_tightening",
+      "final_status": "REJECTED",
+      "actual_writes": 0,
+      "expected_writes": 0,
+      "actual_file_content": null,
+      "valid_sm2_evidence_objects": 2,
+      "tampered_evidence_rejected": true,
+      "attempts": [
+        {
+          "action": "evaluate_original",
+          "status": "ALLOW",
+          "actual_writes": 0,
+          "elapsed_ms": 255.901
+        },
+        {
+          "action": "execute_after_permission_tightening",
+          "status": "REJECTED",
+          "error": "Pre-execution recheck failed: SYSTEM_DENY",
+          "actual_writes": 0,
+          "elapsed_ms": 1.556
+        }
+      ],
+      "write_ledger": [],
+      "signed_objects": [
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ExperimentPermissionDecision",
+            "payload_digest": "395973423fd8eff4e3a43f26c0f4c962a4a2eb3e415d77a1009f56302982637c",
+            "schema_version": "1.0",
+            "signature": "MEYCIQDE3yP+q+hVLPEkXow5BrgC12/OIplBKVpp/1zgA+o/SgIhANLyI8WmLdInILJLL2lYvtzX1mfHfrYZXE3hP3iffoiE"
+          },
+          "payload": {
+            "decision": "ALLOW",
+            "reason": "ALLOWED",
+            "request_id": "same-request-id",
+            "task_id": "experiment-task"
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolCallEnvelope",
+            "payload_digest": "d21e3b489c0d08e11eab52d869e1f3cb01b98633dd3ccd07c97d356e956baba7",
+            "schema_version": "1.0",
+            "signature": "MEUCIEG0VYfGyxO7yz5NtSlp/DuYv7zQljRyrVfprztxFXGNAiEAw85kuGqZLk0c/J/nnIF+1gbeNepuKas75S55cVYIPP4="
+          },
+          "payload": {
+            "action": "write_file",
+            "canonical_args": {
+              "content": "approved content",
+              "path": "reports/result.txt"
+            },
+            "contract_ref": {
+              "confirmed_at": "2026-09-23T04:55:41.503565Z",
+              "confirmed_by": "experiment-user",
+              "contract_id": "contract-cc41a266-23a8-451d-9cd0-07e7b9dbc665",
+              "digest": "572ef9dda2df64f3c29fc76640d6c038538d946bd56837ca34ac52aa829d7913",
+              "status": "CONFIRMED",
+              "version": 1
+            },
+            "effect_class": "WRITE",
+            "request_id": "same-request-id",
+            "resource": "reports/result.txt",
+            "session_id": "experiment-session",
+            "skill_ref": "writer",
+            "task_id": "experiment-task",
+            "tool": "write_file"
+          }
+        }
+      ],
+      "events": []
+    },
+    {
+      "mode": "full_gateway",
+      "scenario": "normal",
+      "final_status": "EXECUTED",
+      "actual_writes": 1,
+      "expected_writes": 1,
+      "actual_file_content": "approved content",
+      "valid_sm2_evidence_objects": 3,
+      "tampered_evidence_rejected": true,
+      "attempts": [
+        {
+          "action": "evaluate_original",
+          "status": "ALLOW",
+          "reason": "ALLOWED",
+          "actual_writes": 0,
+          "elapsed_ms": 321.098
+        },
+        {
+          "action": "execute_original",
+          "status": "EXECUTED",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 16
+          },
+          "actual_writes": 1,
+          "elapsed_ms": 421.974
+        }
+      ],
+      "write_ledger": [
+        {
+          "write_number": 1,
+          "request_id": "same-request-id",
+          "resource": "reports/result.txt",
+          "actual_content": "approved content",
+          "actual_bytes": 16,
+          "actual_sha256": "3b1698580da742407583708ba40ccc0484d44f8848d62ddccc6940023aa1f13c"
+        }
+      ],
+      "signed_objects": [
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolResult",
+            "payload_digest": "2c2e1308a27428c2d32618ad72cbea7c7fd81405453904f36e77b9a305f1c182",
+            "schema_version": "1.0",
+            "signature": "MEUCIBKhxl9skou9iCb5ONcpZn3GeUfoEkSp8JOEMEcxMufYAiEAgYxFsNrARNKKaLqayqhmrtQbkm9nLtZcgayxxiQRGrc="
+          },
+          "payload": {
+            "request_id": "same-request-id",
+            "result": {
+              "bytes_written": 16,
+              "path": "reports/result.txt",
+              "tool": "write_file"
+            },
+            "task_id": "experiment-task"
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "GatewayDecision",
+            "payload_digest": "fa353d2e0478858f85d615b81942da8d878dd4426fe325b373a814aa547bab2d",
+            "schema_version": "1.0",
+            "signature": "MEYCIQCTJloJXq5Ak5UPifembRtUCW919Na2ahPjCVZYOCbtrwIhAOxspEnLNTLlZhROaHFa9LEt6JgYpSshEwZG+gbJg0HG"
+          },
+          "payload": {
+            "confirmation_id": null,
+            "decision": "ALLOW",
+            "evidence_refs": [
+              "0088ed9b597b485ed7b7f0beb1a4a98d9bbcfc489b6b9054fdd7e45e9c9da519"
+            ],
+            "reason_code": "ALLOWED",
+            "request_id": "same-request-id",
+            "task_id": "experiment-task",
+            "versions": {
+              "contract": 1,
+              "policy": "experiment-policy:1",
+              "tool_manifest": "experiment-write-file:1"
+            }
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolCallEnvelope",
+            "payload_digest": "0247598abe274f41f3c1e0d7562a3981284c5a5dfc727c3f094c8264c0b9a2d4",
+            "schema_version": "1.0",
+            "signature": "MEYCIQCtMiBeEkzDs6fjHolg6VaDNtPu9Ak6XDRN8rArwA702AIhAJnrvl08eiXUaBkrOe88YZ3c5y3I5ZNHoucibD82edx1"
+          },
+          "payload": {
+            "action": "write_file",
+            "canonical_args": {
+              "content": "approved content",
+              "path": "reports/result.txt"
+            },
+            "contract_ref": {
+              "confirmed_at": "2026-09-23T04:55:41.928434Z",
+              "confirmed_by": "experiment-user",
+              "contract_id": "contract-2f99e7c9-5f4e-4348-bd5c-e4d7487a07ce",
+              "digest": "0088ed9b597b485ed7b7f0beb1a4a98d9bbcfc489b6b9054fdd7e45e9c9da519",
+              "status": "CONFIRMED",
+              "version": 1
+            },
+            "effect_class": "WRITE",
+            "request_id": "same-request-id",
+            "resource": "reports/result.txt",
+            "session_id": "experiment-session",
+            "skill_ref": "writer",
+            "task_id": "experiment-task",
+            "tool": "write_file"
+          }
+        }
+      ],
+      "events": [
+        {
+          "schema_version": "1.0",
+          "event_id": "event-97d95648-e7bc-465c-8374-88abea3eb5e1",
+          "sequence": 1,
+          "task_id": "experiment-task",
+          "parent_event_id": null,
+          "type": "PERMISSION_EVALUATED",
+          "actor": "permission-resolver",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "ecb6cd09341afc24d81a3c44f587b49ad49fdb1045b9fddc36c59e1220790264",
+          "state": "PERMISSION_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "e2b662eb60638c16f587e3f9bd81bca11a9a0807850b06db98af587af0713423",
+          "occurred_at": "2026-09-23T04:55:42.245779Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "0088ed9b597b485ed7b7f0beb1a4a98d9bbcfc489b6b9054fdd7e45e9c9da519",
+            "ecb6cd09341afc24d81a3c44f587b49ad49fdb1045b9fddc36c59e1220790264",
+            "e2b662eb60638c16f587e3f9bd81bca11a9a0807850b06db98af587af0713423"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-ffcdb01a-c528-4a79-85f9-a008f1cbbab1",
+          "sequence": 2,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-97d95648-e7bc-465c-8374-88abea3eb5e1",
+          "type": "GATEWAY_ALLOWED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "ecb6cd09341afc24d81a3c44f587b49ad49fdb1045b9fddc36c59e1220790264",
+          "state": "GATEWAY_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "e2b662eb60638c16f587e3f9bd81bca11a9a0807850b06db98af587af0713423",
+          "occurred_at": "2026-09-23T04:55:42.265103Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "0088ed9b597b485ed7b7f0beb1a4a98d9bbcfc489b6b9054fdd7e45e9c9da519",
+            "ecb6cd09341afc24d81a3c44f587b49ad49fdb1045b9fddc36c59e1220790264",
+            "e2b662eb60638c16f587e3f9bd81bca11a9a0807850b06db98af587af0713423"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-635775ba-c5a1-439c-8baf-1ca88fda229e",
+          "sequence": 3,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-ffcdb01a-c528-4a79-85f9-a008f1cbbab1",
+          "type": "PERMISSION_EVALUATED",
+          "actor": "permission-resolver",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "ecb6cd09341afc24d81a3c44f587b49ad49fdb1045b9fddc36c59e1220790264",
+          "state": "PERMISSION_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "e2b662eb60638c16f587e3f9bd81bca11a9a0807850b06db98af587af0713423",
+          "occurred_at": "2026-09-23T04:55:42.448521Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "0088ed9b597b485ed7b7f0beb1a4a98d9bbcfc489b6b9054fdd7e45e9c9da519",
+            "ecb6cd09341afc24d81a3c44f587b49ad49fdb1045b9fddc36c59e1220790264",
+            "e2b662eb60638c16f587e3f9bd81bca11a9a0807850b06db98af587af0713423"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-d0983e91-1182-4f6e-b8a7-337d65fb91dd",
+          "sequence": 4,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-635775ba-c5a1-439c-8baf-1ca88fda229e",
+          "type": "GATEWAY_ALLOWED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "ecb6cd09341afc24d81a3c44f587b49ad49fdb1045b9fddc36c59e1220790264",
+          "state": "GATEWAY_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "e2b662eb60638c16f587e3f9bd81bca11a9a0807850b06db98af587af0713423",
+          "occurred_at": "2026-09-23T04:55:42.465174Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "0088ed9b597b485ed7b7f0beb1a4a98d9bbcfc489b6b9054fdd7e45e9c9da519",
+            "ecb6cd09341afc24d81a3c44f587b49ad49fdb1045b9fddc36c59e1220790264",
+            "e2b662eb60638c16f587e3f9bd81bca11a9a0807850b06db98af587af0713423"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-79816173-05cd-4764-9079-6a7ea039267d",
+          "sequence": 5,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-d0983e91-1182-4f6e-b8a7-337d65fb91dd",
+          "type": "EXECUTION_STARTED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "ecb6cd09341afc24d81a3c44f587b49ad49fdb1045b9fddc36c59e1220790264",
+          "state": "EXECUTION_STARTED",
+          "decision": "ALLOW",
+          "result_digest": null,
+          "occurred_at": "2026-09-23T04:55:42.543097Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "0088ed9b597b485ed7b7f0beb1a4a98d9bbcfc489b6b9054fdd7e45e9c9da519",
+            "ecb6cd09341afc24d81a3c44f587b49ad49fdb1045b9fddc36c59e1220790264"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-b29fadb0-d101-4e22-8280-c6172284b00a",
+          "sequence": 6,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-79816173-05cd-4764-9079-6a7ea039267d",
+          "type": "EXECUTION_FINISHED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "ecb6cd09341afc24d81a3c44f587b49ad49fdb1045b9fddc36c59e1220790264",
+          "state": "EXECUTED",
+          "decision": "ALLOW",
+          "result_digest": "403f2005be66c9ccbfa54c392064de8761585a585a0e2353bbf3a3e87474369f",
+          "occurred_at": "2026-09-23T04:55:42.686329Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "0088ed9b597b485ed7b7f0beb1a4a98d9bbcfc489b6b9054fdd7e45e9c9da519",
+            "ecb6cd09341afc24d81a3c44f587b49ad49fdb1045b9fddc36c59e1220790264",
+            "403f2005be66c9ccbfa54c392064de8761585a585a0e2353bbf3a3e87474369f"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        }
+      ]
+    },
+    {
+      "mode": "full_gateway",
+      "scenario": "same_id_retry",
+      "final_status": "EXECUTED",
+      "actual_writes": 1,
+      "expected_writes": 1,
+      "actual_file_content": "approved content",
+      "valid_sm2_evidence_objects": 3,
+      "tampered_evidence_rejected": true,
+      "attempts": [
+        {
+          "action": "evaluate_original",
+          "status": "ALLOW",
+          "reason": "ALLOWED",
+          "actual_writes": 0,
+          "elapsed_ms": 317.191
+        },
+        {
+          "action": "execute_original",
+          "status": "EXECUTED",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 16
+          },
+          "actual_writes": 1,
+          "elapsed_ms": 437.915
+        },
+        {
+          "action": "execute_same_instance_retry",
+          "status": "EXECUTED",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 16
+          },
+          "actual_writes": 0,
+          "elapsed_ms": 1.995
+        },
+        {
+          "action": "execute_after_gateway_recreation",
+          "status": "EXECUTED",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 16
+          },
+          "actual_writes": 0,
+          "elapsed_ms": 1.027
+        }
+      ],
+      "write_ledger": [
+        {
+          "write_number": 1,
+          "request_id": "same-request-id",
+          "resource": "reports/result.txt",
+          "actual_content": "approved content",
+          "actual_bytes": 16,
+          "actual_sha256": "3b1698580da742407583708ba40ccc0484d44f8848d62ddccc6940023aa1f13c"
+        }
+      ],
+      "signed_objects": [
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolResult",
+            "payload_digest": "2c2e1308a27428c2d32618ad72cbea7c7fd81405453904f36e77b9a305f1c182",
+            "schema_version": "1.0",
+            "signature": "MEUCIQCZXTmbT95JXy3nUQR22peMBpJS1SZOZWqaP20Iza6F+gIgSzd/Eb+pCSfh00PDBKpDecQrBk5WiY1ZwDp3TzQBwI4="
+          },
+          "payload": {
+            "request_id": "same-request-id",
+            "result": {
+              "bytes_written": 16,
+              "path": "reports/result.txt",
+              "tool": "write_file"
+            },
+            "task_id": "experiment-task"
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolCallEnvelope",
+            "payload_digest": "7d7b687cf92a21999c723cb97def8041487b1aabd65c359ed1cfe928153b1582",
+            "schema_version": "1.0",
+            "signature": "MEQCICByfokNA1b2kQd/4XgeY5vhXRzzkqXrqseWhGyo5nHZAiBIg2nO0Q8V8e5sg6ou6eCbNJ9G89FmBDeqsjaINNi2Cw=="
+          },
+          "payload": {
+            "action": "write_file",
+            "canonical_args": {
+              "content": "approved content",
+              "path": "reports/result.txt"
+            },
+            "contract_ref": {
+              "confirmed_at": "2026-09-23T04:55:42.916343Z",
+              "confirmed_by": "experiment-user",
+              "contract_id": "contract-8c5e5df4-fb04-45db-8c2d-4c117d3aac2e",
+              "digest": "ed4e904b0afb55c6987ef8dedd36ee6622cd1866fb44bc153bdc67d0b97a42a7",
+              "status": "CONFIRMED",
+              "version": 1
+            },
+            "effect_class": "WRITE",
+            "request_id": "same-request-id",
+            "resource": "reports/result.txt",
+            "session_id": "experiment-session",
+            "skill_ref": "writer",
+            "task_id": "experiment-task",
+            "tool": "write_file"
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "GatewayDecision",
+            "payload_digest": "7e26305cb54b4a907158e0d402be81fd4e42633ee37adc7b64e89e01a9e4b579",
+            "schema_version": "1.0",
+            "signature": "MEQCICpYJf+x2huu8n1qWH7ZBOXgP7ub11wSQpXKde/g1qNuAiA4Ws9OkpGstZIlbLJxp1jx0u59qwpxFc8LwF7BV79lMw=="
+          },
+          "payload": {
+            "confirmation_id": null,
+            "decision": "ALLOW",
+            "evidence_refs": [
+              "ed4e904b0afb55c6987ef8dedd36ee6622cd1866fb44bc153bdc67d0b97a42a7"
+            ],
+            "reason_code": "ALLOWED",
+            "request_id": "same-request-id",
+            "task_id": "experiment-task",
+            "versions": {
+              "contract": 1,
+              "policy": "experiment-policy:1",
+              "tool_manifest": "experiment-write-file:1"
+            }
+          }
+        }
+      ],
+      "events": [
+        {
+          "schema_version": "1.0",
+          "event_id": "event-1161d534-8f8b-4030-a662-ff2ba8bd4ea7",
+          "sequence": 1,
+          "task_id": "experiment-task",
+          "parent_event_id": null,
+          "type": "PERMISSION_EVALUATED",
+          "actor": "permission-resolver",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "5600e3b04757dbce79cee8848e4bb75972d66b48163c109f6008ea92165239fb",
+          "state": "PERMISSION_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "6b95266c26a44aefcb60c1cf5f7b3190a1f578173cc463728799e22b7a9c3b3d",
+          "occurred_at": "2026-09-23T04:55:43.228195Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "ed4e904b0afb55c6987ef8dedd36ee6622cd1866fb44bc153bdc67d0b97a42a7",
+            "5600e3b04757dbce79cee8848e4bb75972d66b48163c109f6008ea92165239fb",
+            "6b95266c26a44aefcb60c1cf5f7b3190a1f578173cc463728799e22b7a9c3b3d"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-9c4cb0ae-e900-41f8-9d54-272534b3b746",
+          "sequence": 2,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-1161d534-8f8b-4030-a662-ff2ba8bd4ea7",
+          "type": "GATEWAY_ALLOWED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "5600e3b04757dbce79cee8848e4bb75972d66b48163c109f6008ea92165239fb",
+          "state": "GATEWAY_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "6b95266c26a44aefcb60c1cf5f7b3190a1f578173cc463728799e22b7a9c3b3d",
+          "occurred_at": "2026-09-23T04:55:43.246587Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "ed4e904b0afb55c6987ef8dedd36ee6622cd1866fb44bc153bdc67d0b97a42a7",
+            "5600e3b04757dbce79cee8848e4bb75972d66b48163c109f6008ea92165239fb",
+            "6b95266c26a44aefcb60c1cf5f7b3190a1f578173cc463728799e22b7a9c3b3d"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-c50b9e59-b0f9-4a29-a08a-54c594b969b8",
+          "sequence": 3,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-9c4cb0ae-e900-41f8-9d54-272534b3b746",
+          "type": "PERMISSION_EVALUATED",
+          "actor": "permission-resolver",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "5600e3b04757dbce79cee8848e4bb75972d66b48163c109f6008ea92165239fb",
+          "state": "PERMISSION_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "6b95266c26a44aefcb60c1cf5f7b3190a1f578173cc463728799e22b7a9c3b3d",
+          "occurred_at": "2026-09-23T04:55:43.430968Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "ed4e904b0afb55c6987ef8dedd36ee6622cd1866fb44bc153bdc67d0b97a42a7",
+            "5600e3b04757dbce79cee8848e4bb75972d66b48163c109f6008ea92165239fb",
+            "6b95266c26a44aefcb60c1cf5f7b3190a1f578173cc463728799e22b7a9c3b3d"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-b61a347e-70e9-4d0c-a34c-4066730467e7",
+          "sequence": 4,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-c50b9e59-b0f9-4a29-a08a-54c594b969b8",
+          "type": "GATEWAY_ALLOWED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "5600e3b04757dbce79cee8848e4bb75972d66b48163c109f6008ea92165239fb",
+          "state": "GATEWAY_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "6b95266c26a44aefcb60c1cf5f7b3190a1f578173cc463728799e22b7a9c3b3d",
+          "occurred_at": "2026-09-23T04:55:43.450112Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "ed4e904b0afb55c6987ef8dedd36ee6622cd1866fb44bc153bdc67d0b97a42a7",
+            "5600e3b04757dbce79cee8848e4bb75972d66b48163c109f6008ea92165239fb",
+            "6b95266c26a44aefcb60c1cf5f7b3190a1f578173cc463728799e22b7a9c3b3d"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-95da6461-d967-4e86-a7fd-43c250a7d88f",
+          "sequence": 5,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-b61a347e-70e9-4d0c-a34c-4066730467e7",
+          "type": "EXECUTION_STARTED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "5600e3b04757dbce79cee8848e4bb75972d66b48163c109f6008ea92165239fb",
+          "state": "EXECUTION_STARTED",
+          "decision": "ALLOW",
+          "result_digest": null,
+          "occurred_at": "2026-09-23T04:55:43.526621Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "ed4e904b0afb55c6987ef8dedd36ee6622cd1866fb44bc153bdc67d0b97a42a7",
+            "5600e3b04757dbce79cee8848e4bb75972d66b48163c109f6008ea92165239fb"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-148008e2-ccb8-4557-9817-fec171d59553",
+          "sequence": 6,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-95da6461-d967-4e86-a7fd-43c250a7d88f",
+          "type": "EXECUTION_FINISHED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "5600e3b04757dbce79cee8848e4bb75972d66b48163c109f6008ea92165239fb",
+          "state": "EXECUTED",
+          "decision": "ALLOW",
+          "result_digest": "51e2d3b26f74878c4ff9c7101f8c66cc5cebeb4367956ae8bdd7412798b68685",
+          "occurred_at": "2026-09-23T04:55:43.683179Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "ed4e904b0afb55c6987ef8dedd36ee6622cd1866fb44bc153bdc67d0b97a42a7",
+            "5600e3b04757dbce79cee8848e4bb75972d66b48163c109f6008ea92165239fb",
+            "51e2d3b26f74878c4ff9c7101f8c66cc5cebeb4367956ae8bdd7412798b68685"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        }
+      ]
+    },
+    {
+      "mode": "full_gateway",
+      "scenario": "evaluated_argument_substitution",
+      "final_status": "REJECTED",
+      "actual_writes": 0,
+      "expected_writes": 0,
+      "actual_file_content": null,
+      "valid_sm2_evidence_objects": 2,
+      "tampered_evidence_rejected": true,
+      "attempts": [
+        {
+          "action": "evaluate_original",
+          "status": "ALLOW",
+          "reason": "ALLOWED",
+          "actual_writes": 0,
+          "elapsed_ms": 294.344
+        },
+        {
+          "action": "evaluate_substitution",
+          "status": "REJECTED",
+          "error": "request_id is already bound to a different envelope",
+          "actual_writes": 0,
+          "elapsed_ms": 2.572
+        }
+      ],
+      "write_ledger": [],
+      "signed_objects": [
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolCallEnvelope",
+            "payload_digest": "8bdb1c61c23aa5bcd47baf7930fddfb38041ed406b43605f2cc63286106a5207",
+            "schema_version": "1.0",
+            "signature": "MEUCIQC8giONQh3pcm8Yj9DOLBjrV6Sr07BOgKI/aKXXNLzYVAIgBq6JqCw1X/4dgX+Z1xtFAEYeNBz4vxz60nEQmej+JVs="
+          },
+          "payload": {
+            "action": "write_file",
+            "canonical_args": {
+              "content": "approved content",
+              "path": "reports/result.txt"
+            },
+            "contract_ref": {
+              "confirmed_at": "2026-09-23T04:55:43.900576Z",
+              "confirmed_by": "experiment-user",
+              "contract_id": "contract-5c02da2c-684c-4027-856c-e5a21174c08d",
+              "digest": "a428f530a0fd1e148c8ba89784bcd977fc8a6728a3fc369ebc59075e4bf2a23f",
+              "status": "CONFIRMED",
+              "version": 1
+            },
+            "effect_class": "WRITE",
+            "request_id": "same-request-id",
+            "resource": "reports/result.txt",
+            "session_id": "experiment-session",
+            "skill_ref": "writer",
+            "task_id": "experiment-task",
+            "tool": "write_file"
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "GatewayDecision",
+            "payload_digest": "2eab770bd91db6cd268bfdf8f49d0db3612743944387b447336008e16e29e2db",
+            "schema_version": "1.0",
+            "signature": "MEUCIAVgJ7dhLB69SAvKTwXJU0q6G1wfIRLO4DsdrEQ5SZMtAiEApzx30trdtuEWQLVU0vTE0UJ/jzvTbR1HwqO5GInE4jA="
+          },
+          "payload": {
+            "confirmation_id": null,
+            "decision": "ALLOW",
+            "evidence_refs": [
+              "a428f530a0fd1e148c8ba89784bcd977fc8a6728a3fc369ebc59075e4bf2a23f"
+            ],
+            "reason_code": "ALLOWED",
+            "request_id": "same-request-id",
+            "task_id": "experiment-task",
+            "versions": {
+              "contract": 1,
+              "policy": "experiment-policy:1",
+              "tool_manifest": "experiment-write-file:1"
+            }
+          }
+        }
+      ],
+      "events": [
+        {
+          "schema_version": "1.0",
+          "event_id": "event-a4798cd0-170c-403b-bfd0-f7c5fb5eb6ca",
+          "sequence": 1,
+          "task_id": "experiment-task",
+          "parent_event_id": null,
+          "type": "PERMISSION_EVALUATED",
+          "actor": "permission-resolver",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "48f6ee86e22d09d1b8a7699e01959c6403920952b2155da3ccf46eeac25ab19c",
+          "state": "PERMISSION_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "b02d223367b3a2afc98c884bf49a062558ac89b334c68f02384b9a30b38e7ea9",
+          "occurred_at": "2026-09-23T04:55:44.190028Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "a428f530a0fd1e148c8ba89784bcd977fc8a6728a3fc369ebc59075e4bf2a23f",
+            "48f6ee86e22d09d1b8a7699e01959c6403920952b2155da3ccf46eeac25ab19c",
+            "b02d223367b3a2afc98c884bf49a062558ac89b334c68f02384b9a30b38e7ea9"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-e6435878-a5a2-401d-b779-b5b684397c51",
+          "sequence": 2,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-a4798cd0-170c-403b-bfd0-f7c5fb5eb6ca",
+          "type": "GATEWAY_ALLOWED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "48f6ee86e22d09d1b8a7699e01959c6403920952b2155da3ccf46eeac25ab19c",
+          "state": "GATEWAY_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "b02d223367b3a2afc98c884bf49a062558ac89b334c68f02384b9a30b38e7ea9",
+          "occurred_at": "2026-09-23T04:55:44.207876Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "a428f530a0fd1e148c8ba89784bcd977fc8a6728a3fc369ebc59075e4bf2a23f",
+            "48f6ee86e22d09d1b8a7699e01959c6403920952b2155da3ccf46eeac25ab19c",
+            "b02d223367b3a2afc98c884bf49a062558ac89b334c68f02384b9a30b38e7ea9"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        }
+      ]
+    },
+    {
+      "mode": "full_gateway",
+      "scenario": "permission_tightening",
+      "final_status": "REJECTED",
+      "actual_writes": 0,
+      "expected_writes": 0,
+      "actual_file_content": null,
+      "valid_sm2_evidence_objects": 3,
+      "tampered_evidence_rejected": true,
+      "attempts": [
+        {
+          "action": "evaluate_original",
+          "status": "ALLOW",
+          "reason": "ALLOWED",
+          "actual_writes": 0,
+          "elapsed_ms": 308.347
+        },
+        {
+          "action": "execute_after_permission_tightening",
+          "status": "REJECTED",
+          "error": "Pre-execution recheck failed: SYSTEM_DENY",
+          "actual_writes": 0,
+          "elapsed_ms": 264.99
+        }
+      ],
+      "write_ledger": [],
+      "signed_objects": [
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolCallEnvelope",
+            "payload_digest": "e3c51e5d21edd962454c6e2bc828b1080a32763d9a7d8fdc59a5af4517c80904",
+            "schema_version": "1.0",
+            "signature": "MEYCIQDiUK/1vI4cs/77dOFYYLmUuLZGFWjp2vdHSubo82qkqgIhAJjI0Qt7/qk1d49amHJsSszh+fgJcmU8elh7YyPh6wYC"
+          },
+          "payload": {
+            "action": "write_file",
+            "canonical_args": {
+              "content": "approved content",
+              "path": "reports/result.txt"
+            },
+            "contract_ref": {
+              "confirmed_at": "2026-09-23T04:55:44.380064Z",
+              "confirmed_by": "experiment-user",
+              "contract_id": "contract-9be95402-69ab-4d7f-bd09-fc9f8c4d8188",
+              "digest": "93d131516e145b5955959e36ca18944d492b776a18aeb498811a0044e6f31407",
+              "status": "CONFIRMED",
+              "version": 1
+            },
+            "effect_class": "WRITE",
+            "request_id": "same-request-id",
+            "resource": "reports/result.txt",
+            "session_id": "experiment-session",
+            "skill_ref": "writer",
+            "task_id": "experiment-task",
+            "tool": "write_file"
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "GatewayDecision",
+            "payload_digest": "4e58c6fd1cd6aa0b2f908a668e73b3432be0f8e865515fda9c93f93b9de9ee0b",
+            "schema_version": "1.0",
+            "signature": "MEYCIQDslPR46okSHygcTOvCyWjJPbLLDgRYMWEpx9l6WpqpFAIhAOrHAkC7VC4awN54v8sU9lZTFYlbuGNuOx+5Kx/Fmok9"
+          },
+          "payload": {
+            "confirmation_id": null,
+            "decision": "ALLOW",
+            "evidence_refs": [
+              "93d131516e145b5955959e36ca18944d492b776a18aeb498811a0044e6f31407"
+            ],
+            "reason_code": "ALLOWED",
+            "request_id": "same-request-id",
+            "task_id": "experiment-task",
+            "versions": {
+              "contract": 1,
+              "policy": "experiment-policy:1",
+              "tool_manifest": "experiment-write-file:1"
+            }
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "GatewayDecision",
+            "payload_digest": "4e2799605d2e4bcf84e975aa179d33831e779ae1363a54aad1bc97285917bd5b",
+            "schema_version": "1.0",
+            "signature": "MEQCICnf04MItoG/Tsd9k6clnq2axbWGRiaOtuf/0V+S20AdAiBbRFGiltZ+Kn/+DLdh3ruCM1DCIYez4sgCINxyjVh2lQ=="
+          },
+          "payload": {
+            "confirmation_id": null,
+            "decision": "DENY",
+            "evidence_refs": [
+              "93d131516e145b5955959e36ca18944d492b776a18aeb498811a0044e6f31407"
+            ],
+            "reason_code": "SYSTEM_DENY",
+            "request_id": "same-request-id",
+            "task_id": "experiment-task",
+            "versions": {
+              "contract": 1,
+              "policy": "experiment-policy:1",
+              "tool_manifest": "experiment-write-file:1"
+            }
+          }
+        }
+      ],
+      "events": [
+        {
+          "schema_version": "1.0",
+          "event_id": "event-247dfe1d-999c-47de-8cb8-b729d76f4f16",
+          "sequence": 1,
+          "task_id": "experiment-task",
+          "parent_event_id": null,
+          "type": "PERMISSION_EVALUATED",
+          "actor": "permission-resolver",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "47bb768a874df667b2c1c6ce5602d0fb68308918be94c352f0577d390aeb3220",
+          "state": "PERMISSION_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "ebe0cb52126d815a2fbfdf265109a8b16f0841255017539c85b7198bf968396c",
+          "occurred_at": "2026-09-23T04:55:44.685200Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "93d131516e145b5955959e36ca18944d492b776a18aeb498811a0044e6f31407",
+            "47bb768a874df667b2c1c6ce5602d0fb68308918be94c352f0577d390aeb3220",
+            "ebe0cb52126d815a2fbfdf265109a8b16f0841255017539c85b7198bf968396c"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-505c6cb4-d121-417a-adc4-cd1493552c06",
+          "sequence": 2,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-247dfe1d-999c-47de-8cb8-b729d76f4f16",
+          "type": "GATEWAY_ALLOWED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "47bb768a874df667b2c1c6ce5602d0fb68308918be94c352f0577d390aeb3220",
+          "state": "GATEWAY_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "ebe0cb52126d815a2fbfdf265109a8b16f0841255017539c85b7198bf968396c",
+          "occurred_at": "2026-09-23T04:55:44.702235Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "93d131516e145b5955959e36ca18944d492b776a18aeb498811a0044e6f31407",
+            "47bb768a874df667b2c1c6ce5602d0fb68308918be94c352f0577d390aeb3220",
+            "ebe0cb52126d815a2fbfdf265109a8b16f0841255017539c85b7198bf968396c"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-076fd05b-7a56-461d-a0fc-5332cea253a4",
+          "sequence": 3,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-505c6cb4-d121-417a-adc4-cd1493552c06",
+          "type": "PERMISSION_EVALUATED",
+          "actor": "permission-resolver",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "47bb768a874df667b2c1c6ce5602d0fb68308918be94c352f0577d390aeb3220",
+          "state": "PERMISSION_DENIED",
+          "decision": "DENY",
+          "result_digest": "fe888f38701ae0e11f034770e22ebf5bd920958709a58e9b714d8a1ae0be814c",
+          "occurred_at": "2026-09-23T04:55:44.945773Z",
+          "request_id": "same-request-id",
+          "reason_code": "SYSTEM_DENY",
+          "evidence_refs": [
+            "93d131516e145b5955959e36ca18944d492b776a18aeb498811a0044e6f31407",
+            "47bb768a874df667b2c1c6ce5602d0fb68308918be94c352f0577d390aeb3220",
+            "fe888f38701ae0e11f034770e22ebf5bd920958709a58e9b714d8a1ae0be814c"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-493a4c0b-f62f-4f2a-9db6-f245c836600e",
+          "sequence": 4,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-076fd05b-7a56-461d-a0fc-5332cea253a4",
+          "type": "GATEWAY_DENIED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "47bb768a874df667b2c1c6ce5602d0fb68308918be94c352f0577d390aeb3220",
+          "state": "GATEWAY_DENIED",
+          "decision": "DENY",
+          "result_digest": "fe888f38701ae0e11f034770e22ebf5bd920958709a58e9b714d8a1ae0be814c",
+          "occurred_at": "2026-09-23T04:55:44.959798Z",
+          "request_id": "same-request-id",
+          "reason_code": "SYSTEM_DENY",
+          "evidence_refs": [
+            "93d131516e145b5955959e36ca18944d492b776a18aeb498811a0044e6f31407",
+            "47bb768a874df667b2c1c6ce5602d0fb68308918be94c352f0577d390aeb3220",
+            "fe888f38701ae0e11f034770e22ebf5bd920958709a58e9b714d8a1ae0be814c"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        }
+      ]
+    },
+    {
+      "mode": "gateway_without_live_authority",
+      "scenario": "permission_tightening",
+      "final_status": "EXECUTED",
+      "actual_writes": 1,
+      "expected_writes": 1,
+      "actual_file_content": "approved content",
+      "valid_sm2_evidence_objects": 3,
+      "tampered_evidence_rejected": true,
+      "attempts": [
+        {
+          "action": "evaluate_original",
+          "status": "ALLOW",
+          "reason": "ALLOWED",
+          "actual_writes": 0,
+          "elapsed_ms": 339.873
+        },
+        {
+          "action": "execute_after_permission_tightening",
+          "status": "EXECUTED",
+          "result": {
+            "tool": "write_file",
+            "path": "reports/result.txt",
+            "bytes_written": 16
+          },
+          "actual_writes": 1,
+          "elapsed_ms": 428.2
+        }
+      ],
+      "write_ledger": [
+        {
+          "write_number": 1,
+          "request_id": "same-request-id",
+          "resource": "reports/result.txt",
+          "actual_content": "approved content",
+          "actual_bytes": 16,
+          "actual_sha256": "3b1698580da742407583708ba40ccc0484d44f8848d62ddccc6940023aa1f13c"
+        }
+      ],
+      "signed_objects": [
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "GatewayDecision",
+            "payload_digest": "11aa0bd07d701b626024049516045168e55f9e97af9dc50484c8932497e6cd91",
+            "schema_version": "1.0",
+            "signature": "MEQCIFjbEAm8YFc63WOoXr4iwCBV9385wrvOk0Hp4pc7lg2pAiA8YNNmGxJczHiBsmG0cwkz6y1hjicqJvMQ4tEIyvixnw=="
+          },
+          "payload": {
+            "confirmation_id": null,
+            "decision": "ALLOW",
+            "evidence_refs": [
+              "e76a29c8fac62a61693012049e38c0f3bf589af5316069598735628a256a59f6"
+            ],
+            "reason_code": "ALLOWED",
+            "request_id": "same-request-id",
+            "task_id": "experiment-task",
+            "versions": {
+              "contract": 1,
+              "policy": "experiment-policy:1",
+              "tool_manifest": "experiment-write-file:1"
+            }
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolCallEnvelope",
+            "payload_digest": "67c12e1defeca108ac5bb5c3f1adb5896c75017a650539021c166e6a31d2fefa",
+            "schema_version": "1.0",
+            "signature": "MEUCIQCxESPjxz3OnT5MaYkLBEwtIRHcT+cJNgvZT47EIXDbcgIgBaLgrlVy0/+03bF4zpXi49TLMoUL75P2W4QplbKn2hg="
+          },
+          "payload": {
+            "action": "write_file",
+            "canonical_args": {
+              "content": "approved content",
+              "path": "reports/result.txt"
+            },
+            "contract_ref": {
+              "confirmed_at": "2026-09-23T04:55:45.196171Z",
+              "confirmed_by": "experiment-user",
+              "contract_id": "contract-90c3b911-6c57-4541-92a2-43bee85abd2c",
+              "digest": "e76a29c8fac62a61693012049e38c0f3bf589af5316069598735628a256a59f6",
+              "status": "CONFIRMED",
+              "version": 1
+            },
+            "effect_class": "WRITE",
+            "request_id": "same-request-id",
+            "resource": "reports/result.txt",
+            "session_id": "experiment-session",
+            "skill_ref": "writer",
+            "task_id": "experiment-task",
+            "tool": "write_file"
+          }
+        },
+        {
+          "envelope": {
+            "algorithm": "SM2-SM3",
+            "key_id": "ablation-cc15e57627e2",
+            "object_type": "ToolResult",
+            "payload_digest": "2c2e1308a27428c2d32618ad72cbea7c7fd81405453904f36e77b9a305f1c182",
+            "schema_version": "1.0",
+            "signature": "MEUCIE0T3Z2otcMUeGreyTXvRJUbkJDPblttvejbCanPaB0mAiEAxuYte3Bisebo6TKxlVVvODXdKpKt4tMenCh+uxZ6aPs="
+          },
+          "payload": {
+            "request_id": "same-request-id",
+            "result": {
+              "bytes_written": 16,
+              "path": "reports/result.txt",
+              "tool": "write_file"
+            },
+            "task_id": "experiment-task"
+          }
+        }
+      ],
+      "events": [
+        {
+          "schema_version": "1.0",
+          "event_id": "event-0a750670-1b6f-4795-ba42-81f9c65a646a",
+          "sequence": 1,
+          "task_id": "experiment-task",
+          "parent_event_id": null,
+          "type": "PERMISSION_EVALUATED",
+          "actor": "permission-resolver",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "59a1b3244d8555900f5be2a707ce7e67a6c55d26d5bf790da5b6e1cb6bd9a566",
+          "state": "PERMISSION_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "34a25ecc354622800bc857c7f02c785e7e6ec8f22ebaf940d70e7b8825e08ace",
+          "occurred_at": "2026-09-23T04:55:45.533687Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "e76a29c8fac62a61693012049e38c0f3bf589af5316069598735628a256a59f6",
+            "59a1b3244d8555900f5be2a707ce7e67a6c55d26d5bf790da5b6e1cb6bd9a566",
+            "34a25ecc354622800bc857c7f02c785e7e6ec8f22ebaf940d70e7b8825e08ace"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-313e34c2-aac7-4e71-b13d-6ac2cfcc7629",
+          "sequence": 2,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-0a750670-1b6f-4795-ba42-81f9c65a646a",
+          "type": "GATEWAY_ALLOWED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "59a1b3244d8555900f5be2a707ce7e67a6c55d26d5bf790da5b6e1cb6bd9a566",
+          "state": "GATEWAY_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "34a25ecc354622800bc857c7f02c785e7e6ec8f22ebaf940d70e7b8825e08ace",
+          "occurred_at": "2026-09-23T04:55:45.552748Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "e76a29c8fac62a61693012049e38c0f3bf589af5316069598735628a256a59f6",
+            "59a1b3244d8555900f5be2a707ce7e67a6c55d26d5bf790da5b6e1cb6bd9a566",
+            "34a25ecc354622800bc857c7f02c785e7e6ec8f22ebaf940d70e7b8825e08ace"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-224f2e00-b170-46e7-910d-deb1aaa9ea40",
+          "sequence": 3,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-313e34c2-aac7-4e71-b13d-6ac2cfcc7629",
+          "type": "PERMISSION_EVALUATED",
+          "actor": "permission-resolver",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "59a1b3244d8555900f5be2a707ce7e67a6c55d26d5bf790da5b6e1cb6bd9a566",
+          "state": "PERMISSION_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "34a25ecc354622800bc857c7f02c785e7e6ec8f22ebaf940d70e7b8825e08ace",
+          "occurred_at": "2026-09-23T04:55:45.725044Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "e76a29c8fac62a61693012049e38c0f3bf589af5316069598735628a256a59f6",
+            "59a1b3244d8555900f5be2a707ce7e67a6c55d26d5bf790da5b6e1cb6bd9a566",
+            "34a25ecc354622800bc857c7f02c785e7e6ec8f22ebaf940d70e7b8825e08ace"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-960d822f-20e9-4f19-a67b-71027cc6eaee",
+          "sequence": 4,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-224f2e00-b170-46e7-910d-deb1aaa9ea40",
+          "type": "GATEWAY_ALLOWED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "59a1b3244d8555900f5be2a707ce7e67a6c55d26d5bf790da5b6e1cb6bd9a566",
+          "state": "GATEWAY_ALLOWED",
+          "decision": "ALLOW",
+          "result_digest": "34a25ecc354622800bc857c7f02c785e7e6ec8f22ebaf940d70e7b8825e08ace",
+          "occurred_at": "2026-09-23T04:55:45.742750Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "e76a29c8fac62a61693012049e38c0f3bf589af5316069598735628a256a59f6",
+            "59a1b3244d8555900f5be2a707ce7e67a6c55d26d5bf790da5b6e1cb6bd9a566",
+            "34a25ecc354622800bc857c7f02c785e7e6ec8f22ebaf940d70e7b8825e08ace"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-1b6765ac-ca21-4043-a6fe-2c02bb4a42c5",
+          "sequence": 5,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-960d822f-20e9-4f19-a67b-71027cc6eaee",
+          "type": "EXECUTION_STARTED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "59a1b3244d8555900f5be2a707ce7e67a6c55d26d5bf790da5b6e1cb6bd9a566",
+          "state": "EXECUTION_STARTED",
+          "decision": "ALLOW",
+          "result_digest": null,
+          "occurred_at": "2026-09-23T04:55:45.832838Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "e76a29c8fac62a61693012049e38c0f3bf589af5316069598735628a256a59f6",
+            "59a1b3244d8555900f5be2a707ce7e67a6c55d26d5bf790da5b6e1cb6bd9a566"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        },
+        {
+          "schema_version": "1.0",
+          "event_id": "event-af1cedd8-b611-4eb9-a3f2-32b3ef2b7420",
+          "sequence": 6,
+          "task_id": "experiment-task",
+          "parent_event_id": "event-1b6765ac-ca21-4043-a6fe-2c02bb4a42c5",
+          "type": "EXECUTION_FINISHED",
+          "actor": "tool-gateway",
+          "source_ref": "gateway:same-request-id",
+          "object_digest": "59a1b3244d8555900f5be2a707ce7e67a6c55d26d5bf790da5b6e1cb6bd9a566",
+          "state": "EXECUTED",
+          "decision": "ALLOW",
+          "result_digest": "9d3913f0e91843ff597ae4c9431365259c58cab41f194938bee3d2e951f4a449",
+          "occurred_at": "2026-09-23T04:55:45.979181Z",
+          "request_id": "same-request-id",
+          "reason_code": "ALLOWED",
+          "evidence_refs": [
+            "e76a29c8fac62a61693012049e38c0f3bf589af5316069598735628a256a59f6",
+            "59a1b3244d8555900f5be2a707ce7e67a6c55d26d5bf790da5b6e1cb6bd9a566",
+            "9d3913f0e91843ff597ae4c9431365259c58cab41f194938bee3d2e951f4a449"
+          ],
+          "prepared_effect_id": null,
+          "effect_descriptor_digest": null,
+          "result_commitment": null,
+          "commit_epoch": null,
+          "execution_receipt_id": null,
+          "compliance_proof_ref": null
+        }
+      ]
+    }
+  ]
+}

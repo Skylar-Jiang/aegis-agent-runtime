@@ -1,0 +1,46 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "checkpoint_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Checkpoint Id",
+      "type": "string"
+    },
+    "from_seq": {
+      "minimum": 1,
+      "title": "From Seq",
+      "type": "integer"
+    },
+    "to_seq": {
+      "minimum": 1,
+      "title": "To Seq",
+      "type": "integer"
+    },
+    "chain_head": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Chain Head",
+      "type": "string"
+    },
+    "created_at": {
+      "title": "Created At",
+      "type": "string"
+    },
+    "signer": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Signer",
+      "type": "string"
+    }
+  },
+  "required": [
+    "checkpoint_id",
+    "from_seq",
+    "to_seq",
+    "chain_head",
+    "created_at",
+    "signer"
+  ],
+  "title": "AuditCheckpoint",
+  "type": "object"
+}

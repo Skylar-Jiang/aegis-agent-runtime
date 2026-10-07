@@ -1,0 +1,14 @@
+mode,scenario,final_status,actual_writes,expected_writes,actual_file_content,valid_sm2_evidence_objects,tampered_evidence_rejected
+permission_only,normal,EXECUTED,1,1,approved content,0,
+permission_only,same_id_retry,EXECUTED,3,3,approved content,0,
+permission_only,evaluated_argument_substitution,EXECUTED,1,1,substituted content,0,
+permission_only,permission_tightening,REJECTED,0,0,,0,
+permission_and_sm2,normal,EXECUTED,1,1,approved content,3,True
+permission_and_sm2,same_id_retry,EXECUTED,3,3,approved content,3,True
+permission_and_sm2,evaluated_argument_substitution,EXECUTED,1,1,substituted content,4,True
+permission_and_sm2,permission_tightening,REJECTED,0,0,,2,True
+full_gateway,normal,EXECUTED,1,1,approved content,3,True
+full_gateway,same_id_retry,EXECUTED,1,1,approved content,3,True
+full_gateway,evaluated_argument_substitution,REJECTED,0,0,,2,True
+full_gateway,permission_tightening,REJECTED,0,0,,3,True
+gateway_without_live_authority,permission_tightening,EXECUTED,1,1,approved content,3,True
